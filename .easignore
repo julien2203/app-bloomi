@@ -1,0 +1,14 @@
+# Fichiers à exclure du build EAS
+# (mais pas de l'archive Git)
+
+# Fichiers d'environnement locaux
+.env.local
+.env*.local
+
+# Dossiers de développement
+.expo/
+node_modules/
+
+# Fichiers temporaires
+*.log
+.DS_Store
