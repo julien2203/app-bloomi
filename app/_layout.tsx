@@ -29,7 +29,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [restoreSession, setAuthFromSession]);
 
   const isInAuthGroup = useMemo(
-    () => segments[0] === '(auth)',
+    () => segments[0] === 'auth',
     [segments]
   );
 
@@ -38,12 +38,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (!initialized || isLoading) return;
 
     if (!session && !isInAuthGroup) {
-      router.replace('/(auth)/sign-in');
+      router.replace('/auth/sign-in');
       return;
     }
 
     if (session && isInAuthGroup) {
-      router.replace('/(tabs)/feed');
+      router.replace('/tabs/feed');
     }
   }, [initialized, isLoading, isInAuthGroup, session, router]);
 

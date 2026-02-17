@@ -42,7 +42,7 @@ export default function SignInScreen() {
       }
 
       router.push({
-        pathname: '/(auth)/verify',
+        pathname: '/auth/verify',
         params: { phone: result.value, country: result.country }
       });
     } catch (e) {

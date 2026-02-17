@@ -41,7 +41,7 @@ export default function VerifyScreen() {
           return;
         }
         // La session a été créée par verifyDevTestCode
-        router.replace('/(tabs)/feed');
+        router.replace('/tabs/feed');
         return;
       }
 
@@ -64,7 +64,7 @@ export default function VerifyScreen() {
         return;
       }
 
-      router.replace('/(tabs)/feed');
+      router.replace('/tabs/feed');
     } catch (e) {
       setError('Une erreur est survenue lors de la vérification du code.');
       setIsSubmitting(false);
