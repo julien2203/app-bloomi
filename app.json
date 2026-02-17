@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Bloomi",
+    "slug": "bloomi-app",
+    "scheme": "bloomi",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "orientation": "portrait",
+    "jsEngine": "hermes",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "splash": {
+      "backgroundColor": "#ffffff",
+      "image": "./assets/icon.png",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6e1bb048-f2d6-4907-99b6-f8c631fe594e"
+      },
+      "router": {}
+    },
+    "owner": "jupouch"
+  }
+}
