@@ -1,0 +1,13 @@
+# Force les permissions correctes pour tous les fichiers
+* text=auto eol=lf
+
+# Assure que les fichiers exécutables sont marqués comme tels
+*.sh text eol=lf
+
+# Fichiers binaires
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
