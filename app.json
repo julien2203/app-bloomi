@@ -30,6 +30,9 @@
       },
       "router": {}
     },
-    "owner": "jupouch"
+    "owner": "jupouch",
+    "android": {
+      "package": "com.jupouch.bloomiapp"
+    }
   }
 }
