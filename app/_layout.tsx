@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { ensureProfileExists } from '../lib/profile';
+import { useInterFonts } from '../lib/ui/fonts';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -29,7 +30,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [restoreSession, setAuthFromSession]);
 
   const isInAuthGroup = useMemo(
-    () => segments[0] === 'auth',
+    () => segments[0] === 'auth' || segments[0] === 'onboarding',
     [segments]
   );
 
@@ -37,15 +38,19 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!initialized || isLoading) return;
 
-    if (!session && !isInAuthGroup) {
-      router.replace('/auth/sign-in');
+    // Permettre l'accès aux écrans auth/onboarding sans session
+    const isPublicRoute = segments[0] === 'auth' || segments[0] === 'onboarding';
+    
+    if (!session && !isPublicRoute) {
+      router.replace('/onboarding/splash');
       return;
     }
 
-    if (session && isInAuthGroup) {
+    // Si connecté et sur un écran auth/onboarding, rediriger vers feed
+    if (session && isPublicRoute) {
       router.replace('/tabs/feed');
     }
-  }, [initialized, isLoading, isInAuthGroup, session, router]);
+  }, [initialized, isLoading, isInAuthGroup, session, router, segments]);
 
   if (!initialized) {
     return (
@@ -65,6 +70,29 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const { fontsLoaded, fontError } = useInterFonts();
+
+  // Bloquer le rendu tant que les polices ne sont pas chargées
+  if (!fontsLoaded) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#FFFFFF'
+        }}
+      >
+        <ActivityIndicator size="large" color="#111827" />
+      </View>
+    );
+  }
+
+  // Si erreur de chargement des polices, continuer quand même (fallback sur système)
+  if (fontError) {
+    console.warn('Erreur chargement polices Inter:', fontError);
+  }
+
   return (
     <SafeAreaProvider>
       <AuthGate>

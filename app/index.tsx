@@ -17,7 +17,8 @@ export default function IndexScreen() {
     if (session) {
       router.replace('/tabs/feed');
     } else {
-      router.replace('/auth/sign-in');
+      // Rediriger vers le splash d'onboarding pour les nouveaux utilisateurs
+      router.replace('/onboarding/splash');
     }
   }, [initialized, isLoading, session, router]);
 

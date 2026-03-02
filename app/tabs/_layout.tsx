@@ -47,6 +47,15 @@ export default function TabsLayout() {
           )
         }}
       />
+      <Tabs.Screen
+        name="test/index"
+        options={{
+          title: 'Test',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="flask-outline" size={size} color={color} />
+          )
+        }}
+      />
     </Tabs>
   );
 }
