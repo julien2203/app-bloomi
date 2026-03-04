@@ -21,12 +21,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24
+    marginVertical: theme.spacing.gapLg
   },
   line: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB'
+    backgroundColor: theme.colors.border
   },
   text: {
     ...theme.typography.body,

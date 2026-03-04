@@ -55,39 +55,38 @@ export function TextField({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16
+    marginBottom: theme.spacing.gapMd
   },
   label: {
     ...theme.typography.body,
     color: theme.colors.textPrimary,
-    marginBottom: 8,
-    fontWeight: '500'
+    marginBottom: theme.spacing.gapSm
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: theme.radius.buttonRadius,
-    backgroundColor: theme.colors.googleWhite
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.input,
+    backgroundColor: theme.colors.background
   },
   input: {
     flex: 1,
     ...theme.typography.body,
     color: theme.colors.textPrimary,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingVertical: theme.spacing.gapSm,
     minHeight: theme.spacing.buttonHeight
   },
   toggle: {
-    paddingRight: 16
+    paddingRight: theme.spacing.gapMd
   },
   inputError: {
-    borderColor: '#EF4444'
+    borderColor: theme.colors.danger
   },
   error: {
     ...theme.typography.caption,
-    color: '#EF4444',
-    marginTop: 4
+    color: theme.colors.danger,
+    marginTop: theme.spacing.gapSm / 2
   }
 });

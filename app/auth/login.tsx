@@ -13,20 +13,55 @@ import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { DividerOr } from '../../components/ui/DividerOr';
 import { theme } from '../../lib/theme';
+import { supabase } from '../../lib/supabase';
+import { ensureProfileExists } from '../../lib/profile';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
-    // TODO: Implémenter la logique de connexion
+    if (!email || !password) {
+      return;
+    }
+
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!data.session) {
+        setError('Impossible de vous connecter. Merci de réessayer.');
+        setLoading(false);
+        return;
+      }
+
+      // S'assurer qu'un profil existe pour cet utilisateur (nécessaire pour listings.seller_id -> profiles.id)
+      await ensureProfileExists(data.session, {
+        // En attendant la vérification SMS réelle, on utilise un numéro de test
+        phone: (data.session.user.phone as string | null | undefined) ?? '+41791234567',
+        country: 'CH'
+      });
+
+      // Connexion réussie : on redirige vers le feed
+      router.replace('/tabs/feed');
+    } catch (e) {
+      setError('Une erreur est survenue lors de la connexion.');
       setLoading(false);
-      // router.replace('/tabs/feed');
-    }, 1000);
+    }
   };
 
   const handleSocialLogin = (provider: 'apple' | 'google' | 'facebook') => {
@@ -75,12 +110,26 @@ export default function LoginScreen() {
                 <Text style={styles.forgotLinkText}>Forgot password?</Text>
               </TouchableOpacity>
 
+              {error ? (
+                <Text
+                  style={{
+                    ...theme.typography.body,
+                    color: '#ef4444',
+                    marginTop: 8,
+                    marginBottom: 8
+                  }}
+                >
+                  {error}
+                </Text>
+              ) : null}
+
               <Button
                 title="Log in"
                 onPress={handleLogin}
                 variant="primary-green"
                 loading={loading}
                 style={styles.loginButton}
+                disabled={loading || !email || !password}
               />
 
               <DividerOr />

@@ -4,6 +4,8 @@
  */
 
 import { supabase } from './supabase';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode as decodeBase64 } from 'base64-arraybuffer';
 import type {
   Listing,
   ListingInsert,
@@ -273,17 +275,22 @@ export async function uploadListingPhoto(
   filename: string
 ): Promise<{ data: string | null; error: Error | null }> {
   try {
-    // Lire le fichier
-    const response = await fetch(file.uri);
-    const blob = await response.blob();
-    const fileExt = filename.split('.').pop() || 'jpg';
+    // Lire le fichier local en base64 (compatible iOS/Android/Expo)
+    const base64 = await FileSystem.readAsStringAsync(file.uri, {
+      // Certaines versions d'Expo n'exposent pas EncodingType, on fallback sur la string 'base64'
+      encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64'
+    });
+    const arrayBuffer = decodeBase64(base64);
+    const binary = new Uint8Array(arrayBuffer);
+    const fileExt = (filename.split('.').pop() || 'jpg').toLowerCase();
     const filePath = `${userId}/${listingId}/${filename}`;
 
     // Upload vers Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('listings')
-      .upload(filePath, blob, {
-        contentType: file.type || `image/${fileExt}`,
+      .upload(filePath, binary, {
+        // Forcer un content-type d'image valide pour React Native / navigateurs
+        contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
         upsert: false
       });
 
@@ -355,6 +362,61 @@ export async function getMyListings(): Promise<ApiResponse<Listing[]>> {
   }
 
   return { data: (data || []) as Listing[], error: null };
+}
+
+/**
+ * Met à jour une annonce appartenant à l'utilisateur connecté
+ */
+export async function updateListing(
+  id: string,
+  payload: ListingUpdate
+): Promise<ApiResponse<Listing>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: new Error('Utilisateur non connecté') };
+  }
+
+  const { data, error } = await supabase
+    .from('listings')
+    .update(payload)
+    .eq('id', id)
+    .eq('seller_id', user.id)
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Listing, error: null };
+}
+
+/**
+ * Supprime une annonce appartenant à l'utilisateur connecté
+ */
+export async function deleteListing(id: string): Promise<ApiResponse<void>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: new Error('Utilisateur non connecté') };
+  }
+
+  const { error } = await supabase
+    .from('listings')
+    .delete()
+    .eq('id', id)
+    .eq('seller_id', user.id);
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: null, error: null };
 }
 
 // ============================================

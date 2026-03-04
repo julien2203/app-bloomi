@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.horizontalPadding
+    paddingHorizontal: theme.spacing.screenPaddingX
   },
   container: {
     width: '100%',
@@ -71,9 +71,9 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   card: {
-    backgroundColor: theme.colors.googleWhite,
-    borderRadius: 20,
-    padding: 32,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.card,
+    padding: theme.spacing.gapLg * 2,
     width: '100%',
     alignItems: 'center'
   },

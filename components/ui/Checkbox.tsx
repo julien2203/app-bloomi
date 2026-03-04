@@ -43,14 +43,14 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12
+    marginBottom: theme.spacing.gapSm
   },
   checkbox: {
     width: 24,
     height: 24,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
-    borderRadius: 4,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.input,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12

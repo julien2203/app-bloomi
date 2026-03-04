@@ -15,6 +15,7 @@ import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Segmented } from '../../components/ui/Segmented';
 import { theme } from '../../lib/theme';
+import { supabase } from '../../lib/supabase';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function SignUpScreen() {
   const [mailingChecked, setMailingChecked] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const userTypeOptions = [
     { label: 'Selling', value: 'selling' },
@@ -34,16 +36,40 @@ export default function SignUpScreen() {
   ];
 
   const handleSignUp = async () => {
-    if (!termsChecked) {
-      // TODO: Afficher erreur
+    if (!termsChecked || !fullName || !username || !email || !password) {
       return;
     }
-    // TODO: Implémenter la logique d'inscription
+
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            username,
+            user_type: userType,
+            marketing_optin: mailingChecked
+          }
+        }
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Supabase envoie un email de vérification si configuré dans le dashboard.
+      // On affiche simplement l'écran d'illustration pour expliquer la suite à l'utilisateur.
       router.push('/auth/verify-email-illustration');
-    }, 1000);
+    } catch (e) {
+      setError('Une erreur est survenue lors de l’inscription. Merci de réessayer.');
+      setLoading(false);
+    }
   };
 
   const canSubmit = fullName && username && email && password && termsChecked;
@@ -137,11 +163,24 @@ export default function SignUpScreen() {
                 }
               />
 
+              {error ? (
+                <Text
+                  style={{
+                    ...theme.typography.body,
+                    color: '#ef4444',
+                    marginTop: 8,
+                    marginBottom: 8
+                  }}
+                >
+                  {error}
+                </Text>
+              ) : null}
+
               <Button
                 title="Sign up"
                 onPress={handleSignUp}
                 variant="primary-green"
-                disabled={!canSubmit}
+                disabled={!canSubmit || loading}
                 loading={loading}
                 style={styles.signupButton}
               />

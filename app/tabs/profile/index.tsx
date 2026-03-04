@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../../stores/authStore';
 import { getProfileForUser, type Profile } from '../../../lib/profile';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, signOut, isLoading } = useAuthStore();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
@@ -86,8 +88,30 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+      
+      <TouchableOpacity
+        onPress={() => router.push('/tabs/profile/my-listings')}
+        style={{
+          marginBottom: 12,
+          borderRadius: 999,
+          paddingVertical: 14,
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: '#e5e7eb'
+        }}
+      >
+        <Text
+          style={{
+            fontWeight: '600',
+            fontSize: 15,
+            color: '#111827'
+          }}
+        >
+          Mes annonces
+        </Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity
+      <TouchableOpacity
           disabled={isLoading}
           onPress={signOut}
           style={{

@@ -1,0 +1,105 @@
+import React from 'react';
+import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { theme } from '../../lib/theme';
+import type { FeedListing } from '../../lib/api';
+import { Text } from '../ui/Text';
+
+interface VerticalListingCardProps {
+  item: FeedListing;
+  onPress: () => void;
+}
+
+export function VerticalListingCard({ item, onPress }: VerticalListingCardProps) {
+  const likeCount = 24;
+
+  return (
+    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.header}>
+        <View style={styles.avatar} />
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {item.seller_display_name ?? 'Vendeur'}
+        </Text>
+      </View>
+      {item.cover_photo_url ? (
+        <Image source={{ uri: item.cover_photo_url }} style={styles.image} resizeMode="cover" />
+      ) : (
+        <View style={styles.imagePlaceholder}>
+          <Text variant="caption" color="textSecondary">
+            Pas d&apos;image
+          </Text>
+        </View>
+      )}
+      <View style={styles.body}>
+        <View style={styles.priceRow}>
+          <Text variant="button">{Math.round(item.price)} CHF</Text>
+          <View style={styles.likes}>
+            <Ionicons name="heart-outline" size={14} color={theme.colors.textSecondary} />
+            <Text variant="caption" color="textSecondary">
+              {likeCount}
+            </Text>
+          </View>
+        </View>
+        <Text variant="body" numberOfLines={2}>
+          {item.title}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const IMAGE_HEIGHT = 150;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    borderRadius: theme.radius.card,
+    backgroundColor: theme.colors.background,
+    marginBottom: theme.spacing.gapMd,
+    overflow: 'hidden',
+    ...theme.shadows.card
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: theme.spacing.gapSm,
+    paddingHorizontal: theme.spacing.gapSm,
+    paddingTop: theme.spacing.gapSm
+  },
+  avatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.colors.muted
+  },
+  image: {
+    width: '100%',
+    height: IMAGE_HEIGHT,
+    backgroundColor: theme.colors.muted,
+    marginTop: theme.spacing.gapSm
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: IMAGE_HEIGHT,
+    backgroundColor: theme.colors.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.gapSm
+  },
+  body: {
+    paddingHorizontal: theme.spacing.gapSm,
+    paddingVertical: theme.spacing.gapSm
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.gapSm / 2
+  },
+  likes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: theme.spacing.gapSm / 2
+  }
+});
+

@@ -56,31 +56,27 @@ export function Segmented({ options, value, onValueChange }: SegmentedProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: theme.radius.buttonRadius,
-    padding: 4
+    backgroundColor: theme.colors.muted,
+    borderRadius: theme.radius.button,
+    padding: theme.spacing.gapSm / 2
   },
   segment: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: theme.spacing.gapSm + 4,
+    paddingHorizontal: theme.spacing.screenPaddingX,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.buttonRadius - 4
+    borderRadius: theme.radius.button - 4
   },
   segmentFirst: {
-    marginRight: 2
+    marginRight: theme.spacing.gapSm / 2
   },
   segmentLast: {
-    marginLeft: 2
+    marginLeft: theme.spacing.gapSm / 2
   },
   segmentSelected: {
-    backgroundColor: theme.colors.googleWhite,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
+    backgroundColor: theme.colors.background,
+    ...theme.shadows.card
   },
   segmentText: {
     ...theme.typography.body,

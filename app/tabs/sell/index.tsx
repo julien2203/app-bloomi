@@ -22,6 +22,8 @@ import { Button } from '../../../components/ui/Button';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { createListing, uploadListingPhoto, addListingPhoto } from '../../../lib/api';
+import { supabase } from '../../../lib/supabase';
+import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
 
 type Photo = {
@@ -123,6 +125,14 @@ export default function SellScreen() {
     setLoading(true);
 
     try {
+      // S'assurer que le profil existe pour respecter la contrainte FK listings.seller_id -> profiles.id
+      const { data: sessionData } = await supabase.auth.getSession();
+      await ensureProfileExists(sessionData.session, {
+        // En attendant la vérification SMS réelle, on utilise un numéro de test
+        phone: user.phone ?? '+41791234567',
+        country: 'CH'
+      });
+
       // Créer le listing
       const listingData: ListingInsert = {
         seller_id: user.id,
@@ -160,7 +170,8 @@ export default function SellScreen() {
         );
 
         if (uploadError || !photoUrl) {
-          console.error('Erreur upload photo:', uploadError);
+          // On log en warning pour éviter un écran rouge en dev, mais on ne bloque pas la publication
+          console.warn('Erreur upload photo (non bloquant):', uploadError);
           continue; // Continue avec les autres photos même si une échoue
         }
 

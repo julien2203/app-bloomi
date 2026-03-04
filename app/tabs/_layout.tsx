@@ -1,60 +1,34 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { FloatingTabBar } from '../../components/navigation/FloatingTabBar';
 
 export default function TabsLayout() {
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#111827',
-        tabBarInactiveTintColor: '#9ca3af'
+        headerShown: false
       }}
     >
       <Tabs.Screen
-        name="feed/index"
-        options={{
-          title: 'Feed',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
-          )
-        }}
+        name="feed"
+        options={{ title: 'Feed' }}
       />
       <Tabs.Screen
         name="sell/index"
-        options={{
-          title: 'Vendre',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" size={size} color={color} />
-          )
-        }}
+        options={{ title: 'Vendre' }}
       />
       <Tabs.Screen
         name="messages/index"
-        options={{
-          title: 'Messages',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
-          )
-        }}
+        options={{ title: 'Messages' }}
       />
       <Tabs.Screen
-        name="profile/index"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          )
-        }}
+        name="profile"
+        options={{ title: 'Profil' }}
       />
       <Tabs.Screen
         name="test/index"
-        options={{
-          title: 'Test',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flask-outline" size={size} color={color} />
-          )
-        }}
+        options={{ title: 'Test' }}
       />
     </Tabs>
   );

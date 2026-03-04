@@ -78,7 +78,7 @@ export default function OnboardingStep2() {
 
             <Button
               title="Se connecter avec téléphone"
-              onPress={() => router.push('/auth/verify-phone-info')}
+              onPress={() => router.push('/auth/sign-in')}
               variant="link"
               style={styles.phoneButton}
               textStyle={styles.phoneButtonText}

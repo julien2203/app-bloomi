@@ -68,7 +68,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   // À supprimer quand l'auth sera fonctionnelle
   setMockSession: () => {
     const mockUser = {
-      id: 'mock-user-id',
+      // Utiliser un UUID valide pour éviter l'erreur "invalid input syntax for type uuid"
+      // À adapter avec un véritable user.id Supabase si vous avez un utilisateur de test
+      id: '00000000-0000-0000-0000-000000000000',
       email: null,
       phone: '+41791234567',
       aud: 'authenticated',

@@ -1,16 +1,10 @@
 /**
  * Design System - Couleurs
- * Basé sur les specs Figma
+ * Délégué à lib/theme.ts (source de vérité)
  */
 
-export const colors = {
-  primary: '#C3EA4F',
-  appleBlack: '#000000',
-  googleWhite: '#FFFFFF',
-  facebookBlue: '#425B90',
-  textPrimary: '#111111',
-  textSecondary: '#6B7280',
-  backgroundWhite: '#FFFFFF'
-} as const;
+import { theme } from '../theme';
+
+export const colors = theme.colors;
 
 export type ColorName = keyof typeof colors;
