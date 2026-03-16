@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 0,
+    paddingHorizontal: theme.spacing.screenPaddingX,
     marginTop: theme.spacing.gapLg,
     marginBottom: 0
   },

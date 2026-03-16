@@ -7,6 +7,8 @@ export type Profile = {
   id: string;
   phone: string | null;
   country: SupportedCountryCode | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
   created_at: string;
 };
 
@@ -43,9 +45,37 @@ export async function ensureProfileExists(
     opts?.country ??
     (phone ? deriveCountryFromPhone(phone) : null);
 
+  const userMeta = (session.user.user_metadata || {}) as Record<string, any>;
+  const displayName =
+    (userMeta.username as string | undefined) ||
+    (userMeta.full_name as string | undefined) ||
+    null;
+
   if (!phone) {
     // On ne bloque pas la connexion si le téléphone n'est pas disponible,
-    // on se contente de ne pas créer de profil.
+    // on se contente de ne pas créer de profil complet.
+    // Par contre, si on a déjà un profil existant, on peut juste mettre à jour le display_name.
+    if (displayName) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: userId,
+            display_name: displayName
+          },
+          { onConflict: 'id' }
+        )
+        .select()
+        .single();
+
+      if (error) {
+        console.warn('ensureProfileExists error (no phone)', error);
+        return null;
+      }
+
+      return data as Profile;
+    }
+
     return null;
   }
 
@@ -55,7 +85,8 @@ export async function ensureProfileExists(
       {
         id: userId,
         phone,
-        country
+        country,
+        display_name: displayName
       },
       { onConflict: 'id' }
     )

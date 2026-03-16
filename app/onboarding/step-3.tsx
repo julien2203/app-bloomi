@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, ImageBackground, StyleSheet } from 'react-native';
+import { View, Text, ImageBackground, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -29,9 +29,13 @@ export default function OnboardingStep3() {
         resizeMode="cover"
       >
         <SafeAreaView style={styles.container}>
-          {/* Logo "b." en haut */}
+          {/* Logo Bloomi centré en haut */}
           <View style={styles.header}>
-            <Text style={styles.logo}>b.</Text>
+            <Image
+              source={require('../../assets/brand/logo-b.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Contenu centré */}
@@ -66,22 +70,22 @@ export default function OnboardingStep3() {
               style={styles.socialButton}
             />
 
-            <DividerOr />
+            <DividerOr variant="light" />
 
             <Button
-              title="Sign up with email"
+              title="Sign up to Bloomi"
               onPress={() => router.push('/auth/sign-up')}
               variant="primary-green"
             />
 
             <View style={styles.loginLink}>
               <Text style={styles.loginLinkText}>
-                Already have an account?{' '}
+                Do you already have an account?{' '}
                 <Text
                   style={styles.loginLinkButton}
                   onPress={() => router.push('/auth/login')}
                 >
-                  Log in
+                  Log in.
                 </Text>
               </Text>
             </View>
@@ -102,13 +106,12 @@ const styles = StyleSheet.create({
     flex: 1
   },
   header: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 16
+    paddingTop: 24,
+    alignItems: 'center'
   },
-  logo: {
-    fontSize: 32,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.googleWhite
+  logoImage: {
+    width: 96,
+    height: 96
   },
   content: {
     flex: 1,

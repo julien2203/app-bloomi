@@ -48,6 +48,7 @@ export default function SignUpScreen() {
         email,
         password,
         options: {
+          emailRedirectTo: `bloomi://auth/callback?email=${encodeURIComponent(email)}`,
           data: {
             full_name: fullName,
             username,
@@ -64,8 +65,11 @@ export default function SignUpScreen() {
       }
 
       // Supabase envoie un email de vérification si configuré dans le dashboard.
-      // On affiche simplement l'écran d'illustration pour expliquer la suite à l'utilisateur.
-      router.push('/auth/verify-email-illustration');
+      // On redirige vers l'écran qui explique à l'utilisateur de vérifier sa boîte mail.
+      router.push({
+        pathname: '/auth/verify-email',
+        params: { email }
+      });
     } catch (e) {
       setError('Une erreur est survenue lors de l’inscription. Merci de réessayer.');
       setLoading(false);

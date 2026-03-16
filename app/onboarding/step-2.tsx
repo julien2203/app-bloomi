@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, ImageBackground, StyleSheet } from 'react-native';
+import { View, Text, ImageBackground, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -30,22 +30,16 @@ export default function OnboardingStep2() {
         resizeMode="cover"
       >
         <SafeAreaView style={styles.container}>
-          {/* Logo "b." en haut */}
+          {/* Logo Bloomi centré en haut */}
           <View style={styles.header}>
-            <Text style={styles.logo}>b.</Text>
+            <Image
+              source={require('../../assets/brand/logo-b.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Contenu centré */}
-          <View style={styles.content}>
-            {/* TODO: Ajouter le texte depuis Figma */}
-            <Text style={styles.headline}>
-              Join thousands of users
-            </Text>
-            <Text style={styles.subheadline}>
-              Start buying and selling today
-            </Text>
-          </View>
-
+        
           {/* Boutons en bas */}
           <View style={styles.footer}>
             <Button
@@ -67,7 +61,7 @@ export default function OnboardingStep2() {
               style={styles.socialButton}
             />
 
-            <DividerOr />
+            <DividerOr variant="light" />
 
             <Button
               title="Sign up with email"
@@ -76,13 +70,28 @@ export default function OnboardingStep2() {
               style={styles.socialButton}
             />
 
-            <Button
-              title="Se connecter avec téléphone"
-              onPress={() => router.push('/auth/sign-in')}
-              variant="link"
-              style={styles.phoneButton}
-              textStyle={styles.phoneButtonText}
-            />
+            {/* Ancien bouton vers /auth/sign-in retiré car écran supprimé */}
+
+            <View style={styles.loginLink}>
+              <Text style={styles.loginLinkText}>
+                Do you already have an account?{' '}
+                <Text
+                  style={styles.loginLinkButton}
+                  onPress={() => router.push('/auth/login')}
+                >
+                  Log in.
+                </Text>
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.legalContainer}>
+            <Text style={styles.legalText}>
+              By continuing, you agree to Thrivi&apos;s{' '}
+              <Text style={styles.legalLink}>Terms of Service</Text>
+              {' '}and acknowledge you&apos;ve read our{' '}
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </Text>
           </View>
         </SafeAreaView>
       </ImageBackground>
@@ -100,13 +109,12 @@ const styles = StyleSheet.create({
     flex: 1
   },
   header: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 16
+    paddingTop: 24,
+    alignItems: 'center'
   },
-  logo: {
-    fontSize: 32,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.googleWhite
+  logoImage: {
+    width: 140,
+    height: 140
   },
   content: {
     flex: 1,
@@ -124,8 +132,10 @@ const styles = StyleSheet.create({
     opacity: 0.9
   },
   footer: {
+    flex: 1,
+    justifyContent: 'flex-end',
     paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingBottom: 32
+    paddingBottom: 80
   },
   socialButton: {
     marginBottom: 12
@@ -138,5 +148,32 @@ const styles = StyleSheet.create({
   },
   phoneButtonText: {
     color: theme.colors.googleWhite
+  },
+  loginLink: {
+    marginTop: 16,
+    alignItems: 'center'
+  },
+  loginLinkText: {
+    ...theme.typography.body,
+    color: theme.colors.googleWhite
+  },
+  loginLinkButton: {
+    color: theme.colors.primary,
+    fontWeight: '600'
+  },
+  legalContainer: {
+    marginTop: 32,
+    paddingHorizontal: theme.spacing.horizontalPadding,
+    paddingBottom: 30
+  },
+  legalText: {
+    ...theme.typography.captionSm,
+    color: theme.colors.googleWhite,
+    textAlign: 'center',
+    opacity: 0.9
+  },
+  legalLink: {
+    color: '#C3EA4F',
+    fontWeight: '600'
   }
 });

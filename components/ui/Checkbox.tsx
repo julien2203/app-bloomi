@@ -46,11 +46,11 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.gapSm
   },
   checkbox: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderWidth: 2,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12

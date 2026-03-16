@@ -16,10 +16,10 @@
     "plugins": [
       "expo-router"
     ],
-    "icon": "./assets/icon.png",
+    "icon": "./assets/brand/logo-bloomi.png",
     "splash": {
       "backgroundColor": "#ffffff",
-      "image": "./assets/splash.png",
+      "image": "./assets/brand/logo-bloomi.png",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": [
@@ -37,6 +37,25 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "bloomi",
+              "host": "auth",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.jupouch.bloomiapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     }
   }

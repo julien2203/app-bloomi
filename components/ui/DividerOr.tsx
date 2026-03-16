@@ -7,12 +7,18 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../../lib/theme';
 
-export function DividerOr() {
+interface DividerOrProps {
+  variant?: 'default' | 'light';
+}
+
+export function DividerOr({ variant = 'default' }: DividerOrProps) {
+  const isLight = variant === 'light';
+
   return (
     <View style={styles.container}>
-      <View style={styles.line} />
-      <Text style={styles.text}>or</Text>
-      <View style={styles.line} />
+      <View style={[styles.line, isLight && styles.lineLight]} />
+      <Text style={[styles.text, isLight && styles.textLight]}>or</Text>
+      <View style={[styles.line, isLight && styles.lineLight]} />
     </View>
   );
 }
@@ -28,9 +34,15 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.border
   },
+  lineLight: {
+    backgroundColor: 'rgba(255,255,255,0.4)'
+  },
   text: {
     ...theme.typography.body,
     color: theme.colors.textSecondary,
     marginHorizontal: 16
+  },
+  textLight: {
+    color: '#FFFFFF'
   }
 });

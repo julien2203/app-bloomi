@@ -23,29 +23,44 @@ export default function OnboardingStep1() {
         resizeMode="cover"
       >
         <SafeAreaView style={styles.container}>
-          {/* Logo "b." en haut */}
           <View style={styles.header}>
-            <Text style={styles.logo}>b.</Text>
+            <Image
+              source={require('../../assets/brand/logo-b.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Contenu centré */}
-          <View style={styles.content}>
-            {/* TODO: Ajouter le texte accroche depuis Figma */}
+          <View style={styles.main}>
             <Text style={styles.headline}>
-              Discover amazing second-hand finds
+              Sell pre-loved clothes completely free
             </Text>
-            <Text style={styles.subheadline}>
-              Buy and sell pre-loved items in your community
-            </Text>
-          </View>
 
-          {/* CTA en bas */}
-          <View style={styles.footer}>
             <Button
               title="Sign up for Bloomi"
               onPress={() => router.push('/onboarding/step-2')}
               variant="primary-green"
+              style={styles.primaryButton}
             />
+
+            <Text style={styles.loginText}>
+              Already have an account?{' '}
+              <Text
+                style={styles.loginLink}
+                onPress={() => router.push('/auth/login')}
+              >
+                Log in
+              </Text>
+            </Text>
+          </View>
+
+          <View style={styles.legalContainer}>
+            <Text style={styles.legalText}>
+              By continuing, you agree to Thrivi&apos;s{' '}
+              <Text style={styles.legalLink}>Terms of Service</Text>
+              {' '}and acknowledge you&apos;ve read our{' '}
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </Text>
           </View>
         </SafeAreaView>
       </ImageBackground>
@@ -63,31 +78,54 @@ const styles = StyleSheet.create({
     flex: 1
   },
   header: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 16
+    paddingTop: 24,
+    alignItems: 'center'
   },
-  logo: {
-    fontSize: 32,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.googleWhite
+  logoImage: {
+    width: 140,
+    height: 140
   },
-  content: {
+  main: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.horizontalPadding
+    justifyContent: 'flex-end',
+    paddingHorizontal: theme.spacing.horizontalPadding,
+    alignItems: 'center',
+    paddingBottom: 80
   },
   headline: {
     ...theme.typography.h1,
     color: theme.colors.googleWhite,
-    marginBottom: 16
+    textAlign: 'center',
+    fontSize: 32
   },
-  subheadline: {
+  primaryButton: {
+    marginTop: 40,
+    alignSelf: 'stretch'
+  },
+  loginText: {
+    marginTop: 40,
     ...theme.typography.body,
     color: theme.colors.googleWhite,
+    textAlign: 'center'
+  },
+  loginLink: {
+    color: theme.colors.googleWhite,
+    fontWeight: '600',
+    textDecorationLine: 'underline'
+  },
+  legalContainer: {
+    marginTop: 40,
+    paddingHorizontal: theme.spacing.horizontalPadding,
+    paddingBottom: 30
+  },
+  legalText: {
+    ...theme.typography.captionSm,
+    color: theme.colors.googleWhite,
+    textAlign: 'center',
     opacity: 0.9
   },
-  footer: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingBottom: 32
+  legalLink: {
+    color: '#C3EA4F',
+    fontWeight: '600'
   }
 });

@@ -1,138 +1,405 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
+} from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
-import { getProfileForUser, type Profile } from '../../../lib/profile';
+import { AppIcon } from '../../../components/ui/AppIcon';
+
+type ProfileRow = {
+  id: string;
+  avatar_url: string | null;
+  display_name: string | null;
+  vacation_mode: boolean | null;
+  location?: string | null;
+};
+
+type ProfileItemProps = {
+  label: string;
+  icon: import('../../../lib/assets').IconName;
+  onPress: () => void;
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { height: windowHeight } = useWindowDimensions();
   const { user, signOut, isLoading } = useAuthStore();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isProfileLoading, setIsProfileLoading] = useState(false);
 
-  useEffect(() => {
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [vacationMode, setVacationMode] = useState<boolean>(false);
+  const [updatingVacation, setUpdatingVacation] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  const loadProfile = useCallback(async () => {
     if (!user?.id) {
       setProfile(null);
       return;
     }
 
-    let isCancelled = false;
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id, avatar_url, display_name, vacation_mode, location')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    const load = async () => {
-      setIsProfileLoading(true);
-      const data = await getProfileForUser(user.id);
-      if (!isCancelled) {
-        setProfile(data);
-        setIsProfileLoading(false);
+      if (fetchError) {
+        setError(fetchError.message);
+        setProfile(null);
+      } else if (data) {
+        const casted = data as ProfileRow;
+        setProfile(casted);
+        setVacationMode(Boolean(casted.vacation_mode));
+      } else {
+        setProfile(null);
       }
-    };
-
-    void load();
-
-    return () => {
-      isCancelled = true;
-    };
+    } catch {
+      setError('Impossible de charger le profil.');
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
 
-  return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 8 }}>
-          Profil
-        </Text>
-        <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>
-          Vue d&apos;ensemble de votre compte Bloomi.
-        </Text>
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
 
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: '#e5e7eb',
-            marginBottom: 24
-          }}
-        >
-          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 4 }}>
-            Utilisateur connecté
-          </Text>
-          {isProfileLoading ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                marginTop: 4
-              }}
-            >
-              <ActivityIndicator size="small" />
-              <Text style={{ fontSize: 13, color: '#6b7280' }}>
-                Chargement du profil...
-              </Text>
-            </View>
-          ) : (
-            <View style={{ marginTop: 4 }}>
-              <Text style={{ fontSize: 13, color: '#6b7280' }}>
-                Téléphone :{' '}
-                <Text style={{ fontWeight: '600', color: '#111827' }}>
-                  {profile?.phone ?? user?.phone ?? 'Non disponible'}
-                </Text>
-              </Text>
-              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                Pays :{' '}
-                <Text style={{ fontWeight: '600', color: '#111827' }}>
-                  {profile?.country ?? 'Non défini'}
-                </Text>
-              </Text>
-            </View>
-          )}
+  // Recharger le profil à chaque retour sur l'onglet Profil
+  useFocusEffect(
+    useCallback(() => {
+      void loadProfile();
+    }, [loadProfile])
+  );
+
+  const handleToggleVacation = async (value: boolean) => {
+    if (!user?.id) return;
+
+    setVacationMode(value);
+    setUpdatingVacation(true);
+    try {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ vacation_mode: value })
+        .eq('id', user.id);
+
+      if (updateError) {
+        setError(updateError.message);
+        setVacationMode((prev) => !prev);
+      } else {
+        setError(null);
+      }
+    } catch {
+      setError('Impossible de mettre à jour le mode vacance.');
+      setVacationMode((prev) => !prev);
+    } finally {
+      setUpdatingVacation(false);
+    }
+  };
+
+  const userMeta = (user as any)?.user_metadata ?? {};
+  const displayName =
+    profile?.display_name ??
+    (userMeta.username as string | undefined) ??
+    (userMeta.full_name as string | undefined) ??
+    'Bloomi user';
+
+  const location = profile?.location ?? '';
+
+  const Content = (
+    <View
+      style={styles.inner}
+      onLayout={(event) => {
+        setContentHeight(event.nativeEvent.layout.height);
+      }}
+    >
+      {/* Header profil */}
+      <View style={styles.header}>
+        {profile?.avatar_url ? (
+          <Image
+            source={{ uri: profile.avatar_url }}
+            style={styles.avatar}
+          />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <AppIcon name="userOutline" size={22} color="#000000" />
+          </View>
+        )}
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerName}>{displayName}</Text>
+          <View style={styles.headerLocationRow}>
+            <AppIcon name="mapPointOutline" size={11} color="#888888" />
+            <Text style={styles.headerLocationText}>{location}</Text>
+          </View>
         </View>
-      
-      <TouchableOpacity
-        onPress={() => router.push('/tabs/profile/my-listings')}
-        style={{
-          marginBottom: 12,
-          borderRadius: 999,
-          paddingVertical: 14,
-          alignItems: 'center',
-          borderWidth: 1,
-          borderColor: '#e5e7eb'
-        }}
-      >
-        <Text
-          style={{
-            fontWeight: '600',
-            fontSize: 15,
-            color: '#111827'
-          }}
+        <TouchableOpacity
+          onPress={() => router.push('/tabs/profile/edit-profile')}
+          style={styles.editProfileButton}
+          activeOpacity={0.8}
         >
-          Mes annonces
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-          disabled={isLoading}
-          onPress={signOut}
-          style={{
-            backgroundColor: '#111827',
-            borderRadius: 999,
-            paddingVertical: 14,
-            alignItems: 'center'
-          }}
-        >
-          <Text
-            style={{
-              color: '#fff',
-              fontWeight: '600',
-              fontSize: 15
-            }}
-          >
-            Se déconnecter
-          </Text>
+          <Text style={styles.editProfileText}>Edit profile</Text>
         </TouchableOpacity>
       </View>
+
+      {loading && (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="small" color="#000" />
+          <Text style={styles.loadingText}>Chargement du profil...</Text>
+        </View>
+      )}
+      {error && !loading && <Text style={styles.errorText}>{error}</Text>}
+
+      {/* Rows liste */}
+      <ProfileItem
+        label="Favorite items"
+        icon="likeHeartOutline"
+        onPress={() => router.push('/tabs/profile/favorites')}
+      />
+      <ProfileItem
+        label="Personalization"
+        icon="settingsPersonalizeOutline"
+        onPress={() => router.push('/tabs/profile/personalization')}
+      />
+      <ProfileItem
+        label="Wallet"
+        icon="walletOutline"
+        onPress={() => router.push('/tabs/profile/wallet')}
+      />
+      <ProfileItem
+        label="My orders"
+        icon="billListOutline"
+        onPress={() => router.push('/tabs/profile/orders')}
+      />
+      <ProfileItem
+        label="Settings"
+        icon="settingsOutline"
+        onPress={() => router.push('/tabs/profile/settings')}
+      />
+      <ProfileItem
+        label="Legal information"
+        icon="documentTextOutline"
+        onPress={() => router.push('/tabs/profile/legal')}
+      />
+      <ProfileItem
+        label="Help center"
+        icon="questionCircleOutline"
+        onPress={() => router.push('/tabs/profile/help')}
+      />
+      <ProfileItem
+        label="Send your feedback"
+        icon="smileCircleOutline"
+        onPress={() => router.push('/tabs/profile/feedback')}
+      />
+
+      {/* Onglet test pour accéder à la gestion de ses annonces */}
+      <ProfileItem
+        label="Test – Manage my listings"
+        icon="billListOutline"
+        onPress={() => router.push('/tabs/profile/my-listings')}
+      />
+
+      {/* Mode vacance dans la même liste */}
+      <View style={styles.row}>
+        <View style={styles.rowLeft}>
+          <AppIcon name="eyeClosedOutline" size={20} color="#000000" />
+          <Text style={styles.rowLabel}>Mode vacance</Text>
+        </View>
+        <Switch
+          value={vacationMode}
+          onValueChange={handleToggleVacation}
+          trackColor={{ false: '#E8E8E8', true: '#C3EA4F' }}
+          thumbColor="#FFFFFF"
+          ios_backgroundColor="#E8E8E8"
+          disabled={updatingVacation}
+        />
+      </View>
+
+      {/* Déconnexion */}
+      <ProfileItem
+        label="Se déconnecter"
+        icon="exitOutline"
+        onPress={() => {
+          if (!isLoading) {
+            signOut();
+          }
+        }}
+      />
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Text style={styles.footerLink}>Privacy Policy</Text>
+        <Text style={styles.footerSeparator}>·</Text>
+        <Text style={styles.footerLink}>Terms &amp; Conditions</Text>
+      </View>
+    </View>
+  );
+
+  const shouldScroll = contentHeight > windowHeight;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {shouldScroll ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {Content}
+        </ScrollView>
+      ) : (
+        Content
+      )}
     </SafeAreaView>
   );
 }
+
+function ProfileItem({ label, icon, onPress }: ProfileItemProps) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.row}>
+        <View style={styles.rowLeft}>
+          <AppIcon name={icon} size={20} color="#000000" />
+          <Text style={styles.rowLabel}>{label}</Text>
+        </View>
+        <Feather name="chevron-right" size={18} color="#C0C0C0" />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF'
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: '#FFFFFF'
+  },
+  scrollContent: {
+    paddingBottom: 24
+  },
+  inner: {
+    flex: 1,
+    backgroundColor: '#FFFFFF'
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 10
+  },
+  avatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 10,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  headerTextContainer: {
+    flex: 1
+  },
+  headerName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000'
+  },
+  headerLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2
+  },
+  headerLocationText: {
+    fontSize: 12,
+    color: '#888888',
+    marginLeft: 3
+  },
+  editProfileButton: {
+    backgroundColor: '#C3EA4F',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20
+  },
+  editProfileText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#000000'
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#888888',
+    marginLeft: 6
+  },
+  errorText: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    fontSize: 12,
+    color: '#ff3333'
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 50,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E8E8E8',
+    justifyContent: 'space-between'
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  rowLabel: {
+    fontSize: 14,
+    color: '#000000',
+    marginLeft: 14
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF'
+  },
+  footerLink: {
+    fontSize: 12,
+    color: '#888888'
+  },
+  footerSeparator: {
+    fontSize: 12,
+    color: '#888888',
+    marginHorizontal: 8
+  }
+});
 

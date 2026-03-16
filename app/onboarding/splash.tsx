@@ -27,11 +27,13 @@ export default function SplashScreen() {
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          {/* Logo Bloomi - TODO: Remplacer par image assets/brand/bloomi-logo.png */}
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>bloomi</Text>
+            <Image
+              source={require('../../assets/brand/logo-bloomi.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
-          <Text style={styles.subtitle}>SECOND HAND</Text>
         </View>
       </SafeAreaView>
     </>
@@ -51,16 +53,8 @@ const styles = StyleSheet.create({
   logoContainer: {
     marginBottom: 16
   },
-  logoText: {
-    fontSize: 48,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.appleBlack,
-    letterSpacing: -1
-  },
-  subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.appleBlack,
-    letterSpacing: 2,
-    fontWeight: '600'
+  logoImage: {
+    width: 220,
+    height: 220
   }
 });

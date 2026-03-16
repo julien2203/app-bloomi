@@ -156,7 +156,10 @@ SELECT
       WHERE lp.listing_id = l.id
     ),
     '[]'::json
-  ) AS photos
+  ) AS photos,
+  l.brand,
+  l.size,
+  l.color
 FROM public.listings l
 INNER JOIN public.profiles p ON l.seller_id = p.id;
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router, usePathname } from 'expo-router';
 import { theme } from '../../lib/theme';
 import { AppIcon } from '../ui/AppIcon';
 import type { IconName } from '../../lib/assets';
@@ -10,22 +11,58 @@ const BAR_WIDTH = 347;
 const BAR_HEIGHT = 56;
 const BAR_RADIUS = 15;
 
-export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+// Ordre visuel fixe : Home, Search, Sell (+), Messages, Profile
+const TAB_ROUTES = [
+  { href: '/tabs/feed', icon: 'home' as const },
+  { href: '/tabs/search', icon: 'search' as const },
+  { href: '/tabs/sell', icon: 'addCircle' as const },
+  { href: '/tabs/messages', icon: 'messagesLetter' as const },
+  { href: '/tabs/profile', icon: 'user' as const }
+] as const;
+
+type BaseIcon = (typeof TAB_ROUTES)[number]['icon'];
+
+export function FloatingTabBar(_: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  // Normaliser le pathname pour éviter les variations type "/tabs/feed/" vs "/tabs/feed"
+  const rawPathname = usePathname();
+  const pathname = rawPathname.replace(/\/+$/, '');
 
-  const getIconName = (routeName: string, focused: boolean): IconName => {
-    let base: string;
+  // On n'affiche la barre flottante UNIQUEMENT sur les écrans racine des tabs
+  // (pas sur les pages de détail, ni sur le flow Sell, ni sur les sous-pages profile, etc.)
 
-    // Ordre attendu : Home, Search, Plus, Mail, User
-    if (routeName === 'feed') base = 'home';
-    else if (routeName === 'test/index') base = 'search';
-    else if (routeName === 'sell/index') base = 'addCircle';
-    else if (routeName === 'messages/index') base = 'messagesLetter';
-    else if (routeName === 'profile') base = 'user';
-    else base = 'search';
+  // 1) En dehors de /tabs -> jamais de barre
+  if (!pathname.startsWith('/tabs')) {
+    return null;
+  }
 
+  // 2) Jamais de barre sur le flow Sell
+  if (pathname.startsWith('/tabs/sell')) {
+    return null;
+  }
+
+  const isRoot = (base: string) => {
+    return (
+      pathname === base ||
+      pathname === `${base}/` ||
+      pathname === `${base}/index` ||
+      pathname.startsWith(`${base}?`)
+    );
+  };
+
+  const showOnThisRoute =
+    isRoot('/tabs/feed') ||
+    isRoot('/tabs/search') ||
+    isRoot('/tabs/messages') ||
+    isRoot('/tabs/profile');
+
+  if (!showOnThisRoute) {
+    return null;
+  }
+
+  const getIconName = (icon: BaseIcon, focused: boolean): IconName => {
     const suffix = focused ? 'Bold' : 'Outline';
-    return `${base}${suffix}` as IconName;
+    return `${icon}${suffix}` as IconName;
   };
 
   return (
@@ -39,25 +76,19 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
       pointerEvents="box-none"
     >
       <View style={styles.container}>
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
-          const icon = getIconName(route.name, isFocused);
+        {TAB_ROUTES.map((tab, index) => {
+          const isFocused = pathname.startsWith(tab.href);
+          const icon = getIconName(tab.icon, isFocused);
 
           const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
+            if (!isFocused) {
+              router.push(tab.href);
             }
           };
 
           return (
             <TouchableOpacity
-              key={route.key}
+              key={tab.href}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
               onPress={onPress}
@@ -83,7 +114,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 20,
-    alignItems: 'center'
+    alignItems: 'center',
+    zIndex: 100
   },
   container: {
     width: BAR_WIDTH,
@@ -96,12 +128,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.gapLg,
-    // Shadow approximation Figma: blur 108, opacity 0.04
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.04,
-    shadowRadius: 54,
-    elevation: 4
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8
   },
   item: {
     flex: 1,

@@ -13,10 +13,22 @@ export default function OnboardingLayout() {
         animation: 'slide_from_right'
       }}
     >
-      <Stack.Screen name="splash" />
-      <Stack.Screen name="step-1" />
-      <Stack.Screen name="step-2" />
-      <Stack.Screen name="step-3" />
+      <Stack.Screen
+        name="splash"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="step-1"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="step-2"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="step-3"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
     </Stack>
   );
 }

@@ -12,11 +12,11 @@ export default function FeedStackLayout() {
     >
       <Stack.Screen
         name="index"
-        options={{ headerShown: false }}
+        options={{ headerShown: false, gestureEnabled: true }}
       />
       <Stack.Screen
         name="[id]"
-        options={{ title: 'Détail de l’annonce', headerShown: true }}
+        options={{ headerShown: false, gestureEnabled: true }}
       />
     </Stack>
   );

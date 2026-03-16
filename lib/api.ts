@@ -24,6 +24,7 @@ import type {
   ApiResponse,
   PaginatedResponse
 } from './types';
+import type { FeedFilters } from './store/feedFilters';
 
 // ============================================
 // TYPES POUR LE FEED
@@ -38,6 +39,7 @@ export type FeedListing = {
   status: string;
   category: string | null;
   condition: string | null;
+  brand?: string | null;
   delivery_mode: string;
   city: string | null;
   country_code: string | null;
@@ -58,20 +60,56 @@ export type FeedListing = {
 
 /**
  * Récupère les annonces du feed depuis la view v_feed_listings
- * Pagination simple avec limit 20, trié par created_at desc
+ * avec pagination et filtres optionnels
  */
 export async function getFeedListings(params?: {
   limit?: number;
   offset?: number;
+  filters?: FeedFilters;
 }): Promise<{ data: FeedListing[]; error: Error | null }> {
-  const { limit = 20, offset = 0 } = params || {};
+  const { limit = 20, offset = 0, filters } = params || {};
 
   try {
-    const { data, error } = await supabase
+    let orderColumn: 'created_at' | 'price' = 'created_at';
+    let ascending = false;
+
+    switch (filters?.sort) {
+      case 'price_asc':
+        orderColumn = 'price';
+        ascending = true;
+        break;
+      case 'price_desc':
+        orderColumn = 'price';
+        ascending = false;
+        break;
+      case 'newest':
+      case 'relevance':
+      default:
+        orderColumn = 'created_at';
+        ascending = false;
+        break;
+    }
+
+    let query = supabase
       .from('v_feed_listings')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order(orderColumn, { ascending })
       .range(offset, offset + limit - 1);
+
+    if (filters?.category) {
+      query = query.eq('category', filters.category);
+    }
+    if (filters?.conditions && filters.conditions.length > 0) {
+      query = query.in('condition', filters.conditions);
+    }
+    if (filters?.priceMin !== undefined) {
+      query = query.gte('price', filters.priceMin);
+    }
+    if (filters?.priceMax !== undefined) {
+      query = query.lte('price', filters.priceMax);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return { data: [], error: new Error(error.message) };
@@ -81,6 +119,69 @@ export async function getFeedListings(params?: {
   } catch (err) {
     return {
       data: [],
+      error: err instanceof Error ? err : new Error('Erreur inconnue')
+    };
+  }
+}
+
+export async function getPriceBounds(filters?: FeedFilters): Promise<{
+  min: number | null;
+  max: number | null;
+  error: Error | null;
+}> {
+  try {
+    // Base query helper pour appliquer les filtres existants
+    const applyFilters = (q: any) => {
+      let query = q;
+      if (filters?.category) {
+        query = query.eq('category', filters.category);
+      }
+      if (filters?.conditions && filters.conditions.length > 0) {
+        query = query.in('condition', filters.conditions);
+      }
+      if (filters?.priceMin !== undefined) {
+        query = query.gte('price', filters.priceMin);
+      }
+      if (filters?.priceMax !== undefined) {
+        query = query.lte('price', filters.priceMax);
+      }
+      return query;
+    };
+
+    // Récupère le prix minimum
+    const { data: minData, error: minError } = await applyFilters(
+      supabase
+        .from('listings')
+        .select('price')
+        .order('price', { ascending: true })
+        .limit(1)
+    ).maybeSingle();
+
+    if (minError && minError.message) {
+      return { min: null, max: null, error: new Error(minError.message) };
+    }
+
+    // Récupère le prix maximum
+    const { data: maxData, error: maxError } = await applyFilters(
+      supabase
+        .from('listings')
+        .select('price')
+        .order('price', { ascending: false })
+        .limit(1)
+    ).maybeSingle();
+
+    if (maxError && maxError.message) {
+      return { min: null, max: null, error: new Error(maxError.message) };
+    }
+
+    const min = (minData as any)?.price ?? null;
+    const max = (maxData as any)?.price ?? null;
+
+    return { min, max, error: null };
+  } catch (err) {
+    return {
+      min: null,
+      max: null,
       error: err instanceof Error ? err : new Error('Erreur inconnue')
     };
   }
@@ -187,6 +288,9 @@ export type ListingDetail = {
   seller_display_name: string | null;
   seller_avatar_url: string | null;
   seller_country: string | null;
+  brand?: string | null;
+  size?: string | null;
+  color?: string | null;
   photos: Array<{
     id: string;
     url: string;
@@ -210,7 +314,37 @@ export async function getListingById(id: string): Promise<{ data: ListingDetail 
       return { data: null, error: new Error(error.message) };
     }
 
-    return { data: data as ListingDetail, error: null };
+    const listing = data as ListingDetail;
+
+    // Normaliser les URLs des photos :
+    // - si `photo.url` est déjà une URL absolue (http/https), on la garde telle quelle
+    // - sinon, on génère une URL publique à partir du chemin stocké
+    const normalizedListing: ListingDetail = {
+      ...listing,
+      photos: listing.photos
+        ? listing.photos.map((photo) => {
+            const rawUrl = photo.url;
+
+            if (
+              typeof rawUrl === 'string' &&
+              (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+            ) {
+              return photo;
+            }
+
+            const { data: publicData } = supabase.storage
+              .from('listings')
+              .getPublicUrl(rawUrl);
+
+            return {
+              ...photo,
+              url: publicData?.publicUrl ?? rawUrl
+            };
+          })
+        : null
+    };
+
+    return { data: normalizedListing, error: null };
   } catch (err) {
     return {
       data: null,
@@ -365,6 +499,32 @@ export async function getMyListings(): Promise<ApiResponse<Listing[]>> {
 }
 
 /**
+ * Récupère les annonces de l'utilisateur connecté au format FeedListing
+ * (inclut cover_photo_url pour l'affichage des images dans "Mes annonces")
+ */
+export async function getMyListingsFeed(): Promise<ApiResponse<FeedListing[]>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: [], error: new Error('Utilisateur non connecté') };
+  }
+
+  const { data, error } = await supabase
+    .from('v_feed_listings')
+    .select('*')
+    .eq('seller_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return { data: [], error: new Error(error.message) };
+  }
+
+  return { data: (data || []) as FeedListing[], error: null };
+}
+
+/**
  * Met à jour une annonce appartenant à l'utilisateur connecté
  */
 export async function updateListing(
@@ -452,6 +612,67 @@ export async function getThreads(): Promise<ApiResponse<ThreadWithRelations[]>> 
   }
 
   return { data: (data || []) as ThreadWithRelations[], error: null };
+}
+
+/**
+ * Crée ou récupère un thread pour un listing donné entre l'acheteur connecté et le vendeur.
+ */
+export async function createOrGetThreadForListing(
+  listingId: string,
+  sellerId: string
+): Promise<ApiResponse<Thread>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: new Error('Utilisateur non connecté') };
+  }
+
+  if (user.id === sellerId) {
+    return { data: null, error: new Error('Le vendeur ne peut pas se contacter lui-même') };
+  }
+
+  try {
+    // 1) Vérifier si un thread existe déjà pour ce listing + buyer
+    const { data: existing, error: existingError } = await supabase
+      .from('threads')
+      .select('*')
+      .eq('listing_id', listingId)
+      .eq('buyer_id', user.id)
+      .maybeSingle();
+
+    if (existingError && existingError.code !== 'PGRST116') {
+      // Erreur réelle (autre que "no rows returned")
+      return { data: null, error: new Error(existingError.message) };
+    }
+
+    if (existing) {
+      return { data: existing as Thread, error: null };
+    }
+
+    // 2) Créer un nouveau thread
+    const { data: created, error: insertError } = await supabase
+      .from('threads')
+      .insert({
+        listing_id: listingId,
+        buyer_id: user.id,
+        seller_id: sellerId
+      })
+      .select('*')
+      .single();
+
+    if (insertError) {
+      return { data: null, error: new Error(insertError.message) };
+    }
+
+    return { data: created as Thread, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err : new Error('Erreur lors de la création du thread')
+    };
+  }
 }
 
 // ============================================

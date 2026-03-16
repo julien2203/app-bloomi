@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -29,17 +29,19 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     };
   }, [restoreSession, setAuthFromSession]);
 
-  const isInAuthGroup = useMemo(
-    () => segments[0] === 'auth' || segments[0] === 'onboarding',
-    [segments]
-  );
-
   // Redirections en fonction de l'état d'auth
   useEffect(() => {
     if (!initialized || isLoading) return;
 
     // Permettre l'accès aux écrans auth/onboarding sans session
     const isPublicRoute = segments[0] === 'auth' || segments[0] === 'onboarding';
+    const isVerificationRoute =
+      segments[0] === 'auth' &&
+      (segments[1] === 'verify-email' ||
+        segments[1] === 'callback' ||
+        segments[1] === 'verify-phone' ||
+        segments[1] === 'verify-phone-info' ||
+        segments[1] === 'verify-phone-code');
     
     if (!session && !isPublicRoute) {
       router.replace('/onboarding/splash');
@@ -47,10 +49,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     // Si connecté et sur un écran auth/onboarding, rediriger vers feed
-    if (session && isPublicRoute) {
+    // sauf pour les écrans de vérification (email / téléphone)
+    if (session && isPublicRoute && !isVerificationRoute) {
       router.replace('/tabs/feed');
     }
-  }, [initialized, isLoading, isInAuthGroup, session, router, segments]);
+  }, [initialized, isLoading, session, router, segments]);
 
   if (!initialized) {
     return (
@@ -71,6 +74,55 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const { fontsLoaded, fontError } = useInterFonts();
+  const router = useRouter();
+
+  // Gestion des deep links (bloomi://auth/callback...)
+  useEffect(() => {
+    const handleUrl = (event: { url: string }) => {
+      const { url } = event;
+      if (!url || !url.startsWith('bloomi://')) return;
+
+      try {
+        const parsed = new URL(url);
+        const host = parsed.host; // ex: "auth"
+        const pathname = parsed.pathname; // ex: "/callback"
+
+        if (host === 'auth' && pathname === '/callback') {
+          const searchParams = parsed.searchParams;
+          const token = searchParams.get('token') ?? undefined;
+          const type = searchParams.get('type') ?? undefined;
+          const email = searchParams.get('email') ?? undefined;
+
+          router.replace({
+            pathname: '/auth/callback',
+            params: {
+              rawUrl: url,
+              ...(token ? { token } : {}),
+              ...(type ? { type } : {}),
+              ...(email ? { email } : {})
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Erreur parsing deep link:', e);
+      }
+    };
+
+    // Quand l’app est déjà ouverte
+    const subscription = Linking.addEventListener('url', handleUrl);
+
+    // Quand l’app est lancée via un lien (cold start)
+    (async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleUrl({ url: initialUrl });
+      }
+    })();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [router]);
 
   // Bloquer le rendu tant que les polices ne sont pas chargées
   if (!fontsLoaded) {

@@ -5,6 +5,7 @@ import { theme } from '../../lib/theme';
 import { images } from '../../lib/assets';
 import { useRouter } from 'expo-router';
 import { Text } from '../ui/Text';
+import { AppIcon } from '../ui/AppIcon';
 
 interface HomeHeroProps {
   backgroundUri: string | null;
@@ -14,7 +15,11 @@ export function HomeHero({ backgroundUri }: HomeHeroProps) {
   const router = useRouter();
 
   const handleSellPress = () => {
-    router.push('/tabs/sell/index');
+    router.push('/tabs/sell');
+  };
+
+  const handleFiltersPress = () => {
+    router.push('/filters');
   };
 
   return (
@@ -43,21 +48,28 @@ export function HomeHero({ backgroundUri }: HomeHeroProps) {
                 placeholderTextColor={theme.colors.textSecondary}
                 style={styles.searchInput}
               />
-              <Feather
-                name="sliders"
-                size={20}
-                color={theme.colors.textPrimary}
-                style={styles.filterIcon}
-              />
+              <TouchableOpacity
+                onPress={handleFiltersPress}
+                activeOpacity={0.7}
+                style={styles.filterButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <AppIcon
+                  name="settingsPersonalizeOutline"
+                  size={20}
+                  color={theme.colors.textPrimary}
+                  style={styles.filterIcon}
+                />
+              </TouchableOpacity>
             </View>
             <View style={styles.actions}>
-              <Feather
-                name="shopping-cart"
+              <AppIcon
+                name="cartLargeOutline"
                 size={22}
                 color={theme.colors.googleWhite}
               />
-              <Feather
-                name="bell"
+              <AppIcon
+                name="notificationsBellOutline"
                 size={22}
                 color={theme.colors.googleWhite}
               />
@@ -127,6 +139,10 @@ const styles = StyleSheet.create({
   },
   filterIcon: {
     marginLeft: theme.spacing.gapSm
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12
   },
   actions: {
     flexDirection: 'row',

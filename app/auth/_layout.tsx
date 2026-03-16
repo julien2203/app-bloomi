@@ -10,15 +10,42 @@ export default function AuthLayout() {
         animation: 'slide_from_right'
       }}
     >
-      <Stack.Screen name="login" />
-      <Stack.Screen name="sign-up" />
-      <Stack.Screen name="sign-in" />
-      <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="verify-email-illustration" />
-      <Stack.Screen name="verify-email-simple" />
-      <Stack.Screen name="verify-phone-info" />
-      <Stack.Screen name="verify-phone-code" />
-      <Stack.Screen name="verify" />
+      <Stack.Screen
+        name="login"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="sign-up"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="forgot-password"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="verify-email"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="callback"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="verify-phone"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="verify-phone-info"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="verify-phone-code"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="verify"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
     </Stack>
   );
 }

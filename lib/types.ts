@@ -55,6 +55,9 @@ export interface Listing {
   updated_at: string;
   published_at: string | null;
   sold_at: string | null;
+  brand?: string | null;
+  size?: string | null;
+  color?: string | null;
 }
 
 export type ListingInsert = Omit<

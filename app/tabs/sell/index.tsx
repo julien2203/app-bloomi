@@ -11,20 +11,23 @@ import {
   Image,
   TouchableOpacity,
   Alert,
-  ActivityIndicator
+  TextInput,
+  Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
-import { TextField } from '../../../components/ui/TextField';
+import { Feather } from '@expo/vector-icons';
 import { Button } from '../../../components/ui/Button';
+import { AppIcon } from '../../../components/ui/AppIcon';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { createListing, uploadListingPhoto, addListingPhoto } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
+import { useSellFormStore } from '../../../lib/store/sellForm';
 
 type Photo = {
   uri: string;
@@ -32,9 +35,14 @@ type Photo = {
   name?: string;
 };
 
+const TITLE_MAX = 60;
+const DESCRIPTION_MAX = 300;
+
 export default function SellScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const { values: sellValues, resetForm } = useSellFormStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -44,9 +52,33 @@ export default function SellScreen() {
   const [errors, setErrors] = useState<{
     title?: string;
     price?: string;
-    city?: string;
     photos?: string;
   }>({});
+  const [showPublishSheet, setShowPublishSheet] = useState(false);
+  const [showPhotoTips, setShowPhotoTips] = useState(false);
+
+  React.useEffect(() => {
+    const loadCityFromProfile = async () => {
+      if (!user) return;
+      try {
+        const { data, error: profileError } = await supabase
+          .from('profiles')
+          .select('city')
+          .eq('id', user.id)
+          .single();
+
+        if (!profileError && data?.city) {
+          setCity(data.city);
+        } else {
+          setCity('');
+        }
+      } catch {
+        setCity('');
+      }
+    };
+
+    void loadCityFromProfile();
+  }, [user]);
 
   const requestPermissions = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -95,13 +127,13 @@ export default function SellScreen() {
       newErrors.title = 'Le titre est requis';
     }
 
-    const priceNum = parseFloat(price);
-    if (!price || isNaN(priceNum) || priceNum <= 0) {
+    const priceFromStore =
+      typeof sellValues.price === 'number' && Number.isFinite(sellValues.price)
+        ? sellValues.price
+        : undefined;
+    const priceNum = priceFromStore ?? parseFloat(price);
+    if (!priceNum || Number.isNaN(priceNum) || priceNum <= 0) {
       newErrors.price = 'Un prix valide est requis';
-    }
-
-    if (!city.trim()) {
-      newErrors.city = 'La ville est requise';
     }
 
     if (photos.length === 0) {
@@ -109,7 +141,19 @@ export default function SellScreen() {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const hasErrors = Object.keys(newErrors).length > 0;
+
+    if (hasErrors) {
+      const firstError =
+        newErrors.title ||
+        newErrors.price ||
+        newErrors.photos ||
+        'Veuillez corriger les champs en rouge';
+
+      Alert.alert('Formulaire incomplet', firstError);
+    }
+
+    return !hasErrors;
   };
 
   const handlePublish = async () => {
@@ -134,14 +178,23 @@ export default function SellScreen() {
       });
 
       // Créer le listing
+      const priceFromStore =
+        typeof sellValues.price === 'number' && Number.isFinite(sellValues.price)
+          ? sellValues.price
+          : undefined;
+      const priceNum = priceFromStore ?? parseFloat(price);
+
       const listingData: ListingInsert = {
         seller_id: user.id,
         title: title.trim(),
         description: description.trim() || null,
-        price: parseFloat(price),
+        price: priceNum,
         status: 'published',
-        category: null,
-        condition: null,
+        category: sellValues.category?.name ?? null,
+        condition: sellValues.condition ?? null,
+        brand: sellValues.brand?.name ?? null,
+        size: sellValues.size?.label ?? null,
+        color: sellValues.color?.name ?? null,
         delivery_mode: 'both',
         city: city.trim(),
         country_code: 'CH',
@@ -179,8 +232,8 @@ export default function SellScreen() {
         await addListingPhoto(listing.id, photoUrl, i);
       }
 
-      // Rediriger vers le feed
-      router.replace('/tabs/feed');
+      // Afficher la bottom sheet de mise en avant
+      setShowPublishSheet(true);
     } catch (error) {
       Alert.alert(
         'Erreur',
@@ -196,102 +249,376 @@ export default function SellScreen() {
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Vendre un article</Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            style={styles.backButton}
+          >
+            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Sell an item</Text>
+          <View style={styles.headerRightPlaceholder} />
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 120 }
+          ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Titre */}
-          <TextField
-            label="Titre *"
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Ex: iPhone 13 Pro - 256GB"
-            error={errors.title}
-            maxLength={100}
-          />
-
-          {/* Description */}
-          <TextField
-            label="Description"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Décrivez votre article..."
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-            style={styles.descriptionInput}
-          />
-
-          {/* Prix */}
-          <TextField
-            label="Prix (CHF) *"
-            value={price}
-            onChangeText={(text) => {
-              setPrice(text.replace(/[^0-9.]/g, ''));
-              if (errors.price) {
-                setErrors((prev) => ({ ...prev, price: undefined }));
-              }
-            }}
-            placeholder="0"
-            keyboardType="numeric"
-            error={errors.price}
-          />
-
-          {/* Ville */}
-          <TextField
-            label="Ville *"
-            value={city}
-            onChangeText={setCity}
-            placeholder="Ex: Genève"
-            error={errors.city}
-            maxLength={50}
-          />
-
           {/* Photos */}
           <View style={styles.photosSection}>
-            <Text style={styles.photosLabel}>Photos *</Text>
             {errors.photos && <Text style={styles.error}>{errors.photos}</Text>}
 
-            <ScrollView
-              horizontal
-              style={styles.photosContainer}
-              contentContainerStyle={styles.photosContent}
-              showsHorizontalScrollIndicator={false}
-            >
-              {photos.map((photo, index) => (
-                <View key={index} style={styles.photoItem}>
-                  <Image source={{ uri: photo.uri }} style={styles.photo} />
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => removePhoto(index)}
-                  >
-                    <Text style={styles.removeButtonText}>×</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-                <Text style={styles.addPhotoText}>+ Ajouter</Text>
+            {photos.length === 0 ? (
+              <TouchableOpacity
+                style={styles.photoUploadButton}
+                onPress={pickImage}
+                activeOpacity={0.85}
+              >
+                <AppIcon name="addSquareOutline" size={20} color="#121212" />
+                <Text style={styles.photoUploadText}>Upload photos</Text>
               </TouchableOpacity>
-            </ScrollView>
+            ) : (
+              <ScrollView
+                horizontal
+                style={styles.photosContainer}
+                contentContainerStyle={styles.photosContent}
+                showsHorizontalScrollIndicator={false}
+              >
+                {photos.map((photo, index) => (
+                  <View key={index} style={styles.photoItem}>
+                    <Image source={{ uri: photo.uri }} style={styles.photo} />
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => removePhoto(index)}
+                    >
+                      <Text style={styles.removeButtonText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.photoAddTile}
+                  onPress={pickImage}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="plus" size={20} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+
+            <Text style={[styles.photoHint, { textAlign: 'center' }]}>
+              Add up to 5 photos.{' '}
+              <Text
+                style={styles.photoHintLink}
+                onPress={() => {
+                  setShowPhotoTips(true);
+                }}
+              >
+                See photo tips.
+              </Text>
+            </Text>
+          </View>
+
+          <View style={styles.sectionSeparator} />
+
+          {/* Title */}
+          <View style={[styles.fieldGroup, { marginTop: 24 }]}>
+            <Text style={styles.fieldLabel}>Title</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="e.g. White cos sweater"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={title}
+              onChangeText={(text) => {
+                setTitle(text);
+                if (errors.title) {
+                  setErrors((prev) => ({ ...prev, title: undefined }));
+                }
+              }}
+              maxLength={TITLE_MAX}
+            />
+            <View style={styles.fieldFooterRow}>
+              {errors.title ? (
+                <Text style={styles.error}>{errors.title}</Text>
+              ) : (
+                <View />
+              )}
+              <Text style={styles.counterText}>
+                {`${TITLE_MAX - title.length} character left`}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.sectionSeparator} />
+
+          {/* Description */}
+          <View style={[styles.fieldGroup, { marginTop: 20 }]}>
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              style={[
+                styles.textInput,
+                styles.descriptionInput
+              ]}
+              placeholder="e.g. Only worn a few times, true to size"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={description}
+              onChangeText={(text) => {
+                setDescription(text);
+              }}
+              multiline
+              maxLength={DESCRIPTION_MAX}
+            />
+            <View style={styles.fieldFooterRow}>
+              <Text style={styles.counterText}>
+                {`${DESCRIPTION_MAX - description.length} character left`}
+              </Text>
+            </View>
+          </View>
+
+          {/* List fields */}
+          <View style={styles.listSection}>
+            <TouchableOpacity
+              style={[styles.listRow, styles.listRowFirst]}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/tabs/sell/category');
+              }}
+            >
+              <Text style={styles.listRowLabel}>Category</Text>
+              <View style={styles.listRowRight}>
+                {sellValues.category ? (
+                  <Text style={styles.listRowValue}>{sellValues.category.name}</Text>
+                ) : null}
+                <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.listRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/tabs/sell/brand-gender');
+              }}
+            >
+              <Text style={styles.listRowLabel}>Brand</Text>
+              <View style={styles.listRowRight}>
+                {sellValues.brand ? (
+                  <Text style={styles.listRowValue}>{sellValues.brand.name}</Text>
+                ) : null}
+                <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.listRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/tabs/sell/condition');
+              }}
+            >
+              <Text style={styles.listRowLabel}>Condition</Text>
+              <View style={styles.listRowRight}>
+                {sellValues.condition ? (
+                  <Text style={styles.listRowValue}>{sellValues.condition}</Text>
+                ) : null}
+                <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.listRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/tabs/sell/size');
+              }}
+            >
+              <Text style={styles.listRowLabel}>Size</Text>
+              <View style={styles.listRowRight}>
+                {sellValues.size ? (
+                  <Text style={styles.listRowValue}>{sellValues.size.label}</Text>
+                ) : null}
+                <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.listRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/tabs/sell/color');
+              }}
+            >
+              <Text style={styles.listRowLabel}>Color</Text>
+              <View style={styles.listRowRight}>
+                {sellValues.color ? (
+                  <Text style={styles.listRowValue}>{sellValues.color.name}</Text>
+                ) : null}
+                <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.listRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/tabs/sell/price');
+              }}
+            >
+              <Text style={styles.listRowLabel}>Price</Text>
+              <View style={styles.listRowRight}>
+                {typeof sellValues.price === 'number' && Number.isFinite(sellValues.price) ? (
+                  <Text style={styles.listRowValue}>{sellValues.price} CHF</Text>
+                ) : null}
+                <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
         {/* Bouton Publish */}
-        <View style={styles.footer}>
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: insets.bottom + 16 }
+          ]}
+        >
           <Button
-            title={loading ? 'Publication...' : 'Publish'}
+            title={loading ? 'Publication...' : "Publier l'annonce"}
             onPress={handlePublish}
-            variant="primary-green"
+            variant="primary"
             disabled={loading}
             loading={loading}
           />
         </View>
       </SafeAreaView>
+
+      {/* Bottom sheet Photo tips */}
+      <Modal
+        visible={showPhotoTips}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPhotoTips(false)}
+      >
+        <View style={styles.photoTipsOverlay}>
+          <TouchableOpacity
+            style={styles.photoTipsOverlay}
+            activeOpacity={1}
+            onPress={() => setShowPhotoTips(false)}
+          />
+          <View style={styles.photoTipsSheet}>
+            <View style={styles.photoTipsHandle} />
+            <TouchableOpacity
+              style={styles.photoTipsCloseButton}
+              onPress={() => setShowPhotoTips(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.photoTipsCloseButtonText}>×</Text>
+            </TouchableOpacity>
+            <Text style={styles.photoTipsTitle}>Photo tips</Text>
+
+            <Text style={styles.photoTipsSectionTitle}>Choose natural light</Text>
+
+            <View style={styles.photoTipsImagesRow}>
+              <View style={styles.photoTipsImagePlaceholder}>
+                <View
+                  style={[
+                    styles.photoTipsBadge,
+                    { backgroundColor: '#22C55E' }
+                  ]}
+                >
+                  <Text style={styles.photoTipsBadgeText}>✓</Text>
+                </View>
+              </View>
+              <View style={styles.photoTipsImagePlaceholder}>
+                <View
+                  style={[
+                    styles.photoTipsBadge,
+                    { backgroundColor: '#EF4444' }
+                  ]}
+                >
+                  <Text style={styles.photoTipsBadgeText}>✗</Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.photoTipsText}>
+              Take photos in a well-lit area. Bright daylight is best.
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bottom sheet après publication */}
+      <Modal
+        visible={showPublishSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPublishSheet(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity
+            style={styles.sheetOverlayTouchable}
+            activeOpacity={1}
+            onPress={() => setShowPublishSheet(false)}
+          />
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Mise en ligne du produit</Text>
+
+            <TouchableOpacity
+              style={styles.sheetCard}
+              activeOpacity={0.8}
+              onPress={() => console.log('coming soon')}
+            >
+              <View style={styles.sheetCardHeader}>
+                <View style={styles.sheetIconCircle}>
+                  <AppIcon name="userOutline" size={18} color={theme.colors.textPrimary} />
+                </View>
+                <Text style={styles.sheetCardTitle}>Mise en avant du produit</Text>
+                <Text style={styles.sheetPrice}>5.99CHF</Text>
+              </View>
+              <Text style={styles.sheetCardSubtitle}>
+                Payer pour mettre en avant cet article lors de sa publication.
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetCard}
+              activeOpacity={0.8}
+              onPress={() => console.log('coming soon')}
+            >
+              <View style={styles.sheetCardHeader}>
+                <View style={styles.sheetIconCircle}>
+                  <AppIcon name="userOutline" size={18} color={theme.colors.textPrimary} />
+                </View>
+                <Text style={styles.sheetCardTitle}>Mise en avant du dressing</Text>
+                <Text style={styles.sheetPrice}>12.99CHF</Text>
+              </View>
+              <Text style={styles.sheetCardSubtitle}>
+                Payer pour mettre en avant l&apos;intégralité des produits de votre dressing.
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.sheetNote}>
+              Ces mises en avant s&apos;appliqueront pendant une durée de 15 jours.
+            </Text>
+
+            <Button
+              title="Passer cette étape"
+              onPress={() => {
+                setShowPublishSheet(false);
+                router.replace('/tabs/feed');
+              }}
+              variant="primary"
+              style={styles.sheetSkipButton}
+            />
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -302,29 +629,37 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.backgroundWhite
   },
   header: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
+    paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5'
   },
   headerTitle: {
-    ...theme.typography.h1,
+    ...theme.typography.body,
+    fontSize: 17,
+    fontWeight: '600',
     color: theme.colors.textPrimary
+  },
+  backButton: {
+    padding: 8
+  },
+  headerRightPlaceholder: {
+    width: 32
   },
   scrollView: {
     flex: 1
   },
   scrollContent: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
+    paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 100
-  },
-  descriptionInput: {
-    minHeight: 120,
-    paddingTop: 14
+    paddingBottom: 120
   },
   photosSection: {
-    marginTop: 8,
-    marginBottom: 16
+    marginBottom: 24
   },
   photosLabel: {
     ...theme.typography.body,
@@ -336,7 +671,8 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   photosContent: {
-    gap: 12
+    gap: 12,
+    paddingRight: 4
   },
   photoItem: {
     position: 'relative',
@@ -349,6 +685,46 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: '100%'
+  },
+  photoUploadButton: {
+    alignSelf: 'center',
+    width: 167,
+    height: 56,
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: '#C3EA4F',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.backgroundWhite,
+    gap: 8
+  },
+  photoUploadIcon: {
+    marginRight: 8
+  },
+  photoUploadText: {
+    ...theme.typography.button,
+    color: theme.colors.textPrimary
+  },
+  photoAddTile: {
+    width: 100,
+    height: 100,
+    borderRadius: theme.radius.cardRadius,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.backgroundWhite
+  },
+  photoHint: {
+    ...theme.typography.captionSm,
+    color: theme.colors.textSecondary,
+    marginTop: 50,
+    textAlign: 'center'
+  },
+  photoHintLink: {
+    textDecorationLine: 'underline'
   },
   removeButton: {
     position: 'absolute',
@@ -367,26 +743,79 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     lineHeight: 20
   },
-  addPhotoButton: {
-    width: 100,
-    height: 100,
-    borderRadius: theme.radius.cardRadius,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.googleWhite
-  },
-  addPhotoText: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
-    textAlign: 'center'
-  },
   error: {
     ...theme.typography.caption,
-    color: '#EF4444',
+    color: theme.colors.danger,
     marginTop: 4
+  },
+  fieldGroup: {
+    paddingVertical: 16,
+    marginBottom: 0
+  },
+  fieldLabel: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary,
+    marginBottom: 8
+  },
+  textInput: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary,
+    paddingVertical: 0,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5'
+  },
+  descriptionInput: {
+    textAlignVertical: 'top'
+  },
+  fieldFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: 7
+  },
+  counterText: {
+    ...theme.typography.captionSm,
+    color: theme.colors.textSecondary
+  },
+  fieldSeparator: {
+    height: 0
+  },
+  sectionSeparator: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    marginHorizontal: -16
+  },
+  listSection: {
+    marginTop: 20,
+    marginBottom: 16
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginHorizontal: -16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5'
+  },
+  listRowFirst: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5'
+  },
+  listRowLabel: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary
+  },
+  listRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8
+  },
+  listRowValue: {
+    ...theme.typography.body,
+    color: theme.colors.textSecondary
   },
   footer: {
     position: 'absolute',
@@ -395,9 +824,169 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: theme.spacing.horizontalPadding,
     paddingTop: 16,
-    paddingBottom: 32,
     backgroundColor: theme.colors.backgroundWhite,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb'
+    borderTopColor: theme.colors.border
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end'
+  },
+  sheetOverlayTouchable: {
+    flex: 1
+  },
+  sheetContainer: {
+    backgroundColor: theme.colors.backgroundWhite,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: theme.spacing.horizontalPadding,
+    paddingTop: 12,
+    paddingBottom: 24
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    marginBottom: 16
+  },
+  sheetTitle: {
+    ...theme.typography.h3,
+    textAlign: 'center',
+    marginBottom: 16
+  },
+  sheetCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: '#F9FFE8',
+    borderRadius: theme.radius.cardRadius,
+    padding: 12,
+    marginBottom: 12
+  },
+  sheetCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4
+  },
+  sheetIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8
+  },
+  sheetCardTitle: {
+    ...theme.typography.body,
+    flex: 1,
+    marginHorizontal: 8,
+    color: theme.colors.textPrimary
+  },
+  sheetPrice: {
+    ...theme.typography.body,
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.textPrimary
+  },
+  sheetCardSubtitle: {
+    ...theme.typography.captionSm,
+    color: theme.colors.textSecondary
+  },
+  sheetNote: {
+    ...theme.typography.captionSm,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 16
+  },
+  sheetSkipButton: {
+    marginTop: 4
+  },
+  photoTipsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end'
+  },
+  photoTipsSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24
+  },
+  photoTipsHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 2,
+    marginBottom: 16
+  },
+  photoTipsCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  photoTipsCloseButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827'
+  },
+  photoTipsTitle: {
+    ...theme.typography.body,
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+    color: theme.colors.textPrimary
+  },
+  photoTipsSectionTitle: {
+    ...theme.typography.body,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: theme.colors.textPrimary
+  },
+  photoTipsImagesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12
+  },
+  photoTipsImagePlaceholder: {
+    width: 150,
+    height: 150,
+    borderRadius: 16,
+    backgroundColor: '#E5E5E5',
+    overflow: 'hidden'
+  },
+  photoTipsBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9999
+  },
+  photoTipsBadgeText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '700'
+  },
+  photoTipsText: {
+    ...theme.typography.body,
+    color: theme.colors.textSecondary
   }
 });

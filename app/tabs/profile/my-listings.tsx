@@ -10,15 +10,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import { theme } from '../../../lib/theme';
 import { ListingCard } from '../../../components/ListingCard';
 import { Button } from '../../../components/ui/Button';
-import { getMyListings, deleteListing, type FeedListing } from '../../../lib/api';
-import type { Listing } from '../../../lib/types';
+import { getMyListingsFeed, deleteListing, type FeedListing } from '../../../lib/api';
 
 export default function MyListingsScreen() {
   const router = useRouter();
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<FeedListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,7 +27,7 @@ export default function MyListingsScreen() {
   const loadListings = useCallback(async () => {
     try {
       setError(null);
-      const { data, error: apiError } = await getMyListings();
+      const { data, error: apiError } = await getMyListingsFeed();
 
       if (apiError) {
         setError(apiError);
@@ -89,35 +89,12 @@ export default function MyListingsScreen() {
     router.push(`/tabs/profile/edit-listing/${id}`);
   };
 
-  const toFeedListing = (item: Listing): FeedListing => ({
-    id: item.id,
-    seller_id: item.seller_id,
-    title: item.title,
-    description: item.description,
-    price: item.price,
-    status: item.status,
-    category: item.category,
-    condition: item.condition,
-    delivery_mode: item.delivery_mode,
-    city: item.city,
-    country_code: item.country_code,
-    created_at: item.created_at,
-    published_at: item.published_at,
-    updated_at: item.updated_at,
-    cover_photo_url: null,
-    cover_photo_order: null,
-    seller_display_name: null,
-    seller_avatar_url: null,
-    listing_city: item.city ?? '',
-    listing_country: item.country_code ?? ''
-  });
-
-  const renderItem = ({ item }: { item: Listing }) => {
+  const renderItem = ({ item }: { item: FeedListing }) => {
     const isDeleting = deletingId === item.id;
 
     return (
       <View style={styles.cardContainer}>
-        <ListingCard listing={toFeedListing(item)} />
+        <ListingCard listing={item} />
         <View style={styles.actions}>
           <Button
             title="Edit"
@@ -142,8 +119,7 @@ export default function MyListingsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Chargement de vos annonces...</Text>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -153,11 +129,14 @@ export default function MyListingsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
-          <Text style={styles.errorTitle}>Erreur de chargement</Text>
-          <Text style={styles.errorMessage}>{error.message}</Text>
-          <Text style={styles.retryText} onPress={loadListings}>
-            Réessayer
-          </Text>
+        <Feather name="alert-circle" size={40} color={theme.colors.error} style={styles.errorIcon} />
+        <Text style={styles.errorTitle}>Une erreur est survenue</Text>
+        <Button
+          title="Réessayer"
+          onPress={loadListings}
+          variant="secondary"
+          style={styles.retryButton}
+        />
         </View>
       </SafeAreaView>
     );
@@ -167,11 +146,15 @@ export default function MyListingsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
-          <Text style={styles.emptyTitle}>Aucune annonce</Text>
-          <Text style={styles.emptyMessage}>
-            Vous n’avez pas encore créé d’annonce. Rendez-vous dans l’onglet &quot;Vendre&quot; pour en
-            ajouter une.
-          </Text>
+        <Feather name="package" size={48} color={theme.colors.textSecondary} style={styles.emptyIcon} />
+        <Text style={styles.emptyTitle}>Vous n'avez pas encore d'annonces</Text>
+        <Text style={styles.emptyMessage}>Publiez votre première annonce</Text>
+        <Button
+          title="Vendre un article"
+          onPress={() => router.push('/tabs/sell')}
+          variant="primary"
+          style={styles.emptyCtaButton}
+        />
         </View>
       </SafeAreaView>
     );
@@ -237,6 +220,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: theme.spacing.horizontalPadding
   },
+  emptyIcon: {
+    marginBottom: 16
+  },
   loadingText: {
     ...theme.typography.body,
     color: theme.colors.textSecondary,
@@ -247,16 +233,17 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     marginBottom: 8
   },
+  errorIcon: {
+    marginBottom: 16
+  },
   errorMessage: {
     ...theme.typography.body,
     color: theme.colors.textSecondary,
     textAlign: 'center',
     marginBottom: 16
   },
-  retryText: {
-    ...theme.typography.body,
-    color: theme.colors.primary,
-    fontFamily: theme.fontFamily.semiBold
+  retryButton: {
+    marginTop: 8
   },
   emptyTitle: {
     ...theme.typography.h2,
@@ -267,7 +254,11 @@ const styles = StyleSheet.create({
   emptyMessage: {
     ...theme.typography.body,
     color: theme.colors.textSecondary,
-    textAlign: 'center'
+    textAlign: 'center',
+    marginBottom: 16
+  },
+  emptyCtaButton: {
+    marginTop: 8
   }
 });
 

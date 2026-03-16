@@ -15,20 +15,20 @@ export default function TabsLayout() {
         options={{ title: 'Feed' }}
       />
       <Tabs.Screen
-        name="sell/index"
+        name="search"
+        options={{ title: 'Recherche' }}
+      />
+      <Tabs.Screen
+        name="sell"
         options={{ title: 'Vendre' }}
       />
       <Tabs.Screen
-        name="messages/index"
+        name="messages"
         options={{ title: 'Messages' }}
       />
       <Tabs.Screen
         name="profile"
         options={{ title: 'Profil' }}
-      />
-      <Tabs.Screen
-        name="test/index"
-        options={{ title: 'Test' }}
       />
     </Tabs>
   );

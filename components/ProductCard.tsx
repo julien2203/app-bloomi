@@ -34,8 +34,17 @@ export function ProductCard({
   onPress,
   style
 }: ProductCardProps) {
+  const conditionLabelMap: Record<string, string> = {
+    new: 'New with tags',
+    like_new: 'New without tags',
+    good: 'Very good',
+    fair: 'Good',
+    poor: 'Satisfactory'
+  };
+
   const formattedPrice = `${price.toFixed(2)} ${currency}`;
   const formattedPriceIncl = `${(price * 1.08).toFixed(2)} ${currency} incl.`;
+  const conditionLabel = condition ? conditionLabelMap[condition] ?? condition : undefined;
 
   return (
     <TouchableOpacity
@@ -58,6 +67,7 @@ export function ProductCard({
       )}
 
       <View style={styles.body}>
+        {/* Ligne prix */}
         <View style={styles.priceRow}>
           <Text variant="captionSm" style={styles.priceMain}>
             {formattedPrice}
@@ -67,6 +77,14 @@ export function ProductCard({
           </Text>
         </View>
 
+        {/* Titre */}
+        {title && (
+          <Text variant="captionSm" numberOfLines={1} style={styles.title}>
+            {title}
+          </Text>
+        )}
+
+        {/* Marque sous le titre */}
         {brand && (
           <Text
             variant="captionSm"
@@ -78,25 +96,20 @@ export function ProductCard({
           </Text>
         )}
 
-        {condition && (
-          <Text
-            variant="captionSm"
-            color="textSecondary"
-            numberOfLines={1}
-            style={styles.meta}
-          >
-            {condition}
-          </Text>
-        )}
+        {/* Ligne état (gauche) / like (droite) */}
+        <View style={styles.conditionRow}>
+          {conditionLabel ? (
+            <Text
+              variant="captionSm"
+              color="textSecondary"
+              numberOfLines={1}
+            >
+              {conditionLabel}
+            </Text>
+          ) : (
+            <View />
+          )}
 
-        <View style={styles.footer}>
-          <View style={styles.titleContainer}>
-            {title && (
-              <Text variant="captionSm" numberOfLines={1}>
-                {title}
-              </Text>
-            )}
-          </View>
           <View style={styles.likes}>
             <AppIcon
               name="likeHeartOutline"
@@ -113,7 +126,7 @@ export function ProductCard({
   );
 }
 
-const IMAGE_HEIGHT = 144; // ~60% de la carte
+const IMAGE_HEIGHT = 168; // image un peu plus haute
 const RADIUS = 8;
 
 const styles = StyleSheet.create({
@@ -155,18 +168,17 @@ const styles = StyleSheet.create({
   meta: {
     marginBottom: 4
   },
+  title: {
+    marginBottom: 4
+  },
   priceMain: {
     fontFamily: theme.fontFamily.semiBold
   },
-  footer: {
+  conditionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 4
   },
   likes: {
     flexDirection: 'row',
