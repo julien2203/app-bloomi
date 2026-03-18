@@ -18,6 +18,9 @@ yarn-error.log*
 *.env
 !.env.example
 
+# Secrets / credentials
+bloomi-app-*.json
+
 # Dossiers de développement
 .expo/
 dist/
