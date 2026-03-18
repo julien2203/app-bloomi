@@ -5,15 +5,16 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking
+  Linking,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
+import { AppIcon } from '../../components/ui/AppIcon';
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
@@ -65,39 +66,75 @@ export default function VerifyEmailScreen() {
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Vérifiez votre e-mail.</Text>
-          <View style={styles.headerSpacer} />
+          <Text style={styles.headerTitle}>Verify your email</Text>
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                await supabase.auth.signOut();
+              } finally {
+                router.replace('/onboarding/splash');
+              }
+            }}
+            style={styles.logoutButton}
+          >
+            <Text style={styles.logoutText}>Log out</Text>
+          </TouchableOpacity>
         </View>
+        <View style={styles.headerSeparator} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.content}>
+          <View style={styles.mainContent}>
             {/* Illustration */}
-            <View style={styles.illustration}>
-              <Ionicons name="mail-outline" size={64} color={theme.colors.primary} />
+            <View style={styles.illustrationContainer}>
+              <Image
+                source={require('../../assets/onboarding/illustration-email.png')}
+                style={styles.illustrationImage}
+                resizeMode="contain"
+              />
             </View>
 
-            <Text style={styles.title}>
-              Vérifiez votre e-mail pour sécuriser votre compte
-            </Text>
-            <Text style={styles.subtitle}>
-              Un lien de confirmation a été envoyé à{' '}
-              <Text style={styles.subtitleEmail}>{displayedEmail}</Text>. Cliquez dessus pour
-              activer votre compte.
-            </Text>
+            {/* Bloc texte */}
+            <View style={styles.textBlock}>
+              <Text style={styles.title}>
+                Verify your email to keep your account secure
+              </Text>
+              <Text style={styles.subtitle}>
+                Verifying your email address helps you to safely recover your password, retrieve and
+                protect your account, and receive secure messages from us.
+              </Text>
+            </View>
 
+            {/* Bouton principal */}
             <Button
               title="Ouvrir ma boîte mail"
               onPress={handleOpenMailbox}
               variant="primary-green"
               style={styles.primaryButton}
+              textStyle={styles.primaryButtonText}
             />
 
+            {/* Lien Learn more */}
+            <TouchableOpacity
+              onPress={() => {
+                // Conserver la logique existante si elle est ajoutée plus tard
+              }}
+              style={styles.learnMoreContainer}
+            >
+              <Text style={styles.learnMoreText}>Learn more</Text>
+            </TouchableOpacity>
+
+            {/* Lien renvoi email + messages */}
             <TouchableOpacity onPress={handleResend} style={styles.resendLink}>
               <Text style={styles.resendText}>
                 Vous n'avez pas reçu notre e-mail ?{' '}
@@ -115,13 +152,27 @@ export default function VerifyEmailScreen() {
                 {error}
               </Text>
             )}
-          </View>
 
-          <View style={styles.legalContainer}>
-            <Text style={styles.legalText}>
-              En continuant, vous acceptez les Conditions d'utilisation de Bloomi et
-              reconnaissez avoir lu notre Politique de confidentialité.
-            </Text>
+            {/* Legal en bas */}
+            <View style={styles.legalContainer}>
+              <Text style={styles.legalText}>
+                By continuing, you agree to Bloomi&apos;s{' '}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => Linking.openURL('https://bloomi.app/terms')}
+                >
+                  Terms of Service
+                </Text>{' '}
+                and acknowledge you&apos;ve read our{' '}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => Linking.openURL('https://bloomi.app/privacy')}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -138,9 +189,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 8,
-    paddingBottom: 8
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12
   },
   backButton: {
     padding: 4
@@ -148,53 +199,83 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...theme.typography.body,
     fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.textPrimary,
+    fontSize: 16
+  },
+  logoutButton: {
+    paddingVertical: 4
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '400',
     color: theme.colors.textPrimary
   },
-  headerSpacer: {
-    width: 24
+  headerSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E5E5'
   },
   scrollContent: {
-    flexGrow: 1
+    flexGrow: 1,
+    paddingBottom: 24
   },
-  content: {
+  mainContent: {
     flex: 1,
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 32
+    paddingTop: 48,
+    paddingHorizontal: 0
   },
-  illustration: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: `${theme.colors.primary}20`,
-    alignItems: 'center',
-    justifyContent: 'center',
+  illustrationContainer: {
     alignSelf: 'center',
-    marginBottom: 24
+    marginTop: 48,
+    marginBottom: 40,
+    width: 220,
+    height: 220
+  },
+  illustrationImage: {
+    width: '100%',
+    height: '100%'
   },
   title: {
-    ...theme.typography.h1,
     fontSize: 22,
-    textAlign: 'center',
+    fontWeight: '700',
     color: theme.colors.textPrimary,
-    marginBottom: 12
+    textAlign: 'center',
+    lineHeight: 28,
+    marginBottom: 16
   },
   subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#888888',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24
+    lineHeight: 21
   },
-  subtitleEmail: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.fontFamily.semiBold
+  textBlock: {
+    paddingHorizontal: 32
   },
   primaryButton: {
-    marginBottom: 16
+    marginTop: 32,
+    marginHorizontal: 16,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#CCFF00'
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.appleBlack
+  },
+  learnMoreContainer: {
+    marginTop: 16,
+    alignItems: 'center'
+  },
+  learnMoreText: {
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    textDecorationLine: 'underline'
   },
   resendLink: {
     alignItems: 'center',
-    paddingVertical: 8
+    paddingVertical: 12
   },
   resendText: {
     ...theme.typography.body,
@@ -219,14 +300,19 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   legalContainer: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingVertical: 24
+    marginTop: 'auto',
+    paddingHorizontal: 24,
+    marginBottom: 24
   },
   legalText: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    fontSize: 12,
+    color: '#AAAAAA',
     textAlign: 'center',
     lineHeight: 18
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
+    color: '#AAAAAA'
   }
 });
 

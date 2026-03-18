@@ -28,7 +28,7 @@ export type SellFormState = {
   brand: SellBrand | null;
   condition?: string;
   size: SellSize | null;
-  color: SellColor | null;
+  color: SellColor[];
   price?: number;
 };
 
@@ -52,7 +52,7 @@ const defaultValues: SellFormState = {
   category: null,
   brand: null,
   size: null,
-  color: null,
+  color: [],
   condition: undefined,
   price: undefined
 };

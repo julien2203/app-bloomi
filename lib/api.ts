@@ -370,7 +370,7 @@ export async function getListingByIdWithRelations(id: string): Promise<ApiRespon
     .single();
 
   if (error) {
-    return { data: null, error: new Error(error.message) };
+    return { data: null, error: error.message };
   }
 
   return { data: data as ListingWithRelations, error: null };
@@ -438,7 +438,7 @@ export async function uploadListingPhoto(
       .getPublicUrl(filePath);
 
     if (!urlData?.publicUrl) {
-      return { data: null, error: new Error('Impossible de récupérer l\'URL publique') };
+      return { data: null, error: new Error("Impossible de récupérer l'URL publique") };
     }
 
     return { data: urlData.publicUrl, error: null };
@@ -469,7 +469,7 @@ export async function addListingPhoto(
     .single();
 
   if (error) {
-    return { data: null, error: new Error(error.message) };
+    return { data: null, error: error.message };
   }
 
   return { data: data as ListingPhoto, error: null };
@@ -482,7 +482,7 @@ export async function getMyListings(): Promise<ApiResponse<Listing[]>> {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: new Error('Utilisateur non connecté') };
+    return { data: [], error: 'Utilisateur non connecté' };
   }
 
   const { data, error } = await supabase
@@ -492,7 +492,7 @@ export async function getMyListings(): Promise<ApiResponse<Listing[]>> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return { data: [], error: new Error(error.message) };
+    return { data: [], error: error.message };
   }
 
   return { data: (data || []) as Listing[], error: null };
@@ -508,7 +508,7 @@ export async function getMyListingsFeed(): Promise<ApiResponse<FeedListing[]>> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: new Error('Utilisateur non connecté') };
+    return { data: [], error: 'Utilisateur non connecté' };
   }
 
   const { data, error } = await supabase
@@ -518,7 +518,7 @@ export async function getMyListingsFeed(): Promise<ApiResponse<FeedListing[]>> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return { data: [], error: new Error(error.message) };
+    return { data: [], error: error.message };
   }
 
   return { data: (data || []) as FeedListing[], error: null };
@@ -536,7 +536,7 @@ export async function updateListing(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: new Error('Utilisateur non connecté') };
+    return { data: null, error: 'Utilisateur non connecté' };
   }
 
   const { data, error } = await supabase
@@ -548,7 +548,7 @@ export async function updateListing(
     .single();
 
   if (error) {
-    return { data: null, error: new Error(error.message) };
+    return { data: null, error: error.message };
   }
 
   return { data: data as Listing, error: null };
@@ -563,7 +563,7 @@ export async function deleteListing(id: string): Promise<ApiResponse<void>> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: new Error('Utilisateur non connecté') };
+    return { data: null, error: 'Utilisateur non connecté' };
   }
 
   const { error } = await supabase
@@ -573,7 +573,7 @@ export async function deleteListing(id: string): Promise<ApiResponse<void>> {
     .eq('seller_id', user.id);
 
   if (error) {
-    return { data: null, error: new Error(error.message) };
+    return { data: null, error: error.message };
   }
 
   return { data: null, error: null };
@@ -590,7 +590,7 @@ export async function getThreads(): Promise<ApiResponse<ThreadWithRelations[]>> 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: new Error('Utilisateur non connecté') };
+    return { data: [], error: 'Utilisateur non connecté' };
   }
 
   const { data, error } = await supabase
@@ -608,7 +608,7 @@ export async function getThreads(): Promise<ApiResponse<ThreadWithRelations[]>> 
     .order('created_at', { ascending: false });
 
   if (error) {
-    return { data: [], error: new Error(error.message) };
+    return { data: [], error: error.message };
   }
 
   return { data: (data || []) as ThreadWithRelations[], error: null };
@@ -626,11 +626,11 @@ export async function createOrGetThreadForListing(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: new Error('Utilisateur non connecté') };
+    return { data: null, error: 'Utilisateur non connecté' };
   }
 
   if (user.id === sellerId) {
-    return { data: null, error: new Error('Le vendeur ne peut pas se contacter lui-même') };
+    return { data: null, error: 'Le vendeur ne peut pas se contacter lui-même' };
   }
 
   try {
@@ -644,7 +644,7 @@ export async function createOrGetThreadForListing(
 
     if (existingError && existingError.code !== 'PGRST116') {
       // Erreur réelle (autre que "no rows returned")
-      return { data: null, error: new Error(existingError.message) };
+      return { data: null, error: existingError.message };
     }
 
     if (existing) {
@@ -663,14 +663,14 @@ export async function createOrGetThreadForListing(
       .single();
 
     if (insertError) {
-      return { data: null, error: new Error(insertError.message) };
+      return { data: null, error: insertError.message };
     }
 
     return { data: created as Thread, error: null };
   } catch (err) {
     return {
       data: null,
-      error: err instanceof Error ? err : new Error('Erreur lors de la création du thread')
+      error: err instanceof Error ? err.message : 'Erreur lors de la création du thread'
     };
   }
 }
@@ -695,7 +695,7 @@ export async function getMessages(threadId: string): Promise<ApiResponse<Message
     .order('created_at', { ascending: true });
 
   if (error) {
-    return { data: [], error: new Error(error.message) };
+    return { data: [], error: error.message };
   }
 
   return { data: (data || []) as Message[], error: null };
@@ -711,7 +711,7 @@ export async function sendMessage(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: new Error('Utilisateur non connecté') };
+    return { data: null, error: 'Utilisateur non connecté' };
   }
 
   const { data, error } = await supabase
@@ -719,7 +719,8 @@ export async function sendMessage(
     .insert({
       thread_id: threadId,
       sender_id: user.id,
-      body
+      body,
+      type: 'text'
     })
     .select(
       `
@@ -730,8 +731,62 @@ export async function sendMessage(
     .single();
 
   if (error) {
-    return { data: null, error: new Error(error.message) };
+    return { data: null, error: error.message };
   }
+
+  // Garder l'inbox instantanée (tri basé sur threads.last_message_at)
+  await supabase
+    .from('threads')
+    .update({ last_message_at: (data as any)?.created_at ?? new Date().toISOString() })
+    .eq('id', threadId);
+
+  return { data: data as Message, error: null };
+}
+
+export async function sendOfferMessage(params: {
+  threadId: string;
+  listingId: string;
+  amount: number;
+  currency?: string;
+}): Promise<ApiResponse<Message>> {
+  const { threadId, listingId, amount, currency = 'CHF' } = params;
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'Utilisateur non connecté' };
+  }
+
+  const fallbackBody = `Offer: ${amount.toFixed(2)} ${currency} (status: pending)`;
+
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      thread_id: threadId,
+      sender_id: user.id,
+      body: fallbackBody,
+      type: 'offer',
+      offer_amount: amount,
+      offer_currency: currency,
+      offer_status: 'pending',
+      listing_id: listingId
+    })
+    .select(
+      `
+      *,
+      sender:profiles!messages_sender_id_fkey(id, display_name, avatar_url)
+    `
+    )
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  // Garder l'inbox instantanée (tri basé sur threads.last_message_at)
+  await supabase
+    .from('threads')
+    .update({ last_message_at: (data as any)?.created_at ?? new Date().toISOString() })
+    .eq('id', threadId);
 
   return { data: data as Message, error: null };
 }
@@ -747,7 +802,7 @@ export async function getOrders(): Promise<ApiResponse<Order[]>> {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: new Error('Utilisateur non connecté') };
+    return { data: [], error: 'Utilisateur non connecté' };
   }
 
   const { data, error } = await supabase
@@ -764,7 +819,7 @@ export async function getOrders(): Promise<ApiResponse<Order[]>> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return { data: [], error: new Error(error.message) };
+    return { data: [], error: error.message };
   }
 
   return { data: (data || []) as Order[], error: null };

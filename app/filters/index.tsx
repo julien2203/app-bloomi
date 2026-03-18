@@ -77,6 +77,7 @@ export default function FiltersIndexScreen() {
             style={styles.backButton}
             onPress={() => router.replace('/tabs/feed')}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>

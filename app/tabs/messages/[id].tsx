@@ -7,7 +7,8 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Image
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -24,6 +25,11 @@ type MessageRow = {
   thread_id: string;
   sender_id: string;
   body: string;
+  type?: 'text' | 'offer' | string | null;
+  offer_amount?: number | null;
+  offer_status?: 'pending' | 'accepted' | 'declined' | string | null;
+  offer_currency?: string | null;
+  listing_id?: string | null;
   read_at: string | null;
   created_at: string;
 };
@@ -154,7 +160,18 @@ export default function ThreadScreen() {
 
   const listingTitle = useMemo(() => {
     if (!threadMeta) return '';
-    return threadMeta.listing_title;
+    return threadMeta.listinf_title ?? threadMeta.listing_title ?? '';
+  }, [threadMeta]);
+
+  const listingPrice = useMemo(() => {
+    if (!threadMeta) return null;
+    const price = (threadMeta as any).listing_price as number | null;
+    return typeof price === 'number' ? price : null;
+  }, [threadMeta]);
+
+  const listingImage = useMemo(() => {
+    if (!threadMeta) return null;
+    return (threadMeta as any).listing_cover_photo_url as string | null;
   }, [threadMeta]);
 
   const handleSend = async () => {
@@ -198,8 +215,103 @@ export default function ThreadScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: MessageRow }) => {
+  const renderItem = ({ item, index }: { item: MessageRow; index: number }) => {
     const isMine = item.sender_id === user?.id;
+
+    const isOffer = item.type === 'offer' || item.body.startsWith('Offer:');
+
+    if (isOffer) {
+      const amountFromCol = typeof item.offer_amount === 'number' ? item.offer_amount : null;
+      const amountMatch = item.body.match(/Offer:\s*([0-9]+(?:\.[0-9]{1,2})?)/i);
+      const amountFromBody = amountMatch ? parseFloat(amountMatch[1]) : null;
+      const amount = amountFromCol ?? amountFromBody;
+
+      const normalizedStatus = (item.offer_status || '').toString().toLowerCase();
+      let status: 'Pending' | 'Accepted' | 'Declined' = 'Pending';
+      if (normalizedStatus === 'accepted' || /accepted/i.test(item.body)) status = 'Accepted';
+      if (normalizedStatus === 'declined' || /declined|refused/i.test(item.body)) status = 'Declined';
+
+      let statusColor = theme.colors.textSecondary;
+      if (status === 'Accepted') statusColor = '#16A34A';
+      if (status === 'Declined') statusColor = '#EF4444';
+
+      const originalPrice = listingPrice ?? null;
+      const isSeller = !!threadMeta && user?.id === threadMeta.seller_id;
+      const canActOnOffer = isSeller && status === 'Pending' && !isMine;
+
+      const updateOfferStatus = async (next: 'accepted' | 'declined') => {
+        if (!threadId || !user) return;
+        try {
+          await supabase
+            .from('messages')
+            .update({ offer_status: next })
+            .eq('id', item.id);
+
+          const autoBody =
+            next === 'accepted' ? 'Offer accepted.' : 'Offer declined.';
+
+          await supabase
+            .from('messages')
+            .insert({
+              thread_id: threadId,
+              sender_id: user.id,
+              body: autoBody,
+              type: 'text'
+            });
+        } catch {
+          // no-op: on garde l'UI existante (errors gérés globalement)
+        }
+      };
+
+      return (
+        <View style={[styles.messageRow, isMine ? styles.messageRowRight : styles.messageRowLeft]}>
+          <View style={styles.offerCard}>
+            <View style={styles.offerRow}>
+              <Text variant="body" style={styles.offerAmount}>
+                {amount != null ? `${amount.toFixed(2)} CHF` : 'Offer'}
+              </Text>
+              {originalPrice != null && (
+                <Text variant="captionSm" style={styles.offerOriginalPrice}>
+                  {originalPrice.toFixed(2)} CHF
+                </Text>
+              )}
+            </View>
+            <Text
+              variant="captionSm"
+              style={[styles.offerStatus, { color: statusColor }]}
+            >
+              {status}
+            </Text>
+            {canActOnOffer && (
+              <View style={styles.offerActionsRow}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.offerActionBtn, styles.offerAcceptBtn]}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  onPress={() => void updateOfferStatus('accepted')}
+                >
+                  <Text variant="captionSm" style={styles.offerActionText}>
+                    Accept
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.offerActionBtn, styles.offerDeclineBtn]}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  onPress={() => void updateOfferStatus('declined')}
+                >
+                  <Text variant="captionSm" style={styles.offerActionText}>
+                    Decline
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    // Bulle standard
     return (
       <View style={[styles.messageRow, isMine ? styles.messageRowRight : styles.messageRowLeft]}>
         <View
@@ -304,30 +416,95 @@ export default function ThreadScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={insets.top}
       >
+        {/* Carte article sticky */}
+        {threadMeta && (
+          <View style={styles.listingHeader}>
+            {listingImage ? (
+              <Image source={{ uri: listingImage }} style={styles.listingHeaderImage} />
+            ) : (
+              <View style={[styles.listingHeaderImage, styles.listingHeaderImagePlaceholder]}>
+                <Text variant="body" color="textSecondary">
+                  ?
+                </Text>
+              </View>
+            )}
+            <View style={styles.listingHeaderInfo}>
+              <Text
+                variant="body"
+                style={styles.listingHeaderTitle}
+                numberOfLines={2}
+              >
+                {listingTitle}
+              </Text>
+              {listingPrice != null && (
+                <Text variant="body" style={styles.listingHeaderPrice}>
+                  {listingPrice.toFixed(2)} CHF
+                </Text>
+              )}
+              {listingPrice != null && (
+                <Text variant="captionSm" style={styles.listingHeaderProtection}>
+                  {(listingPrice * (1 + 0.08)).toFixed(0)}CHF includes Buyer Protection 🛡️
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
         <View style={styles.messagesContainer}>{content}</View>
 
         <View
           style={[
-            styles.inputBar,
-            { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }
+            styles.inputBarContainer,
+            { paddingBottom: (insets.bottom || 16) }
           ]}
         >
-          <TextInput
-            style={styles.textInput}
-            placeholder="Écrire un message..."
-            placeholderTextColor={theme.colors.textSecondary}
-            value={input}
-            onChangeText={setInput}
-            multiline
-          />
-          <Button
-            title="Envoyer"
+          <View style={styles.inputBar}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Write a message here..."
+              placeholderTextColor={theme.colors.textSecondary}
+              value={input}
+              onChangeText={setInput}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={() => {}}
+              activeOpacity={0.7}
+              style={styles.iconButton}
+            >
+              <AppIcon
+                name="paperclipOutline"
+                size={18}
+                color={theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {}}
+              activeOpacity={0.7}
+              style={styles.iconButton}
+            >
+              <AppIcon
+                name="stickerSmileCircle2Outline"
+                size={18}
+                color={theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
             onPress={handleSend}
-            variant="primary"
-            style={styles.sendButton}
+            activeOpacity={0.8}
             disabled={!input.trim() || sending}
-            loading={sending}
-          />
+            style={[
+              styles.sendCircle,
+              (!input.trim() || sending) && styles.sendCircleDisabled
+            ]}
+          >
+            <AppIcon
+              name={(!input.trim() || sending) ? 'conversationPlainOutline' : 'conversationPlainBold'}
+              size={20}
+              color={(!input.trim() || sending) ? theme.colors.textSecondary : theme.colors.googleWhite}
+            />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -416,30 +593,140 @@ const styles = StyleSheet.create({
     textAlign: 'right'
   },
   inputBar: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E5E5',
-    backgroundColor: theme.colors.backgroundWhite,
-    columnGap: 8
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6
   },
   textInput: {
     flex: 1,
     maxHeight: 100,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     ...theme.typography.body,
     color: theme.colors.textPrimary
   },
-  sendButton: {
-    minWidth: 88,
-    height: 40,
-    borderRadius: 20
+  inputBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5E5',
+    backgroundColor: theme.colors.backgroundWhite
+  },
+  iconButton: {
+    marginLeft: 8
+  },
+  iconText: {
+    fontSize: 18
+  },
+  sendCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#CCFF00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8
+  },
+  sendCircleDisabled: {
+    backgroundColor: '#E5E5E5'
+  },
+  sendCircleIcon: {
+    fontSize: 18
+  },
+  listingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
+    backgroundColor: theme.colors.backgroundWhite
+  },
+  listingHeaderImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 8
+  },
+  listingHeaderImagePlaceholder: {
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  listingHeaderInfo: {
+    flex: 1,
+    marginLeft: 12
+  },
+  listingHeaderTitle: {
+    fontSize: 16,
+    marginBottom: 4
+  },
+  listingHeaderPrice: {
+    ...theme.typography.body,
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.textPrimary
+  },
+  listingHeaderProtection: {
+    marginTop: 2,
+    fontSize: 13,
+    color: theme.colors.danger
+  },
+  offerCard: {
+    maxWidth: '80%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5'
+  },
+  offerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4
+  },
+  offerAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.textPrimary
+  },
+  offerOriginalPrice: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'line-through'
+  },
+  offerStatus: {
+    fontSize: 13
+  },
+  offerActionsRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    marginTop: 10
+  },
+  offerActionBtn: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1
+  },
+  offerAcceptBtn: {
+    backgroundColor: '#C3EA4F',
+    borderColor: '#C3EA4F'
+  },
+  offerDeclineBtn: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E5E5'
+  },
+  offerActionText: {
+    color: theme.colors.textPrimary,
+    fontWeight: '600'
   }
 });
 

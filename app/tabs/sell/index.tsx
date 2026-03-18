@@ -38,6 +38,14 @@ type Photo = {
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 300;
 
+const CONDITION_LABELS: Record<string, string> = {
+  new: 'New with tags',
+  like_new: 'New without tags',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Poor'
+};
+
 export default function SellScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -156,6 +164,16 @@ export default function SellScreen() {
     return !hasErrors;
   };
 
+  const conditionLabel =
+    sellValues.condition != null
+      ? CONDITION_LABELS[sellValues.condition] ?? sellValues.condition
+      : null;
+
+  const colorLabel =
+    sellValues.color && sellValues.color.length > 0
+      ? sellValues.color.map((c) => c.name).join(', ')
+      : null;
+
   const handlePublish = async () => {
     if (!user) {
       Alert.alert('Erreur', 'Vous devez être connecté pour créer une annonce');
@@ -194,7 +212,10 @@ export default function SellScreen() {
         condition: sellValues.condition ?? null,
         brand: sellValues.brand?.name ?? null,
         size: sellValues.size?.label ?? null,
-        color: sellValues.color?.name ?? null,
+        color:
+          sellValues.color && sellValues.color.length > 0
+            ? sellValues.color.map((c) => c.name).join(', ')
+            : null,
         delivery_mode: 'both',
         city: city.trim(),
         country_code: 'CH',
@@ -253,6 +274,7 @@ export default function SellScreen() {
             onPress={() => router.back()}
             activeOpacity={0.7}
             style={styles.backButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -422,8 +444,8 @@ export default function SellScreen() {
             >
               <Text style={styles.listRowLabel}>Condition</Text>
               <View style={styles.listRowRight}>
-                {sellValues.condition ? (
-                  <Text style={styles.listRowValue}>{sellValues.condition}</Text>
+                {conditionLabel ? (
+                  <Text style={styles.listRowValue}>{conditionLabel}</Text>
                 ) : null}
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
@@ -454,8 +476,8 @@ export default function SellScreen() {
             >
               <Text style={styles.listRowLabel}>Color</Text>
               <View style={styles.listRowRight}>
-                {sellValues.color ? (
-                  <Text style={styles.listRowValue}>{sellValues.color.name}</Text>
+                {colorLabel ? (
+                  <Text style={styles.listRowValue}>{colorLabel}</Text>
                 ) : null}
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>

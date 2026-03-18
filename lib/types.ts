@@ -134,6 +134,11 @@ export interface Message {
   thread_id: string;
   sender_id: string;
   body: string;
+  type?: 'text' | 'offer' | string;
+  offer_amount?: number | null;
+  offer_status?: 'pending' | 'accepted' | 'declined' | string | null;
+  offer_currency?: string | null;
+  listing_id?: string | null;
   read_at: string | null;
   created_at: string;
 }

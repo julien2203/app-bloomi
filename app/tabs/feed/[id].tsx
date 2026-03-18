@@ -23,9 +23,10 @@ import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { useAuthStore } from '../../../stores/authStore';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_WIDTH = SCREEN_WIDTH - 48; // marge 16 gauche + 16 droite + 16 peek
 const ITEM_HEIGHT = ITEM_WIDTH;
+const MODAL_IMAGE_HEIGHT = SCREEN_HEIGHT * 0.65;
 
 type PhotoItem = {
   id: string;
@@ -151,7 +152,11 @@ export default function ListingDetailScreen() {
   };
 
   const handleMakeOffer = () => {
-    console.log('Make an offer:', listing?.id);
+    if (!listing) return;
+    router.push({
+      pathname: '/tabs/feed/make-offer',
+      params: { id: listing.id }
+    });
   };
 
   const handleBuyNow = () => {
@@ -256,6 +261,7 @@ export default function ListingDetailScreen() {
             onPress={handleBack}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.iconTouch}
           >
             <AppIcon
               name="arrowLeftOutline"
@@ -266,7 +272,12 @@ export default function ListingDetailScreen() {
           <Text variant="body" style={styles.headerTitle}>
             Detail product
           </Text>
-          <TouchableOpacity onPress={handleMore} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={handleMore}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.iconTouch}
+          >
             <Feather
               name="more-horizontal"
               size={24}
@@ -330,6 +341,7 @@ export default function ListingDetailScreen() {
                   style={styles.favoriteIconContainer}
                   onPress={handleFavoritePress}
                   activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <AppIcon
                     name="likeHeartBold"
@@ -397,6 +409,7 @@ export default function ListingDetailScreen() {
                 onPress={handleMessageSeller}
                 variant="primary"
                 style={styles.sellerButton}
+                textStyle={styles.sellerButtonText}
               />
             )}
           </View>
@@ -553,17 +566,22 @@ export default function ListingDetailScreen() {
         <Modal
           visible={isImageModalVisible}
           animationType="fade"
-          transparent={false}
+          transparent
           onRequestClose={handleModalClose}
         >
           <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
+            <View
+              style={[
+                styles.modalHeader,
+                { top: insets.top + 8 }
+              ]}
+            >
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={handleModalClose}
                 activeOpacity={0.8}
               >
-                <Text variant="body" color="appleBlack">
+                <Text variant="body" color="appleBlack" style={styles.modalCloseText}>
                   Close
                 </Text>
               </TouchableOpacity>
@@ -591,6 +609,7 @@ export default function ListingDetailScreen() {
                 keyExtractor={(item) => item.id}
                 horizontal
                 showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.modalThumbsContent}
                 renderItem={({ item, index }) => (
                   <TouchableOpacity
                     onPress={() => setModalImageIndex(index)}
@@ -682,6 +701,9 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     fontFamily: theme.fontFamily.semiBold
   },
+  iconTouch: {
+    padding: 8
+  },
   scrollView: {
     flex: 1,
     backgroundColor: '#fff'
@@ -770,9 +792,13 @@ const styles = StyleSheet.create({
   },
   sellerButton: {
     flex: 0,
-    width: 118,
+    width: 130,
     borderRadius: 52,
-    height: 36
+    height: 36,
+    paddingHorizontal: 10
+  },
+  sellerButtonText: {
+    fontSize: 16
   },
   productBlock: {
     paddingHorizontal: theme.spacing.screenPaddingX,
@@ -873,47 +899,51 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.9)'
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center'
   },
   modalHeader: {
-    alignItems: 'flex-end',
-    paddingHorizontal: theme.spacing.screenPaddingX,
-    paddingTop: theme.spacing.gapSm
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10
   },
   modalCloseButton: {
-    paddingHorizontal: theme.spacing.gapMd,
-    paddingVertical: theme.spacing.gapSm,
-    borderRadius: theme.radius.button,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#FFFFFF'
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF'
+  },
+  modalCloseText: {
+    fontSize: 15,
+    fontWeight: '500'
   },
   modalImageContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16
+    height: MODAL_IMAGE_HEIGHT,
+    alignItems: 'center'
   },
   modalImage: {
-    width: '100%',
+    width: SCREEN_WIDTH - 32,
     height: '100%',
-    borderRadius: 12
+    borderRadius: 16
   },
   modalThumbnails: {
-    paddingVertical: theme.spacing.gapSm,
-    paddingHorizontal: theme.spacing.screenPaddingX
+    marginTop: 12,
+    paddingHorizontal: 16
+  },
+  modalThumbsContent: {
+    columnGap: 8
   },
   modalThumbWrapper: {
     width: 64,
     height: 64,
-    borderRadius: theme.radius.card,
+    borderRadius: 10,
     overflow: 'hidden',
-    marginRight: theme.spacing.gapSm,
-    borderWidth: 1,
-    borderColor: theme.colors.border
+    borderWidth: 0
   },
   modalThumbWrapperActive: {
-    borderColor: theme.colors.primary
+    borderWidth: 2,
+    borderColor: '#CCFF00'
   },
   modalThumb: {
     width: '100%',

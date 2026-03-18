@@ -113,8 +113,8 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   logoImage: {
-    width: 140,
-    height: 140
+    width: 180,
+    height: 180
   },
   content: {
     flex: 1,
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingBottom: 80
+    paddingBottom: 40
   },
   socialButton: {
     marginBottom: 12
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   legalContainer: {
-    marginTop: 32,
+    marginTop: 40,
     paddingHorizontal: theme.spacing.horizontalPadding,
     paddingBottom: 30
   },

@@ -44,7 +44,7 @@ export function HomeHero({ backgroundUri }: HomeHeroProps) {
                 style={styles.searchIcon}
               />
               <TextInput
-                placeholder="Adidas shoes"
+                placeholder="Rechercher un article"
                 placeholderTextColor={theme.colors.textSecondary}
                 style={styles.searchInput}
               />
@@ -66,12 +66,12 @@ export function HomeHero({ backgroundUri }: HomeHeroProps) {
               <AppIcon
                 name="cartLargeOutline"
                 size={22}
-                color={theme.colors.googleWhite}
+                color={theme.colors.primary}
               />
               <AppIcon
                 name="notificationsBellOutline"
                 size={22}
-                color={theme.colors.googleWhite}
+                color={theme.colors.primary}
               />
             </View>
           </View>
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.googleWhite,
     borderRadius: theme.radius.input,
-    height: 56,
+    height: 44,
     paddingHorizontal: theme.spacing.gapSm,
     marginRight: theme.spacing.gapMd,
     ...theme.shadows.card

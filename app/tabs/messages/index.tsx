@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,11 +9,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { getInboxThreads, type ThreadListItem } from '../../../lib/api_queries';
 import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
+import { AppIcon } from '../../../components/ui/AppIcon';
 
 function formatRelativeDate(dateString: string | null): string {
   if (!dateString) return '';
@@ -49,9 +51,9 @@ export default function MessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadThreads = async () => {
+  const loadThreads = async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!opts?.silent) setLoading(true);
       setError(null);
       const { data } = await getInboxThreads();
       setThreads(data);
@@ -59,13 +61,20 @@ export default function MessagesScreen() {
       setError('Impossible de charger vos conversations.');
       setThreads([]);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     void loadThreads();
   }, []);
+
+  // Recharge à chaque focus: évite les délais (subscription, navigation rapide, etc.)
+  useFocusEffect(
+    useCallback(() => {
+      void loadThreads({ silent: true });
+    }, [])
+  );
 
   useEffect(() => {
     const channel = supabase
@@ -77,9 +86,7 @@ export default function MessagesScreen() {
           schema: 'public',
           table: 'messages'
         },
-        () => {
-          void loadThreads();
-        }
+        () => void loadThreads({ silent: true })
       )
       .subscribe();
 
@@ -92,8 +99,6 @@ export default function MessagesScreen() {
 
   const renderItem = ({ item }: { item: ThreadListItem }) => {
     const lastBody = item.last_message_body ?? '';
-    const truncatedBody =
-      lastBody.length > 60 ? `${lastBody.slice(0, 57).trimEnd()}...` : lastBody;
     const relativeDate = formatRelativeDate(item.last_message_created_at ?? item.thread_created_at);
 
     const isUnread =
@@ -111,14 +116,6 @@ export default function MessagesScreen() {
       });
     };
 
-    const initials =
-      otherName
-        .split(' ')
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((p) => p[0]?.toUpperCase())
-        .join('') || '?';
-
     return (
       <TouchableOpacity
         style={styles.row}
@@ -129,52 +126,36 @@ export default function MessagesScreen() {
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarPlaceholder}>
-            <Text variant="body" style={styles.avatarInitials}>
-              {initials}
-            </Text>
+            <AppIcon name="userOutline" size={24} color={theme.colors.textSecondary} />
           </View>
         )}
 
         <View style={styles.rowCenter}>
-          <View style={styles.rowHeader}>
-            <Text
-              variant="body"
-              style={styles.nameText}
-              numberOfLines={1}
-            >
-              {otherName || 'Utilisateur'}
-            </Text>
-            <Text
-              variant="captionSm"
-              color="textSecondary"
-              style={styles.dateText}
-            >
-              {relativeDate}
-            </Text>
-          </View>
-
           <Text
-            variant="captionSm"
-            color="textSecondary"
+            variant="body"
             numberOfLines={1}
-            style={styles.listingTitle}
+            style={[
+              styles.nameText,
+              isUnread ? styles.nameTextUnread : styles.nameTextRead
+            ]}
           >
-            {item.listing_title}
+            {otherName || 'Utilisateur'}
           </Text>
-
-          {truncatedBody ? (
+          {lastBody ? (
             <Text
               variant="captionSm"
-              color="textSecondary"
               numberOfLines={1}
               style={styles.lastMessage}
             >
-              {truncatedBody}
+              {lastBody}
             </Text>
           ) : null}
         </View>
 
-        {isUnread && <View style={styles.unreadBadge} />}
+        <View style={styles.rowRight}>
+          <Text style={styles.dateText}>{relativeDate}</Text>
+          {isUnread && <View style={styles.unreadBadge} />}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -233,10 +214,20 @@ export default function MessagesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Text variant="h2" style={styles.headerTitle}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.headerIconTouch}
+        >
+          <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
+        </TouchableOpacity>
+        <Text variant="body" style={styles.headerTitle}>
           Messages
         </Text>
+        <View style={styles.headerRightPlaceholder} />
       </View>
+      <View style={styles.headerSeparator} />
       {renderContent}
     </SafeAreaView>
   );
@@ -248,12 +239,28 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.backgroundWhite
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8
+    paddingTop: 12,
+    paddingBottom: 12
   },
   headerTitle: {
-    fontFamily: theme.fontFamily.semiBold
+    ...theme.typography.body,
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.textPrimary
+  },
+  headerIconTouch: {
+    padding: 8
+  },
+  headerRightPlaceholder: {
+    width: 28
+  },
+  headerSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E5E5'
   },
   center: {
     flex: 1,
@@ -277,61 +284,62 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingBottom: 16
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 72
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12
+    width: 52,
+    height: 52,
+    borderRadius: 26
   },
   avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: theme.colors.muted,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12
-  },
-  avatarInitials: {
-    fontFamily: theme.fontFamily.semiBold
+    justifyContent: 'center'
   },
   rowCenter: {
-    flex: 1
-  },
-  rowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2
+    flex: 1,
+    paddingHorizontal: 12
   },
   nameText: {
-    flex: 1,
-    marginRight: 8
+    fontSize: 16
+  },
+  nameTextUnread: {
+    fontWeight: '700',
+    color: theme.colors.textPrimary
+  },
+  nameTextRead: {
+    fontWeight: '400',
+    color: theme.colors.textPrimary
+  },
+  rowRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center'
   },
   dateText: {
-    minWidth: 60,
-    textAlign: 'right'
-  },
-  listingTitle: {
-    marginBottom: 2
+    fontSize: 13,
+    color: '#AAAAAA'
   },
   lastMessage: {
-    maxWidth: '100%'
+    marginTop: 4,
+    fontSize: 14,
+    color: '#888888'
   },
   unreadBadge: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#EF4444',
-    marginLeft: 8
+    backgroundColor: '#CCFF00',
+    marginTop: 6
   },
   separator: {
     height: 1,

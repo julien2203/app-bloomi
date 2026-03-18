@@ -1,17 +1,19 @@
-import React, { useEffect, useMemo } from 'react';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { ActivityIndicator, View, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { ensureProfileExists } from '../lib/profile';
 import { useInterFonts } from '../lib/ui/fonts';
+import { ensureNotificationsConfigured, notifyNewMessage } from '../lib/notifications';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
 
-  const { session, isLoading, initialized, setAuthFromSession, restoreSession } =
+  const { session, user, isLoading, initialized, setAuthFromSession, restoreSession } =
     useAuthStore();
 
   // Initialisation de la session + abonnement aux changements Supabase
@@ -42,18 +44,61 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         segments[1] === 'verify-phone' ||
         segments[1] === 'verify-phone-info' ||
         segments[1] === 'verify-phone-code');
+    const needsPhoneVerification = !!session && !user?.phone;
     
     if (!session && !isPublicRoute) {
       router.replace('/onboarding/splash');
       return;
     }
 
-    // Si connecté et sur un écran auth/onboarding, rediriger vers feed
-    // sauf pour les écrans de vérification (email / téléphone)
-    if (session && isPublicRoute && !isVerificationRoute) {
+    // Si connecté mais que le numéro de téléphone n'est pas encore vérifié,
+    // forcer le passage par le flow de vérification téléphone.
+    if (session && needsPhoneVerification && !isVerificationRoute) {
+      router.replace('/auth/verify-phone');
+      return;
+    }
+
+    // Si connecté (et profil complet) et sur un écran auth/onboarding,
+    // rediriger vers le feed sauf pour les écrans de vérification (email / téléphone)
+    if (session && !needsPhoneVerification && isPublicRoute && !isVerificationRoute) {
       router.replace('/tabs/feed');
     }
-  }, [initialized, isLoading, session, router, segments]);
+  }, [initialized, isLoading, session, user, router, segments]);
+
+  // Notifications locales : nouveaux messages (hors écran de thread)
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!session || !user?.id) return;
+
+    void ensureNotificationsConfigured();
+
+    const channel = supabase
+      .channel(`messages:notify:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new as any;
+          if (!msg?.id || !msg?.thread_id) return;
+          if (msg.sender_id === user.id) return;
+          if (notifiedIdsRef.current.has(msg.id)) return;
+          notifiedIdsRef.current.add(msg.id);
+
+          // Si l'utilisateur est déjà dans le thread, ne pas notifier
+          const isOnThread =
+            pathname?.startsWith('/tabs/messages/') && pathname.endsWith(`/${msg.thread_id}`);
+          if (isOnThread) return;
+
+          const body = typeof msg.body === 'string' && msg.body.length > 0 ? msg.body : 'New message';
+          void notifyNewMessage({ title: 'Messages', body });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [session, user?.id, pathname]);
 
   if (!initialized) {
     return (

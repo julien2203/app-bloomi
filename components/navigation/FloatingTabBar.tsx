@@ -94,6 +94,7 @@ export function FloatingTabBar(_: BottomTabBarProps) {
               onPress={onPress}
               activeOpacity={0.8}
               style={styles.item}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <AppIcon
                 name={icon}

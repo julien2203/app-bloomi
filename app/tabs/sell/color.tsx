@@ -22,7 +22,7 @@ export default function SellColorScreen() {
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
   const [colors, setColors] = useState<ColorRow[]>([]);
-  const [selected, setSelected] = useState<SellColor | null>(values.color ?? null);
+  const [selected, setSelected] = useState<SellColor[]>(values.color ?? []);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -76,19 +76,27 @@ export default function SellColorScreen() {
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
               {colors.map((item) => {
-                const isSelected = selected?.id === item.id;
+                const isSelected = selected.some((c) => c.id === item.id);
                 const backgroundColor = item.hex ?? '#E5E5E5';
                 return (
                   <TouchableOpacity
                     key={item.id}
                     style={styles.row}
                     activeOpacity={0.7}
-                    onPress={() =>
-                      setSelected({
-                        id: item.id,
-                        name: item.name
-                      })
-                    }
+                    onPress={() => {
+                      const exists = selected.some((c) => c.id === item.id);
+                      if (exists) {
+                        setSelected((prev) => prev.filter((c) => c.id !== item.id));
+                      } else if (selected.length < 3) {
+                        setSelected((prev) => [
+                          ...prev,
+                          {
+                            id: item.id,
+                            name: item.name
+                          }
+                        ]);
+                      }
+                    }}
                   >
                     <View style={styles.rowLeft}>
                       <View
@@ -132,7 +140,7 @@ export default function SellColorScreen() {
             title="Confirmer"
             onPress={handleConfirm}
             variant="primary"
-            disabled={!selected}
+            disabled={selected.length === 0}
             textStyle={{ fontWeight: '700' }}
           />
         </View>

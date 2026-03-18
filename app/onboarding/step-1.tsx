@@ -82,15 +82,14 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   logoImage: {
-    width: 140,
-    height: 140
+    width: 180,
+    height: 180
   },
   main: {
     flex: 1,
     justifyContent: 'flex-end',
     paddingHorizontal: theme.spacing.horizontalPadding,
-    alignItems: 'center',
-    paddingBottom: 80
+    alignItems: 'center'
   },
   headline: {
     ...theme.typography.h1,
@@ -99,7 +98,7 @@ const styles = StyleSheet.create({
     fontSize: 32
   },
   primaryButton: {
-    marginTop: 40,
+    marginTop: 60,
     alignSelf: 'stretch'
   },
   loginText: {

@@ -15,14 +15,35 @@ type ConditionValue = 'new' | 'like_new' | 'good' | 'fair' | 'poor';
 type ConditionOption = {
   label: string;
   value: ConditionValue;
+  description: string;
 };
 
 const CONDITION_OPTIONS: ConditionOption[] = [
-  { label: 'New with tags', value: 'new' },
-  { label: 'New without tags', value: 'like_new' },
-  { label: 'Good', value: 'good' },
-  { label: 'Fair', value: 'fair' },
-  { label: 'Poor', value: 'poor' }
+  {
+    label: 'New with tags',
+    value: 'new',
+    description: 'Never worn, with original tags attached.'
+  },
+  {
+    label: 'New without tags',
+    value: 'like_new',
+    description: 'Never or barely worn, no visible signs of wear.'
+  },
+  {
+    label: 'Good',
+    value: 'good',
+    description: 'Lightly worn, minor signs of use, no defects.'
+  },
+  {
+    label: 'Fair',
+    value: 'fair',
+    description: 'Visible signs of wear, small defects possible.'
+  },
+  {
+    label: 'Poor',
+    value: 'poor',
+    description: 'Heavily worn, visible defects or repairs.'
+  }
 ];
 
 export default function SellConditionScreen() {
@@ -67,15 +88,24 @@ export default function SellConditionScreen() {
                   onPress={() => setSelected(item.value)}
                   activeOpacity={0.7}
                 >
-                  <Text
-                    variant="body"
-                    style={[
-                      styles.optionLabel,
-                      isSelected && styles.optionLabelSelected
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
+                  <View style={styles.optionText}>
+                    <Text
+                      variant="body"
+                      style={[
+                        styles.optionLabel,
+                        isSelected && styles.optionLabelSelected
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    <Text
+                      variant="captionSm"
+                      color="textSecondary"
+                      style={styles.optionDescription}
+                    >
+                      {item.description}
+                    </Text>
+                  </View>
                   {isSelected && (
                     <Feather
                       name="check"
@@ -162,6 +192,13 @@ const styles = StyleSheet.create({
   optionLabelSelected: {
     color: theme.colors.textPrimary,
     fontFamily: theme.fontFamily.semiBold
+  },
+  optionText: {
+    flex: 1,
+    marginRight: 12
+  },
+  optionDescription: {
+    marginTop: 4
   },
   separator: {
     height: 1,
