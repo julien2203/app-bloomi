@@ -21,10 +21,23 @@ export type SellColor = {
   name: string;
 };
 
-export type SellFormFieldKey = 'category' | 'brand' | 'condition' | 'size' | 'price' | 'color';
+export type SellCategoryType = 'chaussures' | 'pantalons' | 'chemises' | 'vetements';
+
+export type SellFormFieldKey =
+  | 'category'
+  | 'brand'
+  | 'condition'
+  | 'size'
+  | 'price'
+  | 'color'
+  | 'categoryGender'
+  | 'categoryType';
 
 export type SellFormState = {
   category: SellCategory | null;
+  /** Contexte de la catégorie sélectionnée (utile pour les sous-pages) */
+  categoryGender?: string;
+  categoryType?: SellCategoryType;
   brand: SellBrand | null;
   condition?: string;
   size: SellSize | null;
@@ -50,6 +63,8 @@ interface SellFormStore {
 
 const defaultValues: SellFormState = {
   category: null,
+  categoryGender: undefined,
+  categoryType: undefined,
   brand: null,
   size: null,
   color: [],

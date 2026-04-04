@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { Button } from '../../../../components/ui/Button';
 import { AppIcon } from '../../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { theme } from '../../../../lib/theme';
 import { getListingById, updateListing, type ListingDetail } from '../../../../lib/api';
 import { useSellFormStore } from '../../../../lib/store/sellForm';
@@ -242,13 +243,7 @@ export default function EditListingScreen() {
           style={{ flex: 1 }}
         >
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              activeOpacity={0.7}
-              style={styles.backButtonHeader}
-            >
-              <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
+            <HeaderBackButton onPress={() => router.back()} />
             <Text style={styles.headerTitle}>Edit listing</Text>
             <View style={styles.headerRightPlaceholder} />
           </View>
@@ -500,9 +495,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5'
-  },
-  backButtonHeader: {
-    padding: 8
   },
   headerTitle: {
     ...theme.typography.body,

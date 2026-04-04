@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Dimensions,
   Image,
   StyleSheet,
   TouchableOpacity,
@@ -7,59 +8,116 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { theme } from '../lib/theme';
 import { Text } from './ui/Text';
 import { AppIcon } from './ui/AppIcon';
+import { useAuthStore } from '../stores/authStore';
+import { likeListing, unlikeListing } from '../lib/api';
+import { useLikesStore } from '../stores/likesStore';
 
 interface ProductCardProps {
+  listingId: string;
   title?: string;
   price: number;
   currency?: 'CHF';
   brand?: string;
+  size?: string;
   condition?: string;
   imageUrl?: string | null;
   likedCount?: number;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  /** Largeur de card (sinon calculée pour une grille 2 colonnes) */
+  cardWidth?: number;
+  /** Hauteur image = width * ratio (ex: 1.0 ou 1.2) */
+  imageRatio?: number;
 }
 
 export function ProductCard({
+  listingId,
   title,
   price,
   currency = 'CHF',
   brand,
+  size,
   condition,
   imageUrl,
   likedCount = 0,
   onPress,
-  style
+  style,
+  cardWidth,
+  imageRatio = 1
 }: ProductCardProps) {
-  const conditionLabelMap: Record<string, string> = {
-    new: 'New with tags',
-    like_new: 'New without tags',
-    good: 'Very good',
-    fair: 'Good',
-    poor: 'Satisfactory'
-  };
+  const router = useRouter();
+  const { user } = useAuthStore();
+
+  const [toggling, setToggling] = useState<boolean>(false);
+  const likedByMe = useLikesStore((s) => !!s.likedIds[listingId]);
+  const likesCount = useLikesStore((s) => s.countsByListingId[listingId] ?? likedCount);
+  const likeOptimistic = useLikesStore((s) => s.likeOptimistic);
+  const unlikeOptimistic = useLikesStore((s) => s.unlikeOptimistic);
+  const rollback = useLikesStore((s) => s.rollback);
 
   const formattedPrice = `${price.toFixed(2)} ${currency}`;
   const formattedPriceIncl = `${(price * 1.08).toFixed(2)} ${currency} incl.`;
-  const conditionLabel = condition ? conditionLabelMap[condition] ?? condition : undefined;
+
+  const heartIcon = useMemo(() => {
+    if (likedByMe) return { name: 'likeHeartBold' as const, color: theme.colors.primary };
+    return { name: 'likeHeartOutline' as const, color: theme.colors.textSecondary };
+  }, [likedByMe]);
+
+  const handleToggleLike = async () => {
+    if (toggling) return;
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+
+    const snapshot = likedByMe ? unlikeOptimistic(listingId) : likeOptimistic(listingId);
+    setToggling(true);
+
+    try {
+      const res = snapshot.prevLiked
+        ? await unlikeListing(listingId)
+        : await likeListing(listingId);
+      if (res.error) {
+        rollback(listingId, snapshot.prevLiked, snapshot.prevCount);
+      }
+    } catch {
+      rollback(listingId, snapshot.prevLiked, snapshot.prevCount);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const effectiveWidth = useMemo(() => {
+    if (typeof cardWidth === 'number' && Number.isFinite(cardWidth) && cardWidth > 0) return cardWidth;
+    const { width } = Dimensions.get('window');
+    const padding = 16;
+    const gap = 12;
+    return (width - padding * 2 - gap) / 2;
+  }, [cardWidth]);
+
+  const effectiveImageHeight = useMemo(() => {
+    const r = typeof imageRatio === 'number' && Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : 1;
+    return Math.round(effectiveWidth * r);
+  }, [effectiveWidth, imageRatio]);
 
   return (
     <TouchableOpacity
-      style={[styles.container, style]}
+      style={[styles.container, { width: effectiveWidth }, style]}
       activeOpacity={0.85}
       onPress={onPress}
     >
       {imageUrl ? (
         <Image
           source={{ uri: imageUrl }}
-          style={styles.image}
+          style={[styles.image, { height: effectiveImageHeight }]}
           resizeMode="cover"
         />
       ) : (
-        <View style={styles.imagePlaceholder}>
+        <View style={[styles.imagePlaceholder, { height: effectiveImageHeight }]}>
           <Text variant="caption" color="textSecondary">
             Pas d&apos;image
           </Text>
@@ -67,71 +125,70 @@ export function ProductCard({
       )}
 
       <View style={styles.body}>
-        {/* Ligne prix */}
-        <View style={styles.priceRow}>
-          <Text variant="captionSm" style={styles.priceMain}>
-            {formattedPrice}
-          </Text>
-          <Text variant="captionSm" color="danger">
-            {formattedPriceIncl}
-          </Text>
-        </View>
-
         {/* Titre */}
         {title && (
-          <Text variant="captionSm" numberOfLines={1} style={styles.title}>
+          <Text variant="captionSm" numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
             {title}
           </Text>
         )}
 
-        {/* Marque sous le titre */}
-        {brand && (
+        {/* Marque + taille sur la même ligne */}
+        {(brand || size) && (
           <Text
             variant="captionSm"
             color="textSecondary"
             numberOfLines={1}
+            ellipsizeMode="tail"
             style={styles.meta}
           >
-            {brand}
+            {[brand ?? null, size ?? null]
+              .filter((x) => !!x && String(x).trim().length > 0)
+              .join(' · ')}
           </Text>
         )}
 
-        {/* Ligne état (gauche) / like (droite) */}
-        <View style={styles.conditionRow}>
-          {conditionLabel ? (
-            <Text
-              variant="captionSm"
-              color="textSecondary"
-              numberOfLines={1}
-            >
-              {conditionLabel}
-            </Text>
-          ) : (
-            <View />
-          )}
+        {/* Prix */}
+        <View style={styles.priceBlock}>
+          <Text variant="captionSm" style={styles.priceMain} numberOfLines={1} ellipsizeMode="tail">
+            {formattedPrice}
+          </Text>
+          <Text
+            variant="captionSm"
+            color="danger"
+            style={styles.priceIncl}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {formattedPriceIncl}
+          </Text>
+        </View>
 
-          <View style={styles.likes}>
-            <AppIcon
-              name="likeHeartOutline"
-              size={16}
-              color={theme.colors.textSecondary}
-            />
+        {/* Like (condition supprimée) */}
+        <View style={styles.likesRow}>
+          <TouchableOpacity
+            style={styles.likes}
+            activeOpacity={0.8}
+            onPress={handleToggleLike}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={toggling}
+          >
+            <AppIcon name={heartIcon.name} size={16} color={heartIcon.color} />
             <Text variant="captionSm" color="textSecondary">
-              {likedCount}
+              {likesCount}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-const IMAGE_HEIGHT = 168; // image un peu plus haute
+/** Légèrement réduit pour laisser 2 lignes de prix lisibles sur petites largeurs */
+const IMAGE_HEIGHT = 160;
 const RADIUS = 8;
 
 const styles = StyleSheet.create({
   container: {
-    height: 240,
     borderRadius: RADIUS,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -140,14 +197,12 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: IMAGE_HEIGHT,
     borderTopLeftRadius: RADIUS,
     borderTopRightRadius: RADIUS,
     backgroundColor: theme.colors.muted
   },
   imagePlaceholder: {
     width: '100%',
-    height: IMAGE_HEIGHT,
     borderTopLeftRadius: RADIUS,
     borderTopRightRadius: RADIUS,
     backgroundColor: theme.colors.muted,
@@ -156,34 +211,43 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingHorizontal: 8,
-    paddingVertical: 8,
-    flex: 1
+    paddingVertical: 6,
+    flex: 1,
+    minWidth: 0
   },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4
+  priceBlock: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    alignSelf: 'stretch',
+    marginBottom: 4,
+    gap: 2
+  },
+  priceIncl: {
+    flexShrink: 1,
+    alignSelf: 'stretch'
   },
   meta: {
     marginBottom: 4
   },
   title: {
-    marginBottom: 4
+    marginBottom: 4,
+    alignSelf: 'stretch'
   },
   priceMain: {
-    fontFamily: theme.fontFamily.semiBold
+    fontFamily: theme.fontFamily.semiBold,
+    flexShrink: 1
   },
-  conditionRow: {
+  likesRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     marginTop: 4
   },
   likes: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 4
-  }
+    columnGap: 4,
+    flexShrink: 0
+  },
+  
 });
 

@@ -1,38 +1,72 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View, Image } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, RefreshControl, StyleSheet, View, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getFeedListings, type FeedListing } from '../../../lib/api';
+import {
+  getFeedListings,
+  getMyLikedListingIds,
+  type FeedListing
+} from '../../../lib/api';
 import { theme } from '../../../lib/theme';
 import { HomeHero } from '../../../components/home/HomeHero';
 import { SectionHeader } from '../../../components/home/SectionHeader';
-import { BottomNav } from '../../../components/home/BottomNav';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { ProductCard } from '../../../components/ProductCard';
 import { useFeedFiltersStore } from '../../../lib/store/feedFilters';
+import { useAuthStore } from '../../../stores/authStore';
+import { useLikesStore } from '../../../stores/likesStore';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { filters } = useFeedFiltersStore();
+  const { user } = useAuthStore();
+  const setLikedIds = useLikesStore((s) => s.setLikedIds);
+  const setCounts = useLikesStore((s) => s.setCounts);
+  const clearLikes = useLikesStore((s) => s.clear);
   const [listings, setListings] = useState<FeedListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const screenWidth = Dimensions.get('window').width;
+  const gridPaddingX = 16;
+  const gridGap = 12;
+  const gridCardWidth = (screenWidth - gridPaddingX * 2 - gridGap) / 2;
+
   const fetchFeed = useCallback(async () => {
     try {
       setError(null);
-      const { data, error: fetchError } = await getFeedListings({
+      const feedPromise = getFeedListings({
         limit: 40,
         offset: 0,
         filters
       });
+      const likedIdsPromise = user ? getMyLikedListingIds() : Promise.resolve({ data: [], error: null });
+
+      const [{ data, error: fetchError }, { data: likedIds, error: likedIdsError }] =
+        await Promise.all([feedPromise, likedIdsPromise]);
 
       if (fetchError) {
         setError(fetchError);
         setListings([]);
       } else {
         setListings(data);
+      }
+
+      // Hydrate store instantanément dès qu'on a l'info user-likes.
+      if (!user) {
+        clearLikes();
+      } else if (!likedIdsError && likedIds) {
+        setLikedIds(likedIds);
+      }
+
+      // Compteurs instantanés: viennent directement de v_feed_listings.likes_count
+      if (!fetchError && data && data.length > 0) {
+        const counts: Record<string, number> = {};
+        for (const l of data) {
+          counts[l.id] = typeof (l as any).likes_count === 'number' ? (l as any).likes_count : 0;
+        }
+        setCounts(counts);
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Erreur inconnue'));
@@ -41,7 +75,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filters]);
+  }, [filters, user, setLikedIds, setCounts, clearLikes]);
 
   useFocusEffect(
     useCallback(() => {
@@ -140,14 +174,17 @@ export default function HomeScreen() {
             ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
             renderItem={({ item }) => (
               <ProductCard
+                listingId={item.id}
                 title={item.title}
                 price={item.price}
                 currency="CHF"
                 brand={item.brand ?? undefined}
+                size={(item as any).size ?? undefined}
                 condition={item.condition ?? undefined}
                 imageUrl={item.cover_photo_url}
-                likedCount={0}
                 onPress={() => handleListingPress(item.id)}
+                cardWidth={167}
+                imageRatio={1}
                 style={styles.horizontalCard}
               />
             )}
@@ -170,14 +207,17 @@ export default function HomeScreen() {
             ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
             renderItem={({ item }) => (
               <ProductCard
+                listingId={item.id}
                 title={item.title}
                 price={item.price}
                 currency="CHF"
                 brand={item.brand ?? undefined}
+                size={(item as any).size ?? undefined}
                 condition={item.condition ?? undefined}
                 imageUrl={item.cover_photo_url}
-                likedCount={0}
                 onPress={() => handleListingPress(item.id)}
+                cardWidth={167}
+                imageRatio={1}
                 style={styles.horizontalCard}
               />
             )}
@@ -200,14 +240,17 @@ export default function HomeScreen() {
             ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
             renderItem={({ item }) => (
               <ProductCard
+                listingId={item.id}
                 title={item.title}
                 price={item.price}
                 currency="CHF"
                 brand={item.brand ?? undefined}
+                size={(item as any).size ?? undefined}
                 condition={item.condition ?? undefined}
                 imageUrl={item.cover_photo_url}
-                likedCount={0}
                 onPress={() => handleListingPress(item.id)}
+                cardWidth={167}
+                imageRatio={1}
                 style={styles.horizontalCard}
               />
             )}
@@ -276,14 +319,17 @@ export default function HomeScreen() {
 
                       {/* Card produit réutilisée */}
                       <ProductCard
+                        listingId={item.id}
                         title={item.title}
                         price={item.price}
                         currency="CHF"
                         brand={item.brand ?? undefined}
+                        size={(item as any).size ?? undefined}
                         condition={item.condition ?? undefined}
                         imageUrl={item.cover_photo_url}
-                        likedCount={0}
                         onPress={() => handleListingPress(item.id)}
+                        cardWidth={gridCardWidth}
+                        imageRatio={1}
                       />
                     </View>
                   ))}
@@ -340,8 +386,7 @@ const styles = StyleSheet.create({
     width: 12
   },
   horizontalCard: {
-    width: 167,
-    height: 240
+    width: 167
   },
   emptyInlineContainer: {
     alignItems: 'center',

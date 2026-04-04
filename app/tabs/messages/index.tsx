@@ -16,6 +16,7 @@ import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 
 function formatRelativeDate(dateString: string | null): string {
   if (!dateString) return '';
@@ -77,22 +78,22 @@ export default function MessagesScreen() {
   );
 
   useEffect(() => {
-    const channel = supabase
-      .channel('messages:inbox')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages'
-        },
-        () => void loadThreads({ silent: true })
-      )
-      .subscribe();
+    // const channel = supabase // TODO: réactiver le realtime
+    //   .channel('messages:inbox') // TODO: réactiver le realtime
+    //   .on( // TODO: réactiver le realtime
+    //     'postgres_changes', // TODO: réactiver le realtime
+    //     { // TODO: réactiver le realtime
+    //       event: '*',
+    //       schema: 'public',
+    //       table: 'messages'
+    //     },
+    //     () => void loadThreads({ silent: true }) // TODO: réactiver le realtime
+    //   ) // TODO: réactiver le realtime
+    //   .subscribe(); // TODO: réactiver le realtime
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    // return () => { // TODO: réactiver le realtime
+    //   void supabase.removeChannel(channel); // TODO: réactiver le realtime
+    // }; // TODO: réactiver le realtime
   }, []);
 
   const hasError = !!error;
@@ -214,14 +215,7 @@ export default function MessagesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.headerIconTouch}
-        >
-          <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
+        <HeaderBackButton onPress={() => router.back()} />
         <Text variant="body" style={styles.headerTitle}>
           Messages
         </Text>
@@ -251,9 +245,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.textPrimary
-  },
-  headerIconTouch: {
-    padding: 8
   },
   headerRightPlaceholder: {
     width: 28

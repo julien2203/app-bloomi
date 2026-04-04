@@ -7,6 +7,8 @@ import { useAuthStore } from '../stores/authStore';
 import { ensureProfileExists } from '../lib/profile';
 import { useInterFonts } from '../lib/ui/fonts';
 import { ensureNotificationsConfigured, notifyNewMessage } from '../lib/notifications';
+import { StripeProvider } from '@stripe/stripe-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -22,7 +24,26 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((_event, sess) => {
       setAuthFromSession(sess);
       if (sess) {
-        ensureProfileExists(sess);
+        void (async () => {
+          const userId = sess.user?.id;
+          if (!userId) {
+            return;
+          }
+
+          const markerKey = `profile_ensured_after_login:${userId}`;
+          const rawTs = await AsyncStorage.getItem(markerKey);
+          const ts = rawTs ? Number(rawTs) : 0;
+          const isRecent = Number.isFinite(ts) && Date.now() - ts < 60_000;
+
+          // Juste après `signInWithPassword`, `login.tsx` a déjà fait l'upsert profil.
+          // On saute ici pour garantir qu'on n'a pas 2 appels séquentiels identiques.
+          if (isRecent) {
+            await AsyncStorage.removeItem(markerKey);
+            return;
+          }
+
+          await ensureProfileExists(sess);
+        })();
       }
     });
 
@@ -72,32 +93,32 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     void ensureNotificationsConfigured();
 
-    const channel = supabase
-      .channel(`messages:notify:${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          const msg = payload.new as any;
-          if (!msg?.id || !msg?.thread_id) return;
-          if (msg.sender_id === user.id) return;
-          if (notifiedIdsRef.current.has(msg.id)) return;
-          notifiedIdsRef.current.add(msg.id);
+    // const channel = supabase // TODO: réactiver le realtime
+    //   .channel(`messages:notify:${user.id}`) // TODO: réactiver le realtime
+    //   .on( // TODO: réactiver le realtime
+    //     'postgres_changes', // TODO: réactiver le realtime
+    //     { event: 'INSERT', schema: 'public', table: 'messages' }, // TODO: réactiver le realtime
+    //     (payload) => { // TODO: réactiver le realtime
+    //       const msg = payload.new as any;
+    //       if (!msg?.id || !msg?.thread_id) return;
+    //       if (msg.sender_id === user.id) return;
+    //       if (notifiedIdsRef.current.has(msg.id)) return;
+    //       notifiedIdsRef.current.add(msg.id);
+    //
+    //       // Si l'utilisateur est déjà dans le thread, ne pas notifier
+    //       const isOnThread =
+    //         pathname?.startsWith('/tabs/messages/') && pathname.endsWith(`/${msg.thread_id}`);
+    //       if (isOnThread) return;
+    //
+    //       const body = typeof msg.body === 'string' && msg.body.length > 0 ? msg.body : 'New message';
+    //       void notifyNewMessage({ title: 'Messages', body });
+    //     } // TODO: réactiver le realtime
+    //   ) // TODO: réactiver le realtime
+    //   .subscribe(); // TODO: réactiver le realtime
 
-          // Si l'utilisateur est déjà dans le thread, ne pas notifier
-          const isOnThread =
-            pathname?.startsWith('/tabs/messages/') && pathname.endsWith(`/${msg.thread_id}`);
-          if (isOnThread) return;
-
-          const body = typeof msg.body === 'string' && msg.body.length > 0 ? msg.body : 'New message';
-          void notifyNewMessage({ title: 'Messages', body });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    // return () => { // TODO: réactiver le realtime
+    //   void supabase.removeChannel(channel); // TODO: réactiver le realtime
+    // }; // TODO: réactiver le realtime
   }, [session, user?.id, pathname]);
 
   if (!initialized) {
@@ -131,6 +152,11 @@ export default function RootLayout() {
         const parsed = new URL(url);
         const host = parsed.host; // ex: "auth"
         const pathname = parsed.pathname; // ex: "/callback"
+
+        if (host === 'profile') {
+          router.replace('/tabs/profile/activate-seller-account');
+          return;
+        }
 
         if (host === 'auth' && pathname === '/callback') {
           const searchParams = parsed.searchParams;
@@ -191,11 +217,16 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AuthGate>
-        <Slot />
-      </AuthGate>
-    </SafeAreaProvider>
+    <StripeProvider
+      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}
+      merchantIdentifier="merchant.com.jupouch.bloomiapp"
+    >
+      <SafeAreaProvider>
+        <AuthGate>
+          <Slot />
+        </AuthGate>
+      </SafeAreaProvider>
+    </StripeProvider>
   );
 }
 

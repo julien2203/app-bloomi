@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 
 export default function ForgotPasswordScreen() {
@@ -54,6 +55,10 @@ export default function ForgotPasswordScreen() {
     <>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <HeaderBackButton onPress={() => router.back()} />
+          <View style={{ flex: 1 }} />
+        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
@@ -99,6 +104,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.backgroundWhite
+  },
+  header: {
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: 8,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   keyboardView: {
     flex: 1

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -16,12 +16,25 @@ import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { getListingById, type ListingDetail, createOrGetThreadForListing } from '../../../lib/api';
+import {
+  createOrGetThreadForListing,
+  getListingById,
+  getListingLikesInfo,
+  getPublishedListingsCountForSeller,
+  likeListing,
+  unlikeListing,
+  type ListingDetail
+} from '../../../lib/api';
 import { theme } from '../../../lib/theme';
+import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { ProductCard } from '../../../components/ProductCard';
 import { useAuthStore } from '../../../stores/authStore';
+import { useLikesStore } from '../../../stores/likesStore';
+import { supabase } from '../../../lib/supabase';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_WIDTH = SCREEN_WIDTH - 48; // marge 16 gauche + 16 droite + 16 peek
@@ -36,6 +49,8 @@ type PhotoItem = {
 };
 
 const BUYER_PROTECTION_RATE = 0.08;
+const RELATED_GRID_GAP = 8;
+const RELATED_GRID_PADDING_X = 16;
 
 const conditionLabelMap: Record<string, string> = {
   new: 'New with tags',
@@ -50,14 +65,34 @@ export default function ListingDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
+  const likeOptimistic = useLikesStore((s) => s.likeOptimistic);
+  const unlikeOptimistic = useLikesStore((s) => s.unlikeOptimistic);
+  const rollbackLike = useLikesStore((s) => s.rollback);
+  const setLikeCounts = useLikesStore((s) => s.setCounts);
 
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const [likedByMe, setLikedByMe] = useState(false);
+  const [likesCount, setLikesCount] = useState<number>(0);
+  const [togglingLike, setTogglingLike] = useState(false);
+
+  const [viewsCount, setViewsCount] = useState<number>(0);
+  /** Uniquement si la vue SQL n’expose pas encore seller_published_count */
+  const [sellerCountFallback, setSellerCountFallback] = useState<number | 'loading' | 'error'>(
+    'loading'
+  );
+
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isImageModalVisible, setImageModalVisible] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
+
+  const [relatedTab, setRelatedTab] = useState<'other' | 'similar'>('other');
+  const [otherItems, setOtherItems] = useState<ListingDetail[]>([]);
+  const [similarItems, setSimilarItems] = useState<ListingDetail[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  const [showBuyerProtectionInfo, setShowBuyerProtectionInfo] = useState(false);
 
   const fetchListing = useCallback(async () => {
     if (!id) {
@@ -78,7 +113,6 @@ export default function ListingDetailScreen() {
         setError(new Error('Annonce introuvable'));
         setListing(null);
       } else {
-        console.log('LISTING DATA:', JSON.stringify(data, null, 2));
         setListing(data);
       }
     } catch (err) {
@@ -92,6 +126,167 @@ export default function ListingDetailScreen() {
   React.useEffect(() => {
     void fetchListing();
   }, [fetchListing]);
+
+  const normalizePhotoUrl = useCallback((rawUrl: string) => {
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
+    const { data } = supabase.storage.from('listings').getPublicUrl(rawUrl);
+    return data?.publicUrl ?? rawUrl;
+  }, []);
+
+  useEffect(() => {
+    const loadRelated = async () => {
+      if (!listing?.id) return;
+
+      setLoadingRelated(true);
+      try {
+        const category = (listing.category ?? '').trim();
+
+        const otherPromise = supabase
+          .from('v_listing_detail')
+          .select('*')
+          .eq('seller_id', listing.seller_id)
+          .eq('status', 'published')
+          .neq('id', listing.id)
+          .limit(6);
+
+        const similarPromise = category
+          ? supabase
+              .from('v_listing_detail')
+              .select('*')
+              .eq('status', 'published')
+              .eq('category', category)
+              .neq('id', listing.id)
+              .neq('seller_id', listing.seller_id)
+              .limit(6)
+          : Promise.resolve({ data: [], error: null } as any);
+
+        const [{ data: otherRows }, { data: similarRows }] = await Promise.all([
+          otherPromise,
+          similarPromise
+        ]);
+
+        const normalizeListing = (row: any): ListingDetail => {
+          const photos = Array.isArray(row?.photos) ? row.photos : [];
+          const normalizedPhotos = photos.map((p: any) => ({
+            ...p,
+            url: typeof p?.url === 'string' ? normalizePhotoUrl(p.url) : p.url
+          }));
+          return { ...(row as ListingDetail), photos: normalizedPhotos };
+        };
+
+        const other = Array.isArray(otherRows) ? otherRows.map(normalizeListing) : [];
+        const similar = Array.isArray(similarRows) ? similarRows.map(normalizeListing) : [];
+
+        setOtherItems(other);
+        setSimilarItems(similar);
+      } catch {
+        setOtherItems([]);
+        setSimilarItems([]);
+      } finally {
+        setLoadingRelated(false);
+      }
+    };
+
+    void loadRelated();
+  }, [listing?.id, listing?.seller_id, normalizePhotoUrl]);
+
+  // Likes: état initial (count + likedByMe)
+  useEffect(() => {
+    let mounted = true;
+    const loadLikes = async () => {
+      if (!listing?.id) return;
+      const { data } = await getListingLikesInfo(listing.id);
+      if (!mounted || !data) return;
+      setLikedByMe(data.likedByMe);
+      setLikesCount(data.likesCount);
+    };
+    void loadLikes();
+    return () => {
+      mounted = false;
+    };
+  }, [listing?.id]);
+
+  // Views: incrémenter à chaque ouverture
+  useEffect(() => {
+    let mounted = true;
+    const bumpViews = async () => {
+      // On ne compte que les vues d'utilisateurs connectés (unique par user)
+      if (!listing?.id) return;
+      try {
+        // Ne pas dépendre uniquement du store: on récupère l'user côté supabase
+        const {
+          data: { user: authedUser }
+        } = await supabase.auth.getUser();
+        if (!authedUser?.id) {
+          console.warn('increment_listing_views skipped: no authed user');
+          return;
+        }
+
+        // Vues uniques: insert/upsert (user_id, listing_id) puis count.
+        // On contourne volontairement le RPC pour éviter les soucis de cache PostgREST.
+        const { error: upsertErr } = await supabase
+          .from('listing_views')
+          .upsert(
+            { user_id: authedUser.id, listing_id: listing.id },
+            { onConflict: 'user_id,listing_id' }
+          );
+        if (upsertErr) {
+          console.warn('listing_views upsert error:', upsertErr);
+        }
+
+        const { count, error: countErr } = await supabase
+          .from('listing_views')
+          .select('listing_id', { count: 'exact', head: true })
+          .eq('listing_id', listing.id);
+        if (countErr) {
+          console.warn('listing_views count error:', countErr);
+        } else if (typeof count === 'number' && mounted) {
+          setViewsCount(count);
+        }
+      } catch {
+        // no-op
+      }
+    };
+    void bumpViews();
+    return () => {
+      mounted = false;
+    };
+  }, [listing?.id, user?.id]);
+
+  useEffect(() => {
+    if (!listing?.seller_id) return;
+    if (typeof listing.seller_published_count === 'number') {
+      return;
+    }
+
+    let mounted = true;
+    setSellerCountFallback('loading');
+    void (async () => {
+      const { count, error: countErr } = await getPublishedListingsCountForSeller(listing.seller_id);
+      if (!mounted) return;
+      if (countErr) {
+        setSellerCountFallback('error');
+      } else {
+        setSellerCountFallback(count);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [listing?.seller_id, listing?.seller_published_count]);
+
+  const sellerItemsLabel = useMemo(() => {
+    const embedded = listing?.seller_published_count;
+    if (typeof embedded === 'number') {
+      return embedded === 1 ? '1 item' : `${embedded} items`;
+    }
+    if (sellerCountFallback === 'loading') return '…';
+    if (sellerCountFallback === 'error') return '—';
+    if (typeof sellerCountFallback === 'number') {
+      return sellerCountFallback === 1 ? '1 item' : `${sellerCountFallback} items`;
+    }
+    return '…';
+  }, [listing?.seller_published_count, sellerCountFallback]);
 
   const photos: PhotoItem[] = useMemo(
     () => (listing?.photos ? (listing.photos as PhotoItem[]) : []),
@@ -114,10 +309,14 @@ export default function ListingDetailScreen() {
     return conditionLabelMap[listing.condition] ?? listing.condition;
   }, [listing]);
 
+  const isListingReservedOrUnavailable = useMemo(() => {
+    const status = String(listing?.status ?? '').toLowerCase();
+    return status !== 'published';
+  }, [listing?.status]);
+
   const handleBack = () => {
     // Sur certains cas (deep link / ouverture directe), il n'y a pas de route précédente
     // donc on renvoie explicitement vers le feed.
-    // @ts-expect-error canGoBack est disponible sur le router Expo
     if (router.canGoBack && router.canGoBack()) {
       router.back();
     } else {
@@ -129,8 +328,41 @@ export default function ListingDetailScreen() {
     console.log('More actions');
   };
 
-  const handleFavoritePress = () => {
-    console.log('Favorite pressed');
+  const handleToggleLike = async () => {
+    if (!listing?.id) return;
+    if (togglingLike) return;
+
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+
+    const prevLiked = likedByMe;
+    const prevCount = likesCount;
+    const nextLiked = !prevLiked;
+    const nextCount = Math.max(0, prevCount + (nextLiked ? 1 : -1));
+
+    setLikedByMe(nextLiked);
+    setLikesCount(nextCount);
+    setTogglingLike(true);
+
+    try {
+      // Seed le store pour ce listing afin d'avoir un compteur cohérent.
+      setLikeCounts({ [listing.id]: prevCount });
+      const snapshot = prevLiked ? unlikeOptimistic(listing.id) : likeOptimistic(listing.id);
+      const res = nextLiked ? await likeListing(listing.id) : await unlikeListing(listing.id);
+      if (res.error) {
+        setLikedByMe(prevLiked);
+        setLikesCount(prevCount);
+        rollbackLike(listing.id, snapshot.prevLiked, snapshot.prevCount);
+      }
+    } catch {
+      setLikedByMe(prevLiked);
+      setLikesCount(prevCount);
+      rollbackLike(listing.id, prevLiked, prevCount);
+    } finally {
+      setTogglingLike(false);
+    }
   };
 
   const handleMessageSeller = () => {
@@ -160,7 +392,21 @@ export default function ListingDetailScreen() {
   };
 
   const handleBuyNow = () => {
-    console.log('Buy now:', listing?.id);
+    if (!listing) return;
+    if (user?.id && user.id === listing.seller_id) return;
+
+    const coverPhoto = photos?.[0]?.url;
+
+    router.push({
+      pathname: '/tabs/feed/listing/checkout' as any,
+      params: {
+        listing_id: listing.id,
+        seller_id: listing.seller_id,
+        amount: String(listing.price),
+        title: listing.title,
+        ...(coverPhoto ? { cover_photo: coverPhoto } : {})
+      }
+    });
   };
 
   const handleImagePress = (index: number) => {
@@ -257,26 +503,15 @@ export default function ListingDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={handleBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.iconTouch}
-          >
-            <AppIcon
-              name="arrowLeftOutline"
-              size={24}
-              color={theme.colors.textPrimary}
-            />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={handleBack} />
           <Text variant="body" style={styles.headerTitle}>
             Detail product
           </Text>
           <TouchableOpacity
             onPress={handleMore}
             activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.iconTouch}
+            hitSlop={HIT_SLOP_COMFORTABLE}
+            style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
           >
             <Feather
               name="more-horizontal"
@@ -339,14 +574,15 @@ export default function ListingDetailScreen() {
                 {/* Favorite icon */}
                 <TouchableOpacity
                   style={styles.favoriteIconContainer}
-                  onPress={handleFavoritePress}
+                  onPress={handleToggleLike}
                   activeOpacity={0.8}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={togglingLike}
                 >
                   <AppIcon
-                    name="likeHeartBold"
-                    size={20}
-                    color="#C3EA4F"
+                    name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
+                    size={30}
+                    color={likedByMe ? theme.colors.primary : theme.colors.textSecondary}
                   />
                 </TouchableOpacity>
 
@@ -379,6 +615,57 @@ export default function ListingDetailScreen() {
             )}
           </View>
 
+          {/* Product block */}
+          <View style={styles.productBlock}>
+            <Text variant="h1" style={styles.productTitle}>
+              {listing.title}
+            </Text>
+
+            <View style={styles.metaRow}>
+              <Text variant="captionSm" color="textSecondary" numberOfLines={1} ellipsizeMode="tail">
+                {[
+                  listing.brand ?? null,
+                  listing.size ?? '—',
+                  conditionLabel ?? 'N/A',
+                  listing.city ?? 'Unknown'
+                ]
+                  .filter((x) => !!x && String(x).trim().length > 0)
+                  .join(' · ')}
+              </Text>
+            </View>
+
+            <Text variant="h2" style={styles.mainPrice}>
+              {formattedPrice}
+            </Text>
+
+            <View style={styles.protectionRow}>
+              <Text
+                variant="captionSm"
+                style={styles.protectionPrice}
+              >
+                {formattedProtectionPrice} includes Buyer Protection
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setShowBuyerProtectionInfo(true)}
+                style={styles.protectionInfoButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="info" size={14} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Description */}
+          <View style={styles.descriptionBlock}>
+            <Text variant="captionSm" color="textSecondary" style={styles.sectionLabel}>
+              Item description
+            </Text>
+            <Text variant="body" color="textSecondary">
+              {listing.description ?? 'No description provided.'}
+            </Text>
+          </View>
+
           {/* Seller block */}
           <View style={styles.sellerBlock}>
             <View style={styles.sellerInfo}>
@@ -399,7 +686,7 @@ export default function ListingDetailScreen() {
                   {listing.seller_display_name ?? 'Seller'}
                 </Text>
                 <Text variant="captionSm" color="textSecondary">
-                  1 item
+                  {sellerItemsLabel}
                 </Text>
               </View>
             </View>
@@ -414,95 +701,21 @@ export default function ListingDetailScreen() {
             )}
           </View>
 
-          {/* Product block */}
-          <View style={styles.productBlock}>
-            {listing.brand && (
-              <Text
-                variant="body"
-                style={styles.brandText}
-              >
-                {listing.brand}
-              </Text>
-            )}
-
-            <Text variant="h1" style={styles.productTitle}>
-              {listing.title}
-            </Text>
-
-            <View style={styles.metaRow}>
-              <Text variant="captionSm" color="textSecondary">
-                {listing.size ?? '—'} • {conditionLabel ?? 'N/A'} • {listing.city ?? 'Unknown'}
-              </Text>
-            </View>
-
-            <Text variant="h2" style={styles.mainPrice}>
-              {formattedPrice}
-            </Text>
-
-            <View style={styles.protectionRow}>
-              <Text
-                variant="captionSm"
-                style={styles.protectionPrice}
-              >
-                {formattedProtectionPrice} includes Buyer Protection
-              </Text>
-              <View style={styles.protectionIcon}>
-                <AppIcon
-                  name="shieldCheckOutline"
-                  size={16}
-                  color={theme.colors.danger}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Description */}
-          <View style={styles.descriptionBlock}>
-            <Text variant="captionSm" color="textSecondary" style={styles.sectionLabel}>
-              Item description
-            </Text>
-            <Text variant="body" color="textSecondary">
-              {listing.description ?? 'No description provided.'}
-            </Text>
-          </View>
-
           {/* Lower section */}
           <View style={styles.lowerSection}>
-            {/* Buyer protection block */}
-            <View style={styles.buyerProtectionBlock}>
-              <View style={styles.buyerProtectionIcon}>
-                <Text variant="body">🛡</Text>
-              </View>
-              <View style={styles.buyerProtectionTextContainer}>
-                <Text variant="body" style={styles.buyerProtectionTitle}>
-                  Buyer protection fee
-                </Text>
-                <Text variant="captionSm" color="textSecondary" style={styles.buyerProtectionText}>
-                  Our{' '}
-                  <Text style={styles.buyerProtectionUnderline}>
-                    Buyer Protection
-                  </Text>{' '}
-                  is added for a fee to every purchase made with the "Buy now" button. Buyer
-                  Protection includes our{' '}
-                  <Text style={styles.buyerProtectionUnderline}>
-                    Refund Policy
-                  </Text>
-                  .
-                </Text>
-              </View>
-            </View>
-
             {/* Favorite / Share */}
             <View style={styles.favoriteShareRow}>
               <TouchableOpacity
                 style={styles.favoriteShareButton}
                 activeOpacity={0.8}
-                onPress={() => console.log('Favorite action')}
+                onPress={handleToggleLike}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={togglingLike}
               >
                 <AppIcon
-                  name="likeHeartOutline"
+                  name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
                   size={18}
-                  color="#000"
+                  color={likedByMe ? theme.colors.primary : theme.colors.textPrimary}
                 />
                 <Text variant="captionSm" color="textPrimary">
                   Favorite
@@ -531,12 +744,90 @@ export default function ListingDetailScreen() {
               <DetailRow label="Size" value={listing.size ?? '—'} withInfo />
               <DetailRow label="Condition" value={conditionLabel ?? '—'} withInfo />
               <DetailRow label="Color" value={listing.color ?? '—'} />
-              <DetailRow label="Views" value="—" />
-              <DetailRow label="Interested" value="—" />
+              <DetailRow label="Views" value={viewsCount != null ? String(viewsCount) : '—'} />
+              <DetailRow label="Interested" value={String(likesCount)} />
               <DetailRow
                 label="Uploaded"
                 value={formatUploadedDate(listing.published_at ?? listing.created_at)}
               />
+            </View>
+          </View>
+
+          {/* Other items / Similar items (bottom of page, above sticky CTAs) */}
+          <View style={styles.relatedSection}>
+            <View style={styles.relatedTabs}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.relatedTab}
+                onPress={() => setRelatedTab('other')}
+              >
+                <Text
+                  variant="body"
+                  style={[
+                    styles.relatedTabText,
+                    relatedTab === 'other'
+                      ? styles.relatedTabTextActive
+                      : styles.relatedTabTextInactive
+                  ]}
+                >
+                  Other listings
+                </Text>
+                {relatedTab === 'other' ? <View style={styles.relatedTabUnderline} /> : null}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.relatedTab}
+                onPress={() => setRelatedTab('similar')}
+              >
+                <Text
+                  variant="body"
+                  style={[
+                    styles.relatedTabText,
+                    relatedTab === 'similar'
+                      ? styles.relatedTabTextActive
+                      : styles.relatedTabTextInactive
+                  ]}
+                >
+                  Similar items
+                </Text>
+                {relatedTab === 'similar' ? <View style={styles.relatedTabUnderline} /> : null}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.relatedGrid}>
+              {loadingRelated ? (
+                <View style={styles.relatedLoadingRow}>
+                  <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                </View>
+              ) : (relatedTab === 'other' ? otherItems : similarItems).length === 0 ? (
+                <Text variant="captionSm" color="textSecondary" style={styles.relatedEmpty}>
+                  No items to show.
+                </Text>
+              ) : (
+                (relatedTab === 'other' ? otherItems : similarItems).map((l) => {
+                  const cover =
+                    l.photos && l.photos.length > 0
+                      ? l.photos[0]?.url ?? null
+                      : null;
+                  return (
+                    <ProductCard
+                      key={l.id}
+                      listingId={l.id}
+                      title={l.title}
+                      price={Number(l.price) || 0}
+                      brand={(l as any).brand ?? undefined}
+                      size={(l as any).size ?? undefined}
+                      condition={l.condition ?? undefined}
+                      imageUrl={cover}
+                      style={styles.relatedCard}
+                      cardWidth={(SCREEN_WIDTH - RELATED_GRID_PADDING_X * 2 - RELATED_GRID_GAP) / 2}
+                      imageRatio={1}
+                      onPress={() => router.push(`/tabs/feed/${l.id}`)}
+                    />
+                  );
+                })
+              )}
             </View>
           </View>
         </ScrollView>
@@ -549,16 +840,26 @@ export default function ListingDetailScreen() {
           ]}
         >
           <Button
-            title="Make an offer"
+            title={isListingReservedOrUnavailable ? 'Reserved' : 'Make an offer'}
             onPress={handleMakeOffer}
             variant="secondary"
-            style={styles.bottomButtonSecondary}
+            style={
+              isListingReservedOrUnavailable
+                ? styles.bottomButtonSecondaryDisabled
+                : styles.bottomButtonSecondary
+            }
+            disabled={isListingReservedOrUnavailable}
           />
           <Button
-            title="Buy now"
+            title={isListingReservedOrUnavailable ? 'Reserved' : 'Buy now'}
             onPress={handleBuyNow}
-            variant="primary"
-            style={styles.bottomButton}
+            variant="google"
+            style={
+              isListingReservedOrUnavailable
+                ? styles.bottomButtonDisabled
+                : styles.bottomButtonNoBorder
+            }
+            disabled={isListingReservedOrUnavailable}
           />
         </View>
 
@@ -630,6 +931,37 @@ export default function ListingDetailScreen() {
             </View>
           </SafeAreaView>
         </Modal>
+
+        {/* Buyer protection info modal */}
+        <Modal
+          visible={showBuyerProtectionInfo}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowBuyerProtectionInfo(false)}
+        >
+          <View style={styles.bpModalOverlay}>
+            <TouchableOpacity
+              style={styles.bpModalBackdropPressable}
+              activeOpacity={1}
+              onPress={() => setShowBuyerProtectionInfo(false)}
+            />
+            <View style={styles.bpModalCard}>
+              <Text variant="body" style={styles.bpModalTitle}>
+                Buyer Protection
+              </Text>
+              <Text variant="captionSm" color="textSecondary" style={styles.bpModalText}>
+                Buyer Protection is added for a fee to every purchase made with the "Buy now" button.
+                It includes our Refund Policy.
+              </Text>
+              <Button
+                title="Close"
+                onPress={() => setShowBuyerProtectionInfo(false)}
+                variant="primary"
+                style={styles.bpModalCloseButton}
+              />
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </>
   );
@@ -648,7 +980,7 @@ function DetailRow({ label, value, withInfo }: DetailRowProps) {
         {label}
       </Text>
       <View style={styles.detailValueContainer}>
-        <Text variant="body" color="textSecondary">
+        <Text variant="body" color="textPrimary">
           {value}
         </Text>
         {withInfo && (
@@ -792,10 +1124,10 @@ const styles = StyleSheet.create({
   },
   sellerButton: {
     flex: 0,
-    width: 130,
-    borderRadius: 52,
-    height: 36,
-    paddingHorizontal: 10
+    borderRadius: theme.radius.button,
+    height: theme.spacing.buttonHeight,
+    paddingHorizontal: theme.spacing.gapMd,
+    minWidth: 148
   },
   sellerButtonText: {
     fontSize: 16
@@ -806,7 +1138,6 @@ const styles = StyleSheet.create({
   },
   brandText: {
     ...theme.typography.body,
-    textDecorationLine: 'underline',
     marginBottom: theme.spacing.gapSm
   },
   productTitle: {
@@ -835,9 +1166,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  protectionInfoButton: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  bpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 16
+  },
+  bpModalBackdropPressable: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent'
+  },
+  bpModalCard: {
+    backgroundColor: theme.colors.backgroundWhite,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16
+  },
+  bpModalTitle: {
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: theme.fontFamily.semiBold
+  },
+  bpModalText: {
+    textAlign: 'center',
+    lineHeight: 18
+  },
+  bpModalCloseButton: {
+    marginTop: 14
+  },
   descriptionBlock: {
     paddingHorizontal: theme.spacing.screenPaddingX,
     paddingBottom: theme.spacing.gapLg
+  },
+  relatedSection: {
+    marginTop: 4,
+    marginBottom: theme.spacing.gapLg
+  },
+  relatedTabs: {
+    flexDirection: 'row',
+    width: '100%',
+    paddingHorizontal: RELATED_GRID_PADDING_X
+  },
+  relatedTab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  relatedTabText: {
+    fontSize: 14
+  },
+  relatedTabTextActive: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fontFamily.bold
+  },
+  relatedTabTextInactive: {
+    color: '#AAAAAA',
+    fontFamily: theme.fontFamily.regular
+  },
+  relatedTabUnderline: {
+    marginTop: 8,
+    height: 2,
+    width: '100%',
+    backgroundColor: '#CCFF00'
+  },
+  relatedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: RELATED_GRID_GAP,
+    rowGap: RELATED_GRID_GAP,
+    paddingHorizontal: RELATED_GRID_PADDING_X,
+    paddingTop: 12,
+    paddingBottom: 12
+  },
+  relatedCard: {
+    width: (SCREEN_WIDTH - RELATED_GRID_PADDING_X * 2 - RELATED_GRID_GAP) / 2
+  },
+  relatedLoadingRow: {
+    width: '100%',
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  relatedEmpty: {
+    paddingVertical: 8
   },
   sectionLabel: {
     marginBottom: theme.spacing.gapSm
@@ -867,7 +1284,7 @@ const styles = StyleSheet.create({
   detailLabel: {
     ...theme.typography.body,
     fontSize: 14,
-    color: '#000'
+    color: theme.colors.textSecondary
   },
   detailValueContainer: {
     flexDirection: 'row',
@@ -892,10 +1309,24 @@ const styles = StyleSheet.create({
   bottomButton: {
     flex: 1
   },
+  bottomButtonNoBorder: {
+    flex: 1,
+    borderWidth: 0,
+    borderColor: 'transparent'
+  },
+  bottomButtonSecondaryDisabled: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#C3EA4F',
+    opacity: 0.45
+  },
   bottomButtonSecondary: {
     flex: 1,
     borderWidth: 1.5,
     borderColor: '#C3EA4F'
+  },
+  bottomButtonDisabled: {
+    opacity: 0.45
   },
   modalContainer: {
     flex: 1,
@@ -948,37 +1379,6 @@ const styles = StyleSheet.create({
   modalThumb: {
     width: '100%',
     height: '100%'
-  },
-  buyerProtectionBlock: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginHorizontal: -theme.spacing.screenPaddingX,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5'
-  },
-  buyerProtectionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#C3EA4F',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  buyerProtectionTextContainer: {
-    flex: 1
-  },
-  buyerProtectionTitle: {
-    fontWeight: '600',
-    fontSize: 14
-  },
-  buyerProtectionText: {
-    fontSize: 12,
-    lineHeight: 18
-  },
-  buyerProtectionUnderline: {
-    textDecorationLine: 'underline'
   },
   favoriteShareRow: {
     flexDirection: 'row',

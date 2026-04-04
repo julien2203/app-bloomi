@@ -6,11 +6,11 @@ import { Feather } from '@expo/vector-icons';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { useSellFormStore } from '../../../lib/store/sellForm';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 
-type ConditionValue = 'new' | 'like_new' | 'good' | 'fair' | 'poor';
+type ConditionValue = 'new' | 'like_new' | 'good' | 'fair';
 
 type ConditionOption = {
   label: string;
@@ -38,11 +38,6 @@ const CONDITION_OPTIONS: ConditionOption[] = [
     label: 'Fair',
     value: 'fair',
     description: 'Visible signs of wear, small defects possible.'
-  },
-  {
-    label: 'Poor',
-    value: 'poor',
-    description: 'Heavily worn, visible defects or repairs.'
   }
 ];
 
@@ -63,13 +58,7 @@ export default function SellConditionScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backButton}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             Condition
           </Text>
@@ -152,9 +141,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between'
-  },
-  backButton: {
-    padding: 8
   },
   headerTitle: {
     ...theme.typography.body,

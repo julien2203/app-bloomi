@@ -1,5 +1,6 @@
 import React from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { View } from 'react-native';
 import { icons, type IconName } from '../../lib/assets';
 
 interface AppIconProps {
@@ -9,17 +10,19 @@ interface AppIconProps {
   style?: StyleProp<ViewStyle>;
 }
 
+/**
+ * Les SVG peuvent avoir une hitbox iOS imprécise et « voler » les touches au Touchable parent.
+ * pointerEvents="none" : la cible tactile est le parent (bouton), pas les paths du SVG.
+ */
 export function AppIcon({ name, size = 24, color, style }: AppIconProps) {
   const Icon = icons[name];
   return (
-    <Icon
-      width={size}
-      height={size}
-      color={color}
-      fill={color}
-      stroke={color}
-      style={style as any}
-    />
+    <View
+      pointerEvents="none"
+      style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}
+    >
+      <Icon width={size} height={size} color={color} fill={color} stroke={color} />
+    </View>
   );
 }
 

@@ -1,11 +1,397 @@
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '../../../components/ui/Button';
+import { Text } from '../../../components/ui/Text';
+import { AppIcon } from '../../../components/ui/AppIcon';
+import { supabase } from '../../../lib/supabase';
+import { SUPABASE_URL } from '../../../lib/env';
+import { theme } from '../../../lib/theme';
+import { useAuthStore } from '../../../stores/authStore';
 
-export default function Screen() {
+type WalletBalance = {
+  available_chf: number;
+  pending_chf: number;
+};
+
+type ProfileStripe = {
+  stripe_connect_onboarding_completed: boolean | null;
+  stripe_account_id: string | null;
+  stripe_seller_account_id: string | null;
+};
+
+function formatChf(n: number) {
+  const safe = Number.isFinite(n) ? n : 0;
+  return `${safe.toFixed(2)} CHF`;
+}
+
+function trimId(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s.length ? s : null;
+}
+
+export default function WalletScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
+
+  const [loading, setLoading] = useState(false);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [balance, setBalance] = useState<WalletBalance>({ available_chf: 0, pending_chf: 0 });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [profileStripe, setProfileStripe] = useState<ProfileStripe | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const userId = user?.id ?? null;
+
+  const stripeAccountId = useMemo(() => {
+    const row = profileStripe;
+    return trimId(row?.stripe_account_id) ?? trimId(row?.stripe_seller_account_id);
+  }, [profileStripe]);
+
+  const onboardingCompleted = useMemo(
+    () => Boolean(profileStripe?.stripe_connect_onboarding_completed),
+    [profileStripe]
+  );
+
+  const loadProfileStripe = useCallback(async () => {
+    if (!userId) return;
+    const { data, error: qError } = await supabase
+      .from('profiles')
+      .select('stripe_connect_onboarding_completed, stripe_account_id, stripe_seller_account_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (qError) throw new Error(qError.message);
+    setProfileStripe((data ?? null) as ProfileStripe | null);
+  }, [userId]);
+
+  const loadBalance = useCallback(async () => {
+    if (!userId) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error('Session expired, please log in again.');
+      }
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-wallet-balance`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
+
+      const json = (await response.json()) as WalletBalance & { error?: string; details?: string };
+      if (!response.ok) {
+        throw new Error(json.error ?? json.details ?? 'Unable to load wallet balance.');
+      }
+
+      const available = Number(json.available_chf);
+      const pending = Number(json.pending_chf);
+      setBalance({
+        available_chf: Number.isFinite(available) ? available : 0,
+        pending_chf: Number.isFinite(pending) ? pending : 0
+      });
+    } catch (e) {
+      setBalance({ available_chf: 0, pending_chf: 0 });
+      setError(e instanceof Error ? e.message : 'Unable to load wallet balance.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  const reloadAll = useCallback(async () => {
+    setSuccessMessage(null);
+    await loadProfileStripe();
+    // On charge le solde même si Stripe n'est pas activé: l'Edge Function renverra 0/0.
+    await loadBalance();
+  }, [loadBalance, loadProfileStripe]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reloadAll();
+    }, [reloadAll])
+  );
+
+  useEffect(() => {
+    void reloadAll();
+  }, [reloadAll]);
+
+  const canPayout = balance.available_chf > 0 && onboardingCompleted;
+
+  const openStripeDashboard = useCallback(async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error('Session expired, please log in again.');
+      }
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-dashboard-link`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
+
+      const json = (await response.json()) as { url?: string; error?: string; details?: string };
+      if (!response.ok) {
+        throw new Error(json.error ?? json.details ?? 'Unable to open Stripe dashboard.');
+      }
+      if (!json.url) {
+        throw new Error('Missing Stripe URL.');
+      }
+
+      await Linking.openURL(json.url);
+    } catch {
+      Alert.alert('Stripe', 'Unable to open Stripe dashboard.');
+    }
+  }, []);
+
+  const handlePayout = useCallback(async () => {
+    if (!canPayout || payoutLoading) return;
+
+    Alert.alert(
+      'Confirm payout',
+      `Do you want to transfer ${formatChf(balance.available_chf)} to your bank account?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Transfer',
+          style: 'default',
+          onPress: async () => {
+            setPayoutLoading(true);
+            setSuccessMessage(null);
+            try {
+              const { data: sessionData } = await supabase.auth.getSession();
+              const accessToken = sessionData.session?.access_token;
+              if (!accessToken) {
+                throw new Error('Session expired, please log in again.');
+              }
+
+              const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payout`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
+              });
+
+              const responseText = await response.text();
+              let json: any = null;
+              try {
+                json = responseText ? JSON.parse(responseText) : null;
+              } catch {
+                json = null;
+              }
+
+              if (!response.ok || json?.success !== true) {
+                throw new Error(json?.error ?? json?.details ?? responseText ?? 'Unable to create payout.');
+              }
+
+              setSuccessMessage('Payout initiated — you will receive the funds within 1–3 business days.');
+              await loadBalance();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Unable to create payout.');
+            } finally {
+              setPayoutLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [balance.available_chf, canPayout, loadBalance, payoutLoading]);
+
+  const showPendingInfo = useCallback(() => {
+    Alert.alert(
+      'Pending funds',
+      'Pending funds will become available in 2–7 days, depending on Stripe processing time.'
+    );
+  }, []);
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ color: '#999' }}>À implémenter</Text>
-    </View>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={[styles.content, { paddingBottom: insets.bottom + 80 }]}>
+        {!userId ? (
+          <View style={styles.center}>
+            <Text variant="body" color="textSecondary" style={styles.centerText}>
+              Please sign in to access your wallet.
+            </Text>
+            <Button title="Sign in" onPress={() => router.push('/auth/login')} variant="primary" />
+          </View>
+        ) : !onboardingCompleted ? (
+          <View style={styles.center}>
+            <Text variant="body" style={styles.centerTitle}>
+              Activate your seller account to access your wallet
+            </Text>
+            <Text variant="body" color="textSecondary" style={styles.centerText}>
+              You need to activate Stripe Connect to receive payouts.
+            </Text>
+            <Button
+              title="Activate my seller account"
+              onPress={() => router.push('/tabs/profile/activate-seller-account')}
+              variant="primary"
+            />
+          </View>
+        ) : (
+          <>
+            <View style={styles.card}>
+              <Text variant="captionSm" color="textSecondary" style={styles.label}>
+                Disponible
+              </Text>
+              {loading ? (
+                <View style={styles.balanceLoadingRow}>
+                  <ActivityIndicator color={theme.colors.textSecondary} />
+                </View>
+              ) : (
+                <Text variant="h1" style={styles.availableAmount}>
+                  {formatChf(balance.available_chf)}
+                </Text>
+              )}
+
+              <View style={styles.pendingRow}>
+                <View style={styles.pendingLabelRow}>
+                  <Text variant="captionSm" color="textSecondary" style={styles.pendingLabel}>
+                    En attente
+                  </Text>
+                  <TouchableOpacity
+                    onPress={showPendingInfo}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.infoIconBtn}
+                  >
+                    <AppIcon name="infoCircleOutline" size={18} color={theme.colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text variant="body" color="textPrimary" style={styles.pendingAmount}>
+                  {formatChf(balance.pending_chf)}
+                </Text>
+              </View>
+
+              {error ? (
+                <Text variant="captionSm" color="textSecondary" style={styles.errorText}>
+                  {error}
+                </Text>
+              ) : null}
+
+              {successMessage ? (
+                <View style={styles.successBox}>
+                  <Text variant="body" style={styles.successText}>
+                    {successMessage}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.actions}>
+              <Button
+                title="Virer sur mon compte bancaire"
+                onPress={handlePayout}
+                variant="primary"
+                disabled={!canPayout}
+                loading={payoutLoading}
+              />
+              <Button
+                title="Accéder au dashboard Stripe"
+                onPress={openStripeDashboard}
+                variant="secondary"
+              />
+            </View>
+          </>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.backgroundWhite
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: theme.spacing.gapMd
+  },
+  card: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: theme.colors.googleWhite
+  },
+  label: {
+    marginBottom: 8
+  },
+  availableAmount: {
+    color: theme.colors.textPrimary
+  },
+  balanceLoadingRow: {
+    height: 44,
+    justifyContent: 'center'
+  },
+  pendingRow: {
+    marginTop: 14
+  },
+  pendingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  pendingLabel: {
+    marginRight: 6
+  },
+  infoIconBtn: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  pendingAmount: {
+    marginTop: 4
+  },
+  actions: {
+    marginTop: 16,
+    gap: 10
+  },
+  successBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: theme.radius.card,
+    backgroundColor: '#F9FFE8',
+    borderWidth: 1,
+    borderColor: theme.colors.primary
+  },
+  successText: {
+    color: theme.colors.textPrimary
+  },
+  errorText: {
+    marginTop: 10
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16
+  },
+  centerTitle: {
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  centerText: {
+    textAlign: 'center',
+    marginBottom: 16
+  }
+});
 

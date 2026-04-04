@@ -14,7 +14,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
@@ -66,14 +67,7 @@ export default function VerifyEmailScreen() {
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text style={styles.headerTitle}>Verify your email</Text>
           <TouchableOpacity
             onPress={async () => {
@@ -84,6 +78,7 @@ export default function VerifyEmailScreen() {
               }
             }}
             style={styles.logoutButton}
+            hitSlop={HIT_SLOP_COMFORTABLE}
           >
             <Text style={styles.logoutText}>Log out</Text>
           </TouchableOpacity>
@@ -192,9 +187,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 12
-  },
-  backButton: {
-    padding: 4
   },
   headerTitle: {
     ...theme.typography.body,

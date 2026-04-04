@@ -5,15 +5,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
 import { getChildCategories } from '../../../lib/api/filters';
 import { useSellFormStore } from '../../../lib/store/sellForm';
+import { supabase } from '../../../lib/supabase';
 
 type CategoryRow = {
   id: number;
   name: string;
 };
+
+function inferTypeFromParentSlug(parentSlug?: string | null): 'chaussures' | 'pantalons' | 'chemises' | 'vetements' {
+  const s = (parentSlug ?? '').toLowerCase();
+  if (s.includes('chaussures')) return 'chaussures';
+  if (s.includes('pantalons')) return 'pantalons';
+  if (s.includes('chemises')) return 'chemises';
+  return 'vetements';
+}
 
 export default function SellCategoryDetailScreen() {
   const router = useRouter();
@@ -27,6 +36,7 @@ export default function SellCategoryDetailScreen() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [parentSlug, setParentSlug] = useState<string | null>(null);
 
   useEffect(() => {
     if (!Number.isFinite(parentId)) return;
@@ -34,6 +44,14 @@ export default function SellCategoryDetailScreen() {
     const load = async () => {
       try {
         setLoading(true);
+        // Parent slug (pour déterminer le "type" utilisé par sizes/brands)
+        const { data: parentRow } = await supabase
+          .from('categories')
+          .select('slug')
+          .eq('id', parentId)
+          .maybeSingle();
+        setParentSlug((parentRow as any)?.slug ? String((parentRow as any).slug) : null);
+
         const data = await getChildCategories(parentId);
         setCategories(
           (data as any[]).map((row) => ({
@@ -62,6 +80,9 @@ export default function SellCategoryDetailScreen() {
       gender
     });
 
+    setField('categoryGender', gender);
+    setField('categoryType', inferTypeFromParentSlug(parentSlug));
+
     // Revenir jusqu'à l'écran principal Sell (index)
     router.back(); // back to gender
     router.back(); // back to category root (tabs/sell/category)
@@ -72,13 +93,7 @@ export default function SellCategoryDetailScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             {headerTitle}
           </Text>
@@ -151,9 +166,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
-  },
-  backButton: {
-    padding: 4
   },
   headerTitle: {
     ...theme.typography.body,

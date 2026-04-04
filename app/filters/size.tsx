@@ -7,7 +7,8 @@ import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { getSizes } from '../../lib/api/filters';
 
@@ -15,6 +16,7 @@ type SizeRow = {
   id: number;
   label: string;
   count: number;
+  sortOrder: number;
 };
 
 type SizeSection = {
@@ -29,7 +31,9 @@ function getSectionTitle(gender?: string | null, type?: string | null): string {
   if (g === 'femme' && t === 'vetements') return "Woman's items";
   if (g === 'femme' && t === 'chaussures') return "Woman's shoes";
 
-  if (g === 'homme' && t === 'vetements') return "Men's items";
+  if (g === 'homme' && t === 'vetements') return "Men's clothing";
+  if (g === 'homme' && t === 'pantalons') return "Men's pants & jeans";
+  if (g === 'homme' && t === 'chemises') return "Men's shirts (collar)";
   if (g === 'homme' && t === 'chaussures') return "Men's shoes";
 
   if (g === 'enfant' && t === 'vetements') return "Kids";
@@ -84,6 +88,10 @@ export default function SizeFilterScreen() {
         // Si aucun count n'est fourni, considérer 0 par défaut (non cliquable)
         const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
         const count = rawCount < 0 ? 0 : rawCount;
+        const sortOrder =
+          typeof row.sort_order === 'number' && Number.isFinite(row.sort_order)
+            ? row.sort_order
+            : 0;
 
         if (!bySectionTitle[title]) {
           bySectionTitle[title] = [];
@@ -92,23 +100,24 @@ export default function SizeFilterScreen() {
         bySectionTitle[title].push({
           id: row.id as number,
           label: row.label as string,
-          count
+          count,
+          sortOrder
         });
       });
 
       const builtSections: SizeSection[] = Object.entries(bySectionTitle).map(
         ([title, rows]) => ({
           title,
-          rows
+          rows: rows.sort((a, b) => a.sortOrder - b.sortOrder)
         })
       );
 
-      // Ordonner les sections dans un ordre fixe pour matcher le Word :
-      // Woman's items, Woman's shoes, Men's items, Men's shoes, Kids, Kids shoes, Baby, Baby shoes, Other
       const SECTION_ORDER = [
         "Woman's items",
         "Woman's shoes",
-        "Men's items",
+        "Men's clothing",
+        "Men's pants & jeans",
+        "Men's shirts (collar)",
         "Men's shoes",
         'Kids',
         'Kids shoes',
@@ -145,19 +154,15 @@ export default function SizeFilterScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleShowResult}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={handleShowResult} />
           <Text variant="body" style={styles.headerTitle}>
             Size
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleClearAll}
+            hitSlop={HIT_SLOP_COMFORTABLE}
+            style={styles.clearAllHit}
           >
             <Text variant="body" style={styles.clearAllText}>
               Clear all
@@ -291,14 +296,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
   },
-  backButton: {
-    padding: 4
-  },
   headerTitle: {
     ...theme.typography.body,
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.textPrimary
+  },
+  clearAllHit: {
+    minHeight: 44,
+    justifyContent: 'center'
   },
   clearAllText: {
     ...theme.typography.body,

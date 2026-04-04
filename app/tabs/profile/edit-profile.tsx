@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
@@ -31,6 +32,10 @@ type ProfileRow = {
   about?: string | null;
   location?: string | null;
   location_visible?: boolean | null;
+  city?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 const CANTONS = [
@@ -76,6 +81,12 @@ export default function EditProfileScreen() {
   const [about, setAbout] = useState('');
   const [location, setLocation] = useState('');
   const [locationVisible, setLocationVisible] = useState(false);
+  const [gpsCity, setGpsCity] = useState<string | null>(null);
+  const [gpsCountry, setGpsCountry] = useState<string | null>(null);
+  const [gpsLat, setGpsLat] = useState<number | null>(null);
+  const [gpsLng, setGpsLng] = useState<number | null>(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const [gpsPermissionDenied, setGpsPermissionDenied] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -94,14 +105,30 @@ export default function EditProfileScreen() {
     const loadProfile = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        let data: any = null;
+        // 1) Query complète (inclut les champs GPS)
+        const full = await supabase
           .from('profiles')
-          .select('id, avatar_url, display_name, bio, about, location, location_visible')
+          .select(
+            'id, avatar_url, display_name, bio, about, location, location_visible, city, country, latitude, longitude'
+          )
           .eq('id', user.id)
           .maybeSingle();
 
-        if (error) {
-          throw error;
+        if (!full.error) {
+          data = full.data;
+        } else {
+          // 2) Fallback: schéma pas à jour (colonnes manquantes) ou policy restrictive
+          const minimal = await supabase
+            .from('profiles')
+            .select('id, avatar_url, display_name, bio, about, location, location_visible')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (minimal.error) {
+            throw minimal.error;
+          }
+          data = minimal.data;
         }
 
         if (data) {
@@ -119,6 +146,11 @@ export default function EditProfileScreen() {
           setAbout(aboutValue);
           setLocation(row.location ?? '');
           setLocationVisible(Boolean(row.location_visible));
+          setGpsCity(row.city ?? null);
+          setGpsCountry(row.country ?? null);
+          setGpsLat(typeof row.latitude === 'number' ? row.latitude : row.latitude != null ? Number(row.latitude as any) : null);
+          setGpsLng(typeof row.longitude === 'number' ? row.longitude : row.longitude != null ? Number(row.longitude as any) : null);
+          setGpsPermissionDenied(false);
           setAvatarUrl(row.avatar_url ?? null);
         } else {
           setProfile(null);
@@ -130,12 +162,17 @@ export default function EditProfileScreen() {
           setAbout('');
           setLocation('');
           setLocationVisible(false);
+          setGpsCity(null);
+          setGpsCountry(null);
+          setGpsLat(null);
+          setGpsLng(null);
+          setGpsPermissionDenied(false);
           setAvatarUrl(null);
         }
-      } catch {
+      } catch (e) {
         setToast({
           type: 'error',
-          message: 'Impossible de charger votre profil.'
+          message: e instanceof Error && e.message ? `Impossible de charger votre profil: ${e.message}` : 'Impossible de charger votre profil.'
         });
       } finally {
         setLoading(false);
@@ -256,30 +293,88 @@ export default function EditProfileScreen() {
   const handleToggleLocationVisible = async (value: boolean) => {
     if (!user?.id) return;
 
-    setLocationVisible(value);
-    setUpdatingLocationVisible(true);
+    // OFF: persist immediately + clear coords
+    if (!value) {
+      setLocationVisible(false);
+      setGpsCity(null);
+      setGpsCountry(null);
+      setGpsLat(null);
+      setGpsLng(null);
+      setUpdatingLocationVisible(true);
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            location_visible: false,
+            latitude: null,
+            longitude: null
+          })
+          .eq('id', user.id);
 
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ location_visible: value })
-        .eq('id', user.id);
-
-      if (error) {
-        setLocationVisible((prev) => !prev);
+        if (error) throw error;
+      } catch {
         setToast({
           type: 'error',
-          message: "Impossible de mettre à jour la visibilité de votre localisation."
+          message: "Impossible de désactiver la localisation."
         });
+      } finally {
+        setUpdatingLocationVisible(false);
       }
+      return;
+    }
+
+    // ON: request GPS + reverse geocode, do not persist until Save
+    setDetectingLocation(true);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setGpsPermissionDenied(true);
+        setToast({ type: 'error', message: 'Permission GPS refusée.' });
+        setLocationVisible(false);
+        return;
+      }
+      setGpsPermissionDenied(false);
+
+      const pos = await Location.getCurrentPositionAsync({});
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      const places = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      const place = places && places.length > 0 ? places[0] : null;
+      const cityDetected =
+        (place as any)?.city ||
+        (place as any)?.subregion ||
+        (place as any)?.region ||
+        null;
+      const countryCode = ((place as any)?.isoCountryCode || (place as any)?.countryCode || '').toString().toUpperCase();
+
+      const allowed = ['CH', 'FR', 'DE', 'IT'] as const;
+      if (!allowed.includes(countryCode as any)) {
+        Alert.alert(
+          'Zone non disponible',
+          'Bloomi est disponible uniquement en Suisse, France, Allemagne et Italie'
+        );
+        setLocationVisible(false);
+        setGpsCity(null);
+        setGpsCountry(null);
+        setGpsLat(null);
+        setGpsLng(null);
+        return;
+      }
+
+      setLocationVisible(true);
+      setGpsCity(cityDetected);
+      setGpsCountry(countryCode);
+      setGpsLat(lat);
+      setGpsLng(lng);
     } catch {
-      setLocationVisible((prev) => !prev);
       setToast({
         type: 'error',
-        message: "Impossible de mettre à jour la visibilité de votre localisation."
+        message: 'Impossible de récupérer votre position.'
       });
+      setLocationVisible(false);
     } finally {
-      setUpdatingLocationVisible(false);
+      setDetectingLocation(false);
     }
   };
 
@@ -302,7 +397,11 @@ export default function EditProfileScreen() {
           bio: aboutValue || null,
           about: aboutValue || null,
           location: locationValue || null,
-          location_visible: locationVisible
+          location_visible: locationVisible,
+          city: locationVisible ? (gpsCity ?? null) : null,
+          country: locationVisible ? (gpsCountry ?? null) : null,
+          latitude: locationVisible ? (gpsLat ?? null) : null,
+          longitude: locationVisible ? (gpsLng ?? null) : null
         })
         .select('id')
         .single();
@@ -495,38 +594,48 @@ export default function EditProfileScreen() {
           <View style={styles.sectionSeparator} />
         </View>
 
-        {/* My location - valeur */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => setLocationModalVisible(true)}
-        >
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>My location</Text>
-            <View style={styles.rowRight}>
-              {loading ? (
-                <View style={styles.locationSkeleton} />
-              ) : (
-                <Text style={styles.rowValue}>
-                  {location || 'Select your location'}
-                </Text>
-              )}
-              <Text style={styles.chevron}>{'›'}</Text>
+        {/* Location: GPS par défaut, fallback manuel si permission refusée */}
+        {!gpsPermissionDenied ? (
+          <>
+            {/* My location - toggle visibilité (GPS) */}
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>My location</Text>
+              <Switch
+                value={locationVisible}
+                onValueChange={handleToggleLocationVisible}
+                trackColor={{ false: '#CCCCCC', true: '#CCFF00' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor="#CCCCCC"
+                disabled={updatingLocationVisible || loading || detectingLocation}
+              />
             </View>
-          </View>
-        </TouchableOpacity>
 
-        {/* My location - toggle visibilité */}
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>My location</Text>
-          <Switch
-            value={locationVisible}
-            onValueChange={handleToggleLocationVisible}
-            trackColor={{ false: '#CCCCCC', true: '#CCFF00' }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor="#CCCCCC"
-            disabled={updatingLocationVisible || loading}
-          />
-        </View>
+            {locationVisible && gpsCity ? (
+              <View style={styles.locationDetectedRow}>
+                <Text style={styles.locationDetectedText}>
+                  {`📍 ${gpsCity}${gpsCountry ? `, ${gpsCountry}` : ''}`}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <>
+            {/* Fallback manuel: visible uniquement si permission GPS refusée */}
+            <TouchableOpacity activeOpacity={0.7} onPress={() => setLocationModalVisible(true)}>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>My location</Text>
+                <View style={styles.rowRight}>
+                  {loading ? (
+                    <View style={styles.locationSkeleton} />
+                  ) : (
+                    <Text style={styles.rowValue}>{location || 'Select your location'}</Text>
+                  )}
+                  <Text style={styles.chevron}>{'›'}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {renderLocationModal()}
@@ -661,6 +770,18 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 4,
     backgroundColor: '#F3F4F6'
+  },
+  locationDetectedRow: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
+    backgroundColor: '#FFFFFF'
+  },
+  locationDetectedText: {
+    fontSize: 14,
+    color: '#111827'
   },
   modalOverlay: {
     flex: 1,

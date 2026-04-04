@@ -27,3 +27,6 @@ dist/
 build/
 android/
 ios/
+
+# Supabase CLI (métadonnées locales)
+supabase/.temp/

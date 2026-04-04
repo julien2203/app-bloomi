@@ -21,6 +21,8 @@ SELECT
   l.title,
   l.description,
   l.price,
+  -- Likes count (instant display)
+  (SELECT COUNT(*)::int FROM public.likes lk WHERE lk.listing_id = l.id) AS likes_count,
   l.status,
   l.category,
   l.condition,
@@ -159,7 +161,13 @@ SELECT
   ) AS photos,
   l.brand,
   l.size,
-  l.color
+  l.color,
+  (
+    SELECT COUNT(*)::int
+    FROM public.listings l2
+    WHERE l2.seller_id = l.seller_id
+      AND l2.status = 'published'
+  ) AS seller_published_count
 FROM public.listings l
 INNER JOIN public.profiles p ON l.seller_id = p.id;
 

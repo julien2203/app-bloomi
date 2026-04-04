@@ -14,7 +14,14 @@
       "typedRoutes": true
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.jupouch.bloomiapp",
+          "urlScheme": "bloomi"
+        }
+      ]
     ],
     "icon": "./assets/brand/logo-bloomi.png",
     "splash": {
@@ -48,7 +55,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },

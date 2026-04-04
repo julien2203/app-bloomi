@@ -20,6 +20,10 @@ export default function ProfileStackLayout() {
       <Stack.Screen name="personalization" options={{ title: 'Personalization' }} />
       <Stack.Screen name="wallet" options={{ title: 'Wallet' }} />
       <Stack.Screen name="orders" options={{ title: 'My orders' }} />
+      <Stack.Screen
+        name="activate-seller-account"
+        options={{ title: 'Activer mon compte vendeur', headerShown: false }}
+      />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="legal" options={{ title: 'Legal information' }} />
       <Stack.Screen name="help" options={{ title: 'Help center' }} />

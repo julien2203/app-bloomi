@@ -105,7 +105,7 @@ import UserOutline from '../assets/icons/user-outline.svg';
 import WalletOutline from '../assets/icons/wallet-outline.svg';
 
 export const images = {
-  hero: require('../assets/home/hero.jpg')
+  hero: require('../assets/home/hero2.jpeg')
   // Ajoute ici d'autres images si besoin
 } as const;
 

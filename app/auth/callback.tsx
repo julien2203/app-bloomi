@@ -25,6 +25,11 @@ export default function AuthCallbackScreen() {
         const rawUrlParam = typeof params.rawUrl === 'string' ? params.rawUrl : null;
         const initialUrl = rawUrlParam || (await Linking.getInitialURL());
 
+        if (initialUrl?.toLowerCase().includes('profile')) {
+          router.replace('/tabs/profile/activate-seller-account');
+          return;
+        }
+
         if (initialUrl && initialUrl.includes('#')) {
           const [, hashPart] = initialUrl.split('#');
           const search = new URLSearchParams(hashPart);

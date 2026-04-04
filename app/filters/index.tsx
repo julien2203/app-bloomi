@@ -5,14 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { useFeedFiltersStore, type FeedSort } from '../../lib/store/feedFilters';
 
 export default function FiltersIndexScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ title?: string }>();
+  const params = useLocalSearchParams<{ title?: string; from?: string }>();
   const { filters } = useFeedFiltersStore();
 
   const headerTitle = params.title || 'Filters';
@@ -66,21 +66,18 @@ export default function FiltersIndexScreen() {
   };
 
   const handleShowResult = () => {
-    router.replace('/tabs/feed');
+    if (params.from === 'search') {
+      router.replace('/tabs/search');
+    } else {
+      router.replace('/tabs/feed');
+    }
   };
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.replace('/tabs/feed')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={handleShowResult} />
           <Text variant="body" style={styles.headerTitle}>
             {headerTitle}
           </Text>
@@ -294,9 +291,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
-  },
-  backButton: {
-    padding: 4
   },
   headerTitle: {
     ...theme.typography.body,

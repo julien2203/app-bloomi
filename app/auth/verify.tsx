@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { DEV_OTP_MODE, DEV_TEST_CODE } from '../../lib/env';
 import { isDevTestCode, verifyDevTestCode } from '../../lib/auth';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 
 export default function VerifyScreen() {
   const { phone } = useLocalSearchParams<{ phone?: string }>();
@@ -86,6 +87,9 @@ export default function VerifyScreen() {
             paddingTop: 48
           }}
         >
+          <View style={{ marginBottom: 16 }}>
+            <HeaderBackButton onPress={() => router.back()} />
+          </View>
           <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 8 }}>
             Entrez le code SMS
           </Text>

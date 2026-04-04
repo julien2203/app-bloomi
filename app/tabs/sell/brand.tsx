@@ -8,15 +8,16 @@ import {
   View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
 import { useSellFormStore, type SellBrand } from '../../../lib/store/sellForm';
 import { getBrands } from '../../../lib/api/filters';
+import { supabase } from '../../../lib/supabase';
 
 type BrandRow = {
   id: number;
@@ -24,33 +25,42 @@ type BrandRow = {
   count: number;
 };
 
+function formatGenderLabel(g?: string | null): string {
+  switch ((g ?? '').toLowerCase()) {
+    case 'femme':
+      return 'Women';
+    case 'homme':
+      return 'Men';
+    case 'enfant':
+      return 'Kids';
+    case 'bebe':
+      return 'Baby';
+    default:
+      return g ? String(g) : '—';
+  }
+}
+
 export default function SellBrandScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
-
-  const params = useLocalSearchParams<{
-    gender?: string;
-    type?: string;
-    title?: string;
-  }>();
-
-  const genderParam = typeof params.gender === 'string' ? params.gender : undefined;
-  const typeParam = typeof params.type === 'string' ? params.type : undefined;
-  const headerTitle = typeof params.title === 'string' ? params.title : 'Brand';
+  const gender = values.categoryGender ?? values.category?.gender;
+  const type = values.categoryType;
+  const headerTitle = 'Brand';
 
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [selected, setSelected] = useState<SellBrand | null>(values.brand ?? null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [popularBrandNames, setPopularBrandNames] = useState<Set<string>>(new Set());
 
   const loadBrands = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const data = await getBrands(genderParam, typeParam);
+      const data = await getBrands(gender, type);
 
       const mapped: BrandRow[] = (data as any[]).map((row) => {
         const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
@@ -60,11 +70,6 @@ export default function SellBrandScreen() {
           name: row.name as string,
           count
         };
-      });
-
-      mapped.sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return a.name.localeCompare(b.name);
       });
 
       setBrands(mapped);
@@ -80,6 +85,50 @@ export default function SellBrandScreen() {
     void loadBrands();
   }, []);
 
+  useEffect(() => {
+    const loadPopular = async () => {
+      const categoryId = values.category?.id;
+      if (!categoryId) {
+        setPopularBrandNames(new Set());
+        return;
+      }
+
+      try {
+        const { data, error: listingsError } = await supabase
+          .from('listings')
+          .select('brand')
+          .eq('status', 'published')
+          .eq('category_id', categoryId);
+
+        if (listingsError) {
+          setPopularBrandNames(new Set());
+          return;
+        }
+
+        const counts: Record<string, number> = {};
+        for (const row of (data ?? []) as any[]) {
+          const name = (row?.brand as string | null)?.trim();
+          if (!name) continue;
+          counts[name] = (counts[name] ?? 0) + 1;
+        }
+
+        const ranked = Object.entries(counts)
+          .sort((a, b) => {
+            if (b[1] !== a[1]) return b[1] - a[1];
+            return a[0].localeCompare(b[0]);
+          })
+          .slice(0, 12)
+          .map(([name]) => name);
+
+        setPopularBrandNames(new Set(ranked));
+      } catch {
+        setPopularBrandNames(new Set());
+      }
+    };
+
+    void loadPopular();
+  }, [values.category?.id]);
+
   const filteredBrands = useMemo(() => {
     const q = search.trim().toLowerCase();
     let result = brands;
@@ -89,26 +138,39 @@ export default function SellBrandScreen() {
     return result;
   }, [brands, search]);
 
+  const popularBrands = useMemo(() => {
+    if (search.trim().length > 0) return [];
+    const picked = brands.filter((b) => popularBrandNames.has(b.name));
+    picked.sort((a, b) => {
+      // ordre popular: par count desc puis alpha
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
+    return picked;
+  }, [brands, popularBrandNames, search]);
+
+  const allBrands = useMemo(() => {
+    const q = search.trim();
+    const base = q.length > 0 ? filteredBrands : brands.filter((b) => !popularBrandNames.has(b.name));
+    const copy = [...base];
+    copy.sort((a, b) => a.name.localeCompare(b.name));
+    return copy;
+  }, [brands, filteredBrands, popularBrandNames, search]);
+
   const hasNoResults = !loading && filteredBrands.length === 0;
 
   const handleConfirm = () => {
     if (selected) {
       setField('brand', selected);
     }
-    router.back();
+    router.replace('/tabs/sell');
   };
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleConfirm}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             {headerTitle}
           </Text>
@@ -168,13 +230,55 @@ export default function SellBrandScreen() {
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
-              {filteredBrands.map((brand) => {
+              {search.trim().length === 0 && popularBrands.length > 0 && (
+                <Text variant="captionSm" style={styles.sectionTitle}>
+                  {`Popular for ${formatGenderLabel(gender)}`}
+                </Text>
+              )}
+
+              {search.trim().length === 0 &&
+                popularBrands.map((brand) => {
+                  const checked = selected?.id === brand.id;
+                  return (
+                    <TouchableOpacity
+                      key={`popular-${brand.id}`}
+                      style={styles.row}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        setSelected({
+                          id: brand.id,
+                          name: brand.name
+                        })
+                      }
+                    >
+                      <View style={styles.rowTextContainer}>
+                        <Text variant="body" style={styles.rowLabel}>
+                          {brand.name}
+                        </Text>
+                        <Text variant="body" style={styles.rowCount}>
+                          {brand.count > 500 ? ' (500+)' : ` (${brand.count})`}
+                        </Text>
+                      </View>
+                      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                        {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+
+              {search.trim().length === 0 && (
+                <Text variant="captionSm" style={[styles.sectionTitle, { marginTop: popularBrands.length ? 16 : 0 }]}>
+                  All brands
+                </Text>
+              )}
+
+              {allBrands.map((brand) => {
                 const checked = selected?.id === brand.id;
                 return (
                   <TouchableOpacity
                     key={brand.id}
-                  style={styles.row}
-                  activeOpacity={0.7}
+                    style={styles.row}
+                    activeOpacity={0.7}
                     onPress={() =>
                       setSelected({
                         id: brand.id,
@@ -183,28 +287,15 @@ export default function SellBrandScreen() {
                     }
                   >
                     <View style={styles.rowTextContainer}>
-                      <Text
-                        variant="body"
-                        style={styles.rowLabel}
-                      >
+                      <Text variant="body" style={styles.rowLabel}>
                         {brand.name}
                       </Text>
-                      <Text
-                        variant="body"
-                        style={styles.rowCount}
-                      >
+                      <Text variant="body" style={styles.rowCount}>
                         {brand.count > 500 ? ' (500+)' : ` (${brand.count})`}
                       </Text>
                     </View>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        checked && styles.checkboxChecked
-                      ]}
-                    >
-                      {checked && (
-                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                      )}
+                    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                      {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
                     </View>
                   </TouchableOpacity>
                 );
@@ -247,9 +338,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
-  },
-  backButton: {
-    padding: 4
   },
   headerTitle: {
     ...theme.typography.body,
@@ -335,6 +423,13 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     fontSize: 16,
     color: '#AAAAAA'
+  },
+  sectionTitle: {
+    marginTop: 12,
+    marginBottom: 8,
+    color: '#999999',
+    marginHorizontal: -20,
+    paddingHorizontal: 20
   },
   checkbox: {
     width: 22,

@@ -12,10 +12,12 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import type { ThreadListItem } from '../../../lib/api_queries';
@@ -57,6 +59,8 @@ export default function ThreadScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [latestOrderStatus, setLatestOrderStatus] = useState<string | null>(null);
+  const [latestOrderPaymentStatus, setLatestOrderPaymentStatus] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList<MessageRow> | null>(null);
 
@@ -100,6 +104,30 @@ export default function ThreadScreen() {
     }
   };
 
+  const loadLatestOrder = async (meta: ThreadListItem | null) => {
+    if (!meta?.listing_id || !meta?.buyer_id) {
+      setLatestOrderStatus(null);
+      setLatestOrderPaymentStatus(null);
+      return;
+    }
+    const { data, error: oErr } = await supabase
+      .from('orders')
+      .select('status, payment_status, created_at')
+      .eq('listing_id', meta.listing_id)
+      .eq('buyer_id', meta.buyer_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (oErr) {
+      setLatestOrderStatus(null);
+      setLatestOrderPaymentStatus(null);
+      return;
+    }
+    setLatestOrderStatus((data as any)?.status ?? null);
+    setLatestOrderPaymentStatus((data as any)?.payment_status ?? null);
+  };
+
   useEffect(() => {
     if (!threadId) {
       setLoading(false);
@@ -110,32 +138,44 @@ export default function ThreadScreen() {
     void loadMessages();
   }, [threadId]);
 
+  useEffect(() => {
+    void loadLatestOrder(threadMeta);
+  }, [threadMeta?.listing_id, threadMeta?.buyer_id]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!threadId) return;
+      void loadThreadMeta();
+      void loadMessages();
+    }, [threadId])
+  );
+
   // Temps réel pour ce thread
   useEffect(() => {
     if (!threadId) return;
 
-    const channel = supabase
-      .channel(`thread:${threadId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `thread_id=eq.${threadId}`
-        },
-        (payload) => {
-          const newMsg = payload.new as MessageRow;
-          setMessages((prev) => [...prev, newMsg].sort((a, b) =>
-            a.created_at.localeCompare(b.created_at)
-          ));
-        }
-      )
-      .subscribe();
+    // const channel = supabase // TODO: réactiver le realtime
+    //   .channel(`thread:${threadId}`) // TODO: réactiver le realtime
+    //   .on( // TODO: réactiver le realtime
+    //     'postgres_changes', // TODO: réactiver le realtime
+    //     { // TODO: réactiver le realtime
+    //       event: 'INSERT',
+    //       schema: 'public',
+    //       table: 'messages',
+    //       filter: `thread_id=eq.${threadId}`
+    //     },
+    //     (payload) => { // TODO: réactiver le realtime
+    //       const newMsg = payload.new as MessageRow;
+    //       setMessages((prev) => [...prev, newMsg].sort((a, b) =>
+    //         a.created_at.localeCompare(b.created_at)
+    //       ));
+    //     } // TODO: réactiver le realtime
+    //   ) // TODO: réactiver le realtime
+    //   .subscribe(); // TODO: réactiver le realtime
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    // return () => { // TODO: réactiver le realtime
+    //   void supabase.removeChannel(channel); // TODO: réactiver le realtime
+    // }; // TODO: réactiver le realtime
   }, [threadId]);
 
   // Marquer comme lus les messages de l'autre participant à l'ouverture
@@ -238,19 +278,42 @@ export default function ThreadScreen() {
       const originalPrice = listingPrice ?? null;
       const isSeller = !!threadMeta && user?.id === threadMeta.seller_id;
       const canActOnOffer = isSeller && status === 'Pending' && !isMine;
+      const isBuyer = !!threadMeta && user?.id === threadMeta.buyer_id;
+      const orderStatusNorm = String(latestOrderStatus ?? '').toLowerCase();
+      const orderPaymentNorm = String(latestOrderPaymentStatus ?? '').toLowerCase();
+      const hasAnyOrder =
+        orderStatusNorm === 'pending' ||
+        orderStatusNorm === 'completed' ||
+        orderStatusNorm === 'cancelled' ||
+        orderStatusNorm === 'confirmed' ||
+        orderStatusNorm === 'shipped' ||
+        orderStatusNorm === 'delivered';
+      const canBuyAcceptedOffer =
+        isBuyer &&
+        status === 'Accepted' &&
+        amount != null &&
+        !!threadMeta?.listing_id &&
+        !!threadMeta?.seller_id &&
+        !hasAnyOrder &&
+        String((threadMeta as any)?.listing_status ?? '').toLowerCase() === 'published';
 
       const updateOfferStatus = async (next: 'accepted' | 'declined') => {
         if (!threadId || !user) return;
         try {
-          await supabase
+          const { error: updateError } = await supabase
             .from('messages')
             .update({ offer_status: next })
             .eq('id', item.id);
+          if (updateError) throw updateError;
+
+          setMessages((prev) =>
+            prev.map((m) => (m.id === item.id ? { ...m, offer_status: next } : m))
+          );
 
           const autoBody =
             next === 'accepted' ? 'Offer accepted.' : 'Offer declined.';
 
-          await supabase
+          const { data: inserted, error: insertError } = await supabase
             .from('messages')
             .insert({
               thread_id: threadId,
@@ -258,9 +321,37 @@ export default function ThreadScreen() {
               body: autoBody,
               type: 'text'
             });
+          if (insertError) throw insertError;
+
+          if (inserted && Array.isArray(inserted) && inserted[0]) {
+            setMessages((prev) =>
+              [...prev, inserted[0] as MessageRow].sort((a, b) =>
+                a.created_at.localeCompare(b.created_at)
+              )
+            );
+          } else {
+            // fallback: recharger si on ne récupère pas la row
+            void loadMessages();
+          }
         } catch {
           // no-op: on garde l'UI existante (errors gérés globalement)
         }
+      };
+
+      const handleBuyAcceptedOffer = () => {
+        if (!threadMeta || amount == null) return;
+        router.push({
+          pathname: '/tabs/feed/listing/checkout' as any,
+          params: {
+            listing_id: threadMeta.listing_id,
+            seller_id: threadMeta.seller_id,
+            amount: String(amount),
+            title: threadMeta.listing_title,
+            ...(threadMeta.listing_cover_photo_url
+              ? { cover_photo: threadMeta.listing_cover_photo_url }
+              : {})
+          }
+        });
       };
 
       return (
@@ -282,6 +373,15 @@ export default function ThreadScreen() {
             >
               {status}
             </Text>
+            {status === 'Accepted' && hasAnyOrder && (
+              <Text variant="captionSm" color="textSecondary" style={styles.offerOrderNote}>
+                {orderStatusNorm === 'cancelled'
+                  ? 'Order cancelled'
+                  : orderPaymentNorm === 'transferred'
+                    ? 'Purchased'
+                    : 'Order in progress'}
+              </Text>
+            )}
             {canActOnOffer && (
               <View style={styles.offerActionsRow}>
                 <TouchableOpacity
@@ -304,6 +404,15 @@ export default function ThreadScreen() {
                     Decline
                   </Text>
                 </TouchableOpacity>
+              </View>
+            )}
+            {canBuyAcceptedOffer && (
+              <View style={styles.offerBuyWrap}>
+                <Button
+                  title={`Buy for ${amount!.toFixed(2)} CHF`}
+                  onPress={handleBuyAcceptedOffer}
+                  variant="primary"
+                />
               </View>
             )}
           </View>
@@ -391,13 +500,7 @@ export default function ThreadScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={handleBack}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
+        <HeaderBackButton onPress={handleBack} />
         <View style={styles.headerCenter}>
           <Text variant="body" style={styles.otherName} numberOfLines={1}>
             {otherName}
@@ -703,6 +806,10 @@ const styles = StyleSheet.create({
   offerStatus: {
     fontSize: 13
   },
+  offerOrderNote: {
+    marginTop: 4,
+    fontSize: 13
+  },
   offerActionsRow: {
     flexDirection: 'row',
     columnGap: 8,
@@ -727,6 +834,9 @@ const styles = StyleSheet.create({
   offerActionText: {
     color: theme.colors.textPrimary,
     fontWeight: '600'
+  },
+  offerBuyWrap: {
+    marginTop: 10
   }
 });
 

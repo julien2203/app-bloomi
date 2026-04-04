@@ -15,9 +15,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { theme } from '../../../lib/theme';
+import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { getListingById, createOrGetThreadForListing, sendOfferMessage } from '../../../lib/api';
 import type { ListingDetail } from '../../../lib/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -195,13 +196,7 @@ export default function MakeOfferScreen() {
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={handleBack}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
+            <HeaderBackButton onPress={handleBack} />
             <Text variant="body" style={styles.headerTitle} numberOfLines={1}>
               {sellerName}
             </Text>
@@ -210,6 +205,8 @@ export default function MakeOfferScreen() {
                 // TODO: afficher un modal d'info si besoin
               }}
               activeOpacity={0.7}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              style={HEADER_ICON_TOUCH_CONTAINER}
             >
               <Feather name="info" size={18} color={theme.colors.textPrimary} />
             </TouchableOpacity>

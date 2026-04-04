@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Button } from '../../../components/ui/Button';
 import { theme } from '../../../lib/theme';
 import { getRootCategoriesByGender } from '../../../lib/api/filters';
@@ -81,13 +81,7 @@ export default function SellCategoryGenderScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             {gender}
           </Text>
@@ -151,9 +145,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
-  },
-  backButton: {
-    padding: 4
   },
   headerTitle: {
     ...theme.typography.body,

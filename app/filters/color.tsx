@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
+import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { getColors } from '../../lib/api/filters';
 
@@ -97,17 +98,16 @@ export default function ColorFilterScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleShowResult}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={handleShowResult} />
           <Text variant="body" style={styles.headerTitle}>
             Color
           </Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleClearAll}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleClearAll}
+            hitSlop={HIT_SLOP_COMFORTABLE}
+            style={styles.clearAllHit}
+          >
             <Text variant="body" style={styles.clearAllText}>
               Clear all
             </Text>
@@ -228,14 +228,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
   },
-  backButton: {
-    padding: 4
-  },
   headerTitle: {
     ...theme.typography.body,
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.textPrimary
+  },
+  clearAllHit: {
+    minHeight: 44,
+    justifyContent: 'center'
   },
   clearAllText: {
     ...theme.typography.body,

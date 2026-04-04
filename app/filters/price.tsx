@@ -1,14 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { Keyboard, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/ui/Screen';
-import { Text } from '../../components/ui/Text';
+import { Text as UiText } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
+import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { getPriceBounds } from '../../lib/api';
+
+const LIME = '#CCFF00';
+const SEPARATOR_GRAY = '#E5E5E5';
+const BORDER_GRAY = '#CCCCCC';
+const HEADER_SIDE_W = 88;
 
 type PriceOption = {
   label: string;
@@ -110,48 +127,50 @@ export default function PriceFilterScreen() {
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleShowResult}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-          <Text variant="body" style={styles.headerTitle}>
-            Price
-          </Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleClearAll}>
-            <Text variant="body" style={styles.clearAllText}>
-              Clear all
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text variant="captionSm" color="textSecondary" style={styles.errorText}>
-              {error}
-            </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.kav}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <View style={styles.headerSide}>
+              <HeaderBackButton onPress={handleShowResult} />
+            </View>
+            <Text style={styles.headerTitle}>Price</Text>
+            <View style={[styles.headerSide, styles.headerSideRight]}>
+              <TouchableOpacity activeOpacity={0.7} onPress={handleClearAll} hitSlop={12}>
+                <Text style={styles.clearAllText}>Clear all</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        )}
+          <View style={styles.headerRule} />
 
-          <View style={styles.content}>
-            {/* Champ 1 : Price from */}
-            <View style={styles.inputContainer}>
-              <Text variant="captionSm" style={styles.inputLabel}>
-                Price from
-              </Text>
-              {loadingBounds ? (
-                <View style={styles.skeletonInputRow}>
-                  <View style={styles.skeletonInput} />
-                </View>
-              ) : (
-                <View style={styles.inputRow}>
+          {error ? (
+            <View style={styles.errorContainer}>
+              <UiText variant="captionSm" color="textSecondary" style={styles.errorText}>
+                {error}
+              </UiText>
+            </View>
+          ) : null}
+
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View>
+              <Text style={styles.labelFrom}>Price from</Text>
+              <View style={styles.valuePad}>
+                {loadingBounds ? (
+                  <View style={styles.skeletonInputRow}>
+                    <View style={styles.skeletonInput} />
+                  </View>
+                ) : (
                   <TextInput
-                    keyboardType="numeric"
-                    placeholder={`${minPlaceholder} CHF`}
+                    keyboardType="decimal-pad"
+                    placeholder={`${minPlaceholder}CHF`}
                     placeholderTextColor="#AAAAAA"
                     style={styles.input}
                     value={min}
@@ -163,28 +182,27 @@ export default function PriceFilterScreen() {
                       setMin(value);
                     }}
                   />
-                </View>
-              )}
-              <View style={styles.inputUnderline} />
+                )}
+              </View>
+              <View style={styles.ruleFull} />
             </View>
 
-            {/* Gap de 20px + Champ 2 : To */}
-            <View style={[styles.inputContainer, styles.secondInputContainer]}>
-              <Text variant="captionSm" style={styles.inputLabel}>
-                To
-              </Text>
-              {loadingBounds ? (
-                <View style={styles.skeletonInputRow}>
-                  <View style={styles.skeletonInput} />
-                </View>
-              ) : (
-                <View style={styles.inputRow}>
+            <View style={styles.blockAfterFrom}>
+              <Text style={styles.labelTo}>To</Text>
+              <View style={styles.valuePad}>
+                {loadingBounds ? (
+                  <View style={styles.skeletonInputRow}>
+                    <View style={styles.skeletonInput} />
+                  </View>
+                ) : (
                   <TextInput
-                    keyboardType="numeric"
-                    placeholder={`${maxPlaceholder} CHF`}
+                    keyboardType="decimal-pad"
+                    placeholder={`${maxPlaceholder}CHF`}
                     placeholderTextColor="#AAAAAA"
                     style={styles.input}
                     value={max}
+                    selectionColor={LIME}
+                    {...(Platform.OS === 'android' ? { cursorColor: '#000000' as const } : {})}
                     onFocus={() => {
                       setIsToFocused(true);
                       setSelectedOption(null);
@@ -195,64 +213,60 @@ export default function PriceFilterScreen() {
                       setMax(value);
                     }}
                   />
-                </View>
-              )}
-              <View
-                style={[
-                  styles.inputUnderline,
-                  isToFocused && styles.inputUnderlineActive
-                ]}
-              />
+                )}
+              </View>
+              <View style={[styles.ruleFull, isToFocused && styles.ruleFullFocused]} />
             </View>
-          
-          <View style={styles.presetsContainer}>
-            <View style={styles.presetsSeparator} />
-            {PRICE_OPTIONS.map((option) => {
-              const checked = selectedOption === option.label;
-              return (
-                <TouchableOpacity
-                  key={option.label}
-                  style={styles.presetRow}
-                  activeOpacity={0.7}
-                  onPress={() => applyOption(option)}
-                >
-                  <Text variant="body" style={styles.presetLabel}>
-                    {option.label}
-                  </Text>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      checked && styles.checkboxChecked
-                    ]}
+
+            <View style={styles.presetsWrap}>
+              <View style={styles.ruleFull} />
+              {PRICE_OPTIONS.map((option) => {
+                const checked = selectedOption === option.label;
+                return (
+                  <TouchableOpacity
+                    key={option.label}
+                    style={styles.presetRow}
+                    activeOpacity={0.7}
+                    onPress={() => applyOption(option)}
                   >
-                    {checked && <Text style={styles.checkboxCheckmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                    <Text style={styles.presetLabel}>{option.label}</Text>
+                    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                      {checked ? (
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingBottom: (keyboardVisible ? 0 : 24) + insets.bottom
+              }
+            ]}
+          >
+            <Button
+              title="Show result"
+              onPress={handleShowResult}
+              variant="primary"
+              style={styles.showResultButton}
+              textStyle={styles.showResultText}
+            />
           </View>
         </View>
-
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: (keyboardVisible ? 0 : 24) + insets.bottom }
-          ]}
-        >
-          <Button
-            title="Show result"
-            onPress={handleShowResult}
-            variant="primary"
-            style={styles.showResultButton}
-            textStyle={styles.showResultText}
-          />
-        </View>
-      </View>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  kav: {
+    flex: 1
+  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF'
@@ -262,24 +276,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5E5',
+    minHeight: 48,
     backgroundColor: '#FFFFFF'
   },
-  backButton: {
-    padding: 4
+  headerSide: {
+    width: HEADER_SIDE_W,
+    alignItems: 'flex-start',
+    justifyContent: 'center'
+  },
+  headerSideRight: {
+    alignItems: 'flex-end'
+  },
+  clearAllHit: {
+    minHeight: 44,
+    justifyContent: 'center'
   },
   headerTitle: {
-    ...theme.typography.body,
+    flex: 1,
+    textAlign: 'center',
     fontSize: 16,
     fontWeight: '600',
-    color: theme.colors.textPrimary
+    color: '#000000'
   },
   clearAllText: {
-    ...theme.typography.body,
     fontSize: 16,
-    color: theme.colors.textPrimary
+    fontWeight: '400',
+    color: '#000000'
+  },
+  headerRule: {
+    height: 1,
+    backgroundColor: SEPARATOR_GRAY,
+    width: '100%'
   },
   errorContainer: {
     paddingHorizontal: 16,
@@ -288,56 +315,52 @@ const styles = StyleSheet.create({
   errorText: {
     marginBottom: 4
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16
-  },
-  inputsColumn: {
-    marginBottom: 16
-  },
-  inputContainer: {
+  scroll: {
     flex: 1
   },
-  secondInputContainer: {
-    marginTop: 16
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 16
   },
-  inputLabel: {
+  labelFrom: {
     fontSize: 14,
     fontWeight: '400',
     color: '#000000',
-    marginBottom: 6
+    paddingHorizontal: 20,
+    paddingTop: 20
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
+  labelTo: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#000000',
+    paddingHorizontal: 20
+  },
+  valuePad: {
+    paddingHorizontal: 20,
     paddingVertical: 8
   },
   input: {
-    flex: 1,
-    ...theme.typography.body,
     fontSize: 16,
+    fontWeight: '400',
     color: '#000000',
-    backgroundColor: 'transparent',
-    paddingVertical: 4,
-    paddingHorizontal: 0
+    padding: 0,
+    margin: 0,
+    backgroundColor: 'transparent'
   },
-  inputUnderline: {
+  ruleFull: {
     height: 1,
-    backgroundColor: '#E5E5E5',
-    marginTop: 4
+    backgroundColor: SEPARATOR_GRAY,
+    width: '100%',
+    alignSelf: 'stretch'
   },
-  inputUnderlineActive: {
-    backgroundColor: '#C3EA4F'
+  ruleFullFocused: {
+    backgroundColor: LIME
   },
-  presetsContainer: {
+  blockAfterFrom: {
+    marginTop: 16
+  },
+  presetsWrap: {
     marginTop: 24
-  },
-  presetsSeparator: {
-    height: 1,
-    backgroundColor: '#E5E5E5',
-    marginBottom: 4
   },
   presetRow: {
     flexDirection: 'row',
@@ -345,45 +368,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    marginHorizontal: -20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5'
+    borderBottomColor: SEPARATOR_GRAY
   },
   presetLabel: {
-    ...theme.typography.body,
     fontSize: 16,
-    color: theme.colors.textPrimary
+    fontWeight: '400',
+    color: '#000000',
+    flex: 1,
+    paddingRight: 12
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#CCCCCC',
+    borderColor: BORDER_GRAY,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center'
   },
   checkboxChecked: {
-    borderColor: '#C3EA4F',
-    backgroundColor: '#C3EA4F'
-  },
-  checkboxCheckmark: {
-    fontSize: 14,
-    color: '#FFFFFF'
+    backgroundColor: LIME,
+    borderColor: LIME
   },
   footer: {
-    paddingHorizontal: 16
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    backgroundColor: '#FFFFFF'
   },
   showResultButton: {
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#C3EA4F'
+    backgroundColor: LIME
   },
   showResultText: {
     fontSize: 16,
     fontWeight: '700',
-    color: theme.colors.appleBlack
+    color: '#000000'
   },
   skeletonInputRow: {
     height: 24,
@@ -396,4 +418,3 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5E5'
   }
 });
-

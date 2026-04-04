@@ -4,8 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
-import { AppIcon } from '../../../components/ui/AppIcon';
-import { Button } from '../../../components/ui/Button';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
 
 type Segment = {
@@ -65,6 +64,29 @@ export default function SellBrandSegmentScreen() {
             type: 'accessoires'
           }
         ];
+      case 'enfant':
+        return [
+          {
+            label: "Kids' clothing",
+            gender: 'enfant',
+            type: 'vetements'
+          },
+          {
+            label: "Kids' shoes",
+            gender: 'enfant',
+            type: 'chaussures'
+          },
+          {
+            label: "Kids' bags",
+            gender: 'enfant',
+            type: 'sacs'
+          },
+          {
+            label: "Kids' accessories",
+            gender: 'enfant',
+            type: 'accessoires'
+          }
+        ];
       case 'bebe':
         return [
           {
@@ -92,16 +114,10 @@ export default function SellBrandSegmentScreen() {
   };
 
   return (
-    <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
+    <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF', paddingBottom: insets.bottom }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={handleBack} />
           <Text variant="body" style={styles.headerTitle}>
             Brand
           </Text>
@@ -123,21 +139,6 @@ export default function SellBrandSegmentScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: insets.bottom + 24 }
-          ]}
-        >
-          <Button
-            title="Back to form"
-            onPress={handleBack}
-            variant="primary"
-            style={styles.showResultButton}
-            textStyle={styles.showResultText}
-          />
-        </View>
       </View>
     </Screen>
   );
@@ -157,9 +158,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
     backgroundColor: '#FFFFFF'
-  },
-  backButton: {
-    padding: 4
   },
   headerTitle: {
     ...theme.typography.body,
@@ -194,18 +192,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#AAAAAA'
   },
-  footer: {
-    paddingHorizontal: 16
-  },
-  showResultButton: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#C3EA4F'
-  },
-  showResultText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.appleBlack
-  }
 });
 

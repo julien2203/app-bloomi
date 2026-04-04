@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '../../components/ui/Button';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 
@@ -111,14 +111,7 @@ export default function SellerTypeScreen() {
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.iconTouch}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text style={styles.headerTitle}>Sign up</Text>
           <View style={{ width: 20 }} />
         </View>
@@ -259,9 +252,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.textPrimary
-  },
-  iconTouch: {
-    padding: 8
   },
   headerSeparator: {
     height: StyleSheet.hairlineWidth,

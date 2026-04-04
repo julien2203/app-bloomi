@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { useSellFormStore } from '../../../lib/store/sellForm';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 
 export default function SellPriceScreen() {
   const router = useRouter();
@@ -39,18 +39,12 @@ export default function SellPriceScreen() {
       >
         <View style={styles.inner}>
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              activeOpacity={0.7}
-              style={styles.backButton}
-            >
-              <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
+            <HeaderBackButton onPress={() => router.back()} />
             <Text style={styles.headerTitle}>Price</Text>
             <View style={styles.headerRightPlaceholder} />
           </View>
 
-          <View style={styles.content}>
+          <View style={styles.body}>
             <Text style={styles.label}>CHF</Text>
             <TextInput
               style={styles.input}
@@ -64,7 +58,7 @@ export default function SellPriceScreen() {
             />
           </View>
 
-          <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
             <Button
               title="Confirmer"
               onPress={handleConfirm}
@@ -88,14 +82,11 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between'
-  },
-  backButton: {
-    padding: 8
   },
   headerTitle: {
     ...theme.typography.body,
@@ -106,31 +97,26 @@ const styles = StyleSheet.create({
   headerRightPlaceholder: {
     width: 32
   },
-  content: {
-    flex: 1,
+  body: {
     paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 24,
-    paddingBottom: 80
+    paddingTop: 8,
+    paddingBottom: 4
   },
   label: {
     ...theme.typography.body,
     color: theme.colors.textPrimary,
-    marginBottom: 8
+    marginBottom: 6
   },
   input: {
     ...theme.typography.body,
     color: theme.colors.textPrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    paddingVertical: 8
+    paddingVertical: 6
   },
   footer: {
     paddingHorizontal: theme.spacing.horizontalPadding,
     paddingTop: 12,
-    paddingBottom: 32,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.backgroundWhite
   }
 });
-

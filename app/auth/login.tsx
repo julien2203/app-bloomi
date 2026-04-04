@@ -9,9 +9,11 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { KeyboardAvoidingView, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { DividerOr } from '../../components/ui/DividerOr';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ensureProfileExists } from '../../lib/profile';
@@ -49,7 +51,12 @@ export default function LoginScreen() {
         return;
       }
 
+      const userId = data.session.user.id;
+      const markerKey = `profile_ensured_after_login:${userId}`;
+
       // S'assurer qu'un profil existe pour cet utilisateur (nécessaire pour listings.seller_id -> profiles.id)
+      // Marqueur utilisé pour éviter un doublon du chargement profil dans `AuthGate` (app/_layout.tsx).
+      await AsyncStorage.setItem(markerKey, String(Date.now()));
       await ensureProfileExists(data.session, {
         // En attendant la vérification SMS réelle, on utilise un numéro de test
         phone: (data.session.user.phone as string | null | undefined) ?? '+41791234567',
@@ -73,6 +80,10 @@ export default function LoginScreen() {
     <>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <HeaderBackButton onPress={() => router.back()} />
+          <View style={{ flex: 1 }} />
+        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
@@ -176,6 +187,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.backgroundWhite
+  },
+  header: {
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: 8,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   keyboardView: {
     flex: 1

@@ -21,6 +21,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { createListing, uploadListingPhoto, addListingPhoto } from '../../../lib/api';
@@ -28,6 +29,7 @@ import { supabase } from '../../../lib/supabase';
 import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
 import { useSellFormStore } from '../../../lib/store/sellForm';
+import * as Location from 'expo-location';
 
 type Photo = {
   uri: string;
@@ -45,6 +47,9 @@ const CONDITION_LABELS: Record<string, string> = {
   fair: 'Fair',
   poor: 'Poor'
 };
+
+const ALLOWED_COUNTRIES = ['CH', 'FR', 'DE', 'IT'] as const;
+type AllowedCountry = (typeof ALLOWED_COUNTRIES)[number];
 
 export default function SellScreen() {
   const router = useRouter();
@@ -87,6 +92,72 @@ export default function SellScreen() {
 
     void loadCityFromProfile();
   }, [user]);
+
+  const resolveGeoForListing = async (): Promise<{
+    latitude: number | null;
+    longitude: number | null;
+    city: string | null;
+    country_code: AllowedCountry | null;
+  }> => {
+    // 1) Try GPS
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (perm.status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({});
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        const places = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        const place = places && places.length > 0 ? places[0] : null;
+
+        const cityDetected =
+          (place as any)?.city ||
+          (place as any)?.subregion ||
+          (place as any)?.region ||
+          null;
+        const iso = String((place as any)?.isoCountryCode ?? '').toUpperCase();
+
+        if (ALLOWED_COUNTRIES.includes(iso as any)) {
+          return {
+            latitude: Number.isFinite(lat) ? lat : null,
+            longitude: Number.isFinite(lng) ? lng : null,
+            city: cityDetected ? String(cityDetected) : null,
+            country_code: iso as AllowedCountry
+          };
+        }
+      }
+    } catch {
+      // ignore → fallback below
+    }
+
+    // 2) Fallback to profile columns
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('city, country, latitude, longitude')
+        .eq('id', user?.id ?? '')
+        .maybeSingle();
+
+      const rawCountry = String((data as any)?.country ?? '').toUpperCase();
+      const cc: AllowedCountry | null = ALLOWED_COUNTRIES.includes(rawCountry as any)
+        ? (rawCountry as AllowedCountry)
+        : null;
+
+      const lat = (data as any)?.latitude;
+      const lng = (data as any)?.longitude;
+      const latNum = typeof lat === 'number' ? lat : lat != null ? Number(lat) : null;
+      const lngNum = typeof lng === 'number' ? lng : lng != null ? Number(lng) : null;
+
+      return {
+        latitude: Number.isFinite(latNum as any) ? (latNum as number) : null,
+        longitude: Number.isFinite(lngNum as any) ? (lngNum as number) : null,
+        city: (data as any)?.city ? String((data as any).city) : null,
+        country_code: cc
+      };
+    } catch {
+      return { latitude: null, longitude: null, city: null, country_code: null };
+    }
+  };
 
   const requestPermissions = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -195,12 +266,45 @@ export default function SellScreen() {
         country: 'CH'
       });
 
+      // Bloquer la publication si le vendeur n'a pas complété Stripe Connect
+      const { data: stripeRow, error: stripeErr } = await supabase
+        .from('profiles')
+        .select('stripe_connect_onboarding_completed')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (stripeErr) {
+        throw new Error(stripeErr.message);
+      }
+
+      const stripeCompleted = Boolean(
+        (stripeRow as { stripe_connect_onboarding_completed?: boolean | null } | null)
+          ?.stripe_connect_onboarding_completed
+      );
+
+      if (!stripeCompleted) {
+        Alert.alert(
+          'Activer votre compte vendeur',
+          "Avant de publier une annonce, vous devez activer votre compte vendeur pour pouvoir recevoir des paiements.",
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            {
+              text: 'Activer mon compte',
+              onPress: () => router.push('/tabs/profile/activate-seller-account')
+            }
+          ]
+        );
+        return;
+      }
+
       // Créer le listing
       const priceFromStore =
         typeof sellValues.price === 'number' && Number.isFinite(sellValues.price)
           ? sellValues.price
           : undefined;
       const priceNum = priceFromStore ?? parseFloat(price);
+
+      const geo = await resolveGeoForListing();
 
       const listingData: ListingInsert = {
         seller_id: user.id,
@@ -217,10 +321,10 @@ export default function SellScreen() {
             ? sellValues.color.map((c) => c.name).join(', ')
             : null,
         delivery_mode: 'both',
-        city: city.trim(),
-        country_code: 'CH',
-        latitude: null,
-        longitude: null
+        city: geo.city ?? (city.trim() ? city.trim() : null),
+        country_code: geo.country_code ?? 'CH',
+        latitude: geo.latitude,
+        longitude: geo.longitude
       };
 
       const listingResult = await createListing(listingData);
@@ -253,6 +357,14 @@ export default function SellScreen() {
         await addListingPhoto(listing.id, photoUrl, i);
       }
 
+      // Réinitialiser le formulaire pour la prochaine annonce (store + état local)
+      resetForm();
+      setTitle('');
+      setDescription('');
+      setPrice('');
+      setPhotos([]);
+      setErrors({});
+
       // Afficher la bottom sheet de mise en avant
       setShowPublishSheet(true);
     } catch (error) {
@@ -270,14 +382,7 @@ export default function SellScreen() {
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text style={styles.headerTitle}>Sell an item</Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -403,6 +508,20 @@ export default function SellScreen() {
 
           {/* List fields */}
           <View style={styles.listSection}>
+            {/*
+              Rendu conditionnel:
+              - Toujours: Category + Price
+              - Après Category: Brand -> Condition -> Size -> Color (progressif)
+            */}
+            {(() => {
+              const hasCategory = !!sellValues.category;
+              const showBrand = hasCategory;
+              const showCondition = showBrand && !!sellValues.brand;
+              const showSize = showCondition && !!sellValues.condition;
+              const showColor = showSize && !!sellValues.size;
+
+              return (
+                <>
             <TouchableOpacity
               style={[styles.listRow, styles.listRowFirst]}
               activeOpacity={0.7}
@@ -419,11 +538,16 @@ export default function SellScreen() {
               </View>
             </TouchableOpacity>
 
+            {showBrand ? (
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
               onPress={() => {
-                router.push('/tabs/sell/brand-gender');
+                if (sellValues.category) {
+                  router.push('/tabs/sell/brand');
+                } else {
+                  router.push('/tabs/sell/brand-gender');
+                }
               }}
             >
               <Text style={styles.listRowLabel}>Brand</Text>
@@ -434,7 +558,9 @@ export default function SellScreen() {
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
             </TouchableOpacity>
+            ) : null}
 
+            {showCondition ? (
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
@@ -450,7 +576,9 @@ export default function SellScreen() {
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
             </TouchableOpacity>
+            ) : null}
 
+            {showSize ? (
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
@@ -466,7 +594,9 @@ export default function SellScreen() {
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
             </TouchableOpacity>
+            ) : null}
 
+            {showColor ? (
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
@@ -482,6 +612,7 @@ export default function SellScreen() {
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
             </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={styles.listRow}
@@ -498,6 +629,9 @@ export default function SellScreen() {
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
             </TouchableOpacity>
+                </>
+              );
+            })()}
           </View>
         </ScrollView>
 
@@ -665,9 +799,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: theme.colors.textPrimary
-  },
-  backButton: {
-    padding: 8
   },
   headerRightPlaceholder: {
     width: 32

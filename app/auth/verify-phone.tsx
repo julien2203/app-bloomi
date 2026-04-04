@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components/ui/Button';
+import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 
@@ -216,6 +217,7 @@ export default function VerifyPhoneScreen() {
               keyboardType="phone-pad"
               value={phoneLocal}
               onChangeText={setPhoneLocal}
+              underlineColorAndroid="transparent"
             />
           </View>
         </View>
@@ -341,6 +343,10 @@ export default function VerifyPhoneScreen() {
     <>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <HeaderBackButton onPress={() => router.back()} />
+          <View style={{ flex: 1 }} />
+        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
@@ -389,6 +395,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF'
+  },
+  header: {
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: 8,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   keyboardView: {
     flex: 1
@@ -450,17 +463,35 @@ const styles = StyleSheet.create({
   phoneInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 8
+    columnGap: 8,
+    minHeight: 32
   },
   phonePrefixInline: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary
+    color: theme.colors.textSecondary,
+    marginTop: 0,
+    marginBottom: 0,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null)
   },
   phoneInput: {
     flex: 1,
     ...theme.typography.body,
     color: theme.colors.textPrimary,
-    paddingVertical: 4
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    margin: 0,
+    minHeight: 32,
+    ...Platform.select({
+      ios: {
+        // UITextField centre le texte différemment du <Text> : léger décalage sans réduire la zone tactile
+        marginTop: -3,
+        paddingTop: 0,
+        paddingBottom: 0
+      },
+      android: {
+        textAlignVertical: 'center'
+      }
+    })
   },
   errorText: {
     ...theme.typography.body,

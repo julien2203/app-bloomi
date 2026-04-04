@@ -35,7 +35,8 @@ const styles = StyleSheet.create({
     marginBottom: 0
   },
   title: {
-    fontFamily: theme.fontFamily.medium
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary
   }
 });
 

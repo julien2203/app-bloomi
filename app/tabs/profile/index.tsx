@@ -7,11 +7,10 @@ import {
   Switch,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
@@ -23,6 +22,9 @@ type ProfileRow = {
   display_name: string | null;
   vacation_mode: boolean | null;
   location?: string | null;
+  city?: string | null;
+  country?: string | null;
+  location_visible?: boolean | null;
 };
 
 type ProfileItemProps = {
@@ -33,7 +35,7 @@ type ProfileItemProps = {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { user, signOut, isLoading } = useAuthStore();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -41,7 +43,6 @@ export default function ProfileScreen() {
   const [vacationMode, setVacationMode] = useState<boolean>(false);
   const [updatingVacation, setUpdatingVacation] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [contentHeight, setContentHeight] = useState(0);
 
   const loadProfile = useCallback(async () => {
     if (!user?.id) {
@@ -54,7 +55,7 @@ export default function ProfileScreen() {
     try {
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('id, avatar_url, display_name, vacation_mode, location')
+        .select('id, avatar_url, display_name, vacation_mode, location, city, country, location_visible')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -119,15 +120,18 @@ export default function ProfileScreen() {
     (userMeta.full_name as string | undefined) ??
     'Bloomi user';
 
-  const location = profile?.location ?? '';
+  const location = (() => {
+    const isGpsVisible = Boolean(profile?.location_visible);
+    const city = (profile?.city ?? '').trim();
+    const country = (profile?.country ?? '').trim();
+    if (isGpsVisible && (city || country)) {
+      return [city, country].filter(Boolean).join(', ');
+    }
+    return profile?.location ?? '';
+  })();
 
   const Content = (
-    <View
-      style={styles.inner}
-      onLayout={(event) => {
-        setContentHeight(event.nativeEvent.layout.height);
-      }}
-    >
+    <View style={styles.inner}>
       {/* Header profil */}
       <View style={styles.header}>
         {profile?.avatar_url ? (
@@ -171,11 +175,6 @@ export default function ProfileScreen() {
         onPress={() => router.push('/tabs/profile/favorites')}
       />
       <ProfileItem
-        label="Personalization"
-        icon="settingsPersonalizeOutline"
-        onPress={() => router.push('/tabs/profile/personalization')}
-      />
-      <ProfileItem
         label="Wallet"
         icon="walletOutline"
         onPress={() => router.push('/tabs/profile/wallet')}
@@ -184,6 +183,11 @@ export default function ProfileScreen() {
         label="My orders"
         icon="billListOutline"
         onPress={() => router.push('/tabs/profile/orders')}
+      />
+      <ProfileItem
+        label="Activer mon compte vendeur"
+        icon="walletOutline"
+        onPress={() => router.push('/tabs/profile/activate-seller-account' as any)}
       />
       <ProfileItem
         label="Settings"
@@ -249,21 +253,24 @@ export default function ProfileScreen() {
     </View>
   );
 
-  const shouldScroll = contentHeight > windowHeight;
+  // Espace pour éviter que le contenu soit masqué par la barre d’onglets flottante
+  // (aligné avec la logique dans `app/tabs/_layout.tsx` et `FloatingTabBar.tsx`).
+  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
+  const floatingTabBarReserveSpace = 20 + 68 + bottomPad + 28;
+  const scrollPaddingBottom = floatingTabBarReserveSpace;
 
   return (
-    <SafeAreaView style={styles.container}>
-      {shouldScroll ? (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {Content}
-        </ScrollView>
-      ) : (
-        Content
-      )}
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: scrollPaddingBottom }
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {Content}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -302,8 +309,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12
+    paddingTop: 6,
+    paddingBottom: 10
   },
   avatar: {
     width: 48,

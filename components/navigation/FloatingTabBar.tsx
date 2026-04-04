@@ -1,15 +1,19 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, usePathname } from 'expo-router';
 import { theme } from '../../lib/theme';
+import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { AppIcon } from '../ui/AppIcon';
 import type { IconName } from '../../lib/assets';
 
-const BAR_WIDTH = 347;
-const BAR_HEIGHT = 56;
-const BAR_RADIUS = 15;
+/** Largeur cible ; réduite automatiquement sur très petits écrans */
+const BAR_WIDTH_IDEAL = 400;
+const HORIZONTAL_SCREEN_GUTTER = 24;
+const BAR_HEIGHT = 68;
+const BAR_RADIUS = 18;
+const ICON_SIZE = 28;
 
 // Ordre visuel fixe : Home, Search, Sell (+), Messages, Profile
 const TAB_ROUTES = [
@@ -24,6 +28,8 @@ type BaseIcon = (typeof TAB_ROUTES)[number]['icon'];
 
 export function FloatingTabBar(_: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const barWidth = Math.min(BAR_WIDTH_IDEAL, windowWidth - HORIZONTAL_SCREEN_GUTTER);
   // Normaliser le pathname pour éviter les variations type "/tabs/feed/" vs "/tabs/feed"
   const rawPathname = usePathname();
   const pathname = rawPathname.replace(/\/+$/, '');
@@ -74,9 +80,10 @@ export function FloatingTabBar(_: BottomTabBarProps) {
         }
       ]}
       pointerEvents="box-none"
+      collapsable={false}
     >
-      <View style={styles.container}>
-        {TAB_ROUTES.map((tab, index) => {
+      <View style={[styles.container, { width: barWidth }]} collapsable={false}>
+        {TAB_ROUTES.map((tab) => {
           const isFocused = pathname.startsWith(tab.href);
           const icon = getIconName(tab.icon, isFocused);
 
@@ -87,21 +94,25 @@ export function FloatingTabBar(_: BottomTabBarProps) {
           };
 
           return (
-            <TouchableOpacity
+            <Pressable
               key={tab.href}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
               onPress={onPress}
-              activeOpacity={0.8}
-              style={styles.item}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              delayPressIn={0}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              android_disableSound
+              style={({ pressed }) => [
+                styles.item,
+                Platform.OS === 'ios' && pressed && styles.itemPressed
+              ]}
             >
               <AppIcon
                 name={icon}
-                size={20}
+                size={ICON_SIZE}
                 color={isFocused ? theme.colors.primary : theme.colors.textSecondary}
               />
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>
@@ -116,10 +127,10 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 20,
     alignItems: 'center',
-    zIndex: 100
+    zIndex: 99999,
+    elevation: 999
   },
   container: {
-    width: BAR_WIDTH,
     height: BAR_HEIGHT,
     borderRadius: BAR_RADIUS,
     borderWidth: 1,
@@ -133,12 +144,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 8
+    elevation: 12
   },
   item: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    minHeight: 48
+  },
+  itemPressed: {
+    opacity: 0.75
   }
 });
 

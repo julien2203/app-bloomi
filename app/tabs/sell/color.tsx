@@ -8,7 +8,7 @@ import { Button } from '../../../components/ui/Button';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { useSellFormStore, type SellColor } from '../../../lib/store/sellForm';
-import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { getColors } from '../../../lib/api/filters';
 
 type ColorRow = {
@@ -55,13 +55,7 @@ export default function SellColorScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backButton}
-          >
-            <AppIcon name="arrowLeftOutline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             Color
           </Text>
@@ -161,9 +155,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between'
-  },
-  backButton: {
-    padding: 8
   },
   headerTitle: {
     ...theme.typography.body,

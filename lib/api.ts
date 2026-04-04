@@ -36,6 +36,7 @@ export type FeedListing = {
   title: string;
   description: string | null;
   price: number;
+  likes_count?: number | null;
   status: string;
   category: string | null;
   condition: string | null;
@@ -297,6 +298,8 @@ export type ListingDetail = {
     order_index: number;
     created_at: string;
   }> | null;
+  /** Nombre d'annonces publiées du vendeur (depuis v_listing_detail) */
+  seller_published_count?: number | null;
 };
 
 /**
@@ -348,6 +351,31 @@ export async function getListingById(id: string): Promise<{ data: ListingDetail 
   } catch (err) {
     return {
       data: null,
+      error: err instanceof Error ? err : new Error('Erreur inconnue')
+    };
+  }
+}
+
+/**
+ * Nombre d'annonces publiées pour un vendeur (statut published), pour affichage profil / fiche produit.
+ */
+export async function getPublishedListingsCountForSeller(
+  sellerId: string
+): Promise<{ count: number; error: Error | null }> {
+  try {
+    const { count, error } = await supabase
+      .from('listings')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', sellerId)
+      .eq('status', 'published');
+
+    if (error) {
+      return { count: 0, error: new Error(error.message) };
+    }
+    return { count: typeof count === 'number' ? count : 0, error: null };
+  } catch (err) {
+    return {
+      count: 0,
       error: err instanceof Error ? err : new Error('Erreur inconnue')
     };
   }
@@ -577,6 +605,230 @@ export async function deleteListing(id: string): Promise<ApiResponse<void>> {
   }
 
   return { data: null, error: null };
+}
+
+// ============================================
+// LIKES
+// ============================================
+
+export type LikedListingCard = {
+  id: string;
+  seller_id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  status: string;
+  category: string | null;
+  condition: string | null;
+  brand?: string | null;
+  size?: string | null;
+  color?: string | null;
+  delivery_mode: string;
+  city: string | null;
+  country_code: string | null;
+  created_at: string;
+  published_at: string | null;
+  updated_at: string;
+  cover_photo_url: string | null;
+  seller_display_name: string | null;
+  seller_avatar_url: string | null;
+};
+
+export async function likeListing(listingId: string): Promise<ApiResponse<{ id: string }>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'Utilisateur non connecté' };
+  }
+
+  const { data, error } = await supabase
+    .from('likes')
+    .insert({
+      user_id: user.id,
+      listing_id: listingId
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: { id: (data as any).id as string }, error: null };
+}
+
+export async function unlikeListing(listingId: string): Promise<ApiResponse<{ success: true }>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'Utilisateur non connecté' };
+  }
+
+  const { error } = await supabase
+    .from('likes')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('listing_id', listingId);
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: { success: true }, error: null };
+}
+
+export async function getMyLikedListings(): Promise<ApiResponse<LikedListingCard[]>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: [], error: 'Utilisateur non connecté' };
+  }
+
+  const { data, error } = await supabase
+    .from('likes')
+    .select(
+      `
+      listing:listings(
+        *,
+        seller:profiles!listings_seller_id_fkey(display_name, avatar_url),
+        photos:listing_photos(url, order_index)
+      )
+    `
+    )
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  const rows = (data || []) as any[];
+  const cards: LikedListingCard[] = rows
+    .map((row) => row.listing)
+    .filter(Boolean)
+    .map((listing: any) => {
+      const photos = (listing.photos || []) as Array<{ url: string; order_index: number }>;
+      const cover = [...photos]
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))[0]?.url ?? null;
+
+      return {
+        id: listing.id,
+        seller_id: listing.seller_id,
+        title: listing.title,
+        description: listing.description ?? null,
+        price: listing.price,
+        status: listing.status,
+        category: listing.category ?? null,
+        condition: listing.condition ?? null,
+        brand: listing.brand ?? null,
+        size: listing.size ?? null,
+        color: listing.color ?? null,
+        delivery_mode: listing.delivery_mode,
+        city: listing.city ?? null,
+        country_code: listing.country_code ?? null,
+        created_at: listing.created_at,
+        published_at: listing.published_at ?? null,
+        updated_at: listing.updated_at,
+        cover_photo_url: cover,
+        seller_display_name: listing.seller?.display_name ?? null,
+        seller_avatar_url: listing.seller?.avatar_url ?? null
+      };
+    });
+
+  return { data: cards, error: null };
+}
+
+export async function getMyLikedListingIds(): Promise<ApiResponse<string[]>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: [], error: 'Utilisateur non connecté' };
+  }
+
+  const { data, error } = await supabase
+    .from('likes')
+    .select('listing_id')
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  return { data: (data || []).map((r: any) => r.listing_id as string), error: null };
+}
+
+export async function getLikesCountsForListings(
+  listingIds: string[]
+): Promise<ApiResponse<Record<string, number>>> {
+  if (!listingIds || listingIds.length === 0) {
+    return { data: {}, error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('likes')
+    .select('listing_id')
+    .in('listing_id', listingIds);
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  const counts: Record<string, number> = {};
+  for (const row of (data || []) as any[]) {
+    const id = row.listing_id as string;
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+
+  return { data: counts, error: null };
+}
+
+export async function getListingLikesInfo(listingId: string): Promise<
+  ApiResponse<{
+    likesCount: number;
+    likedByMe: boolean;
+  }>
+> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const [{ count, error: countError }, likedRes] = await Promise.all([
+    supabase
+      .from('likes')
+      .select('id', { count: 'exact', head: true })
+      .eq('listing_id', listingId),
+    user
+      ? supabase
+          .from('likes')
+          .select('id')
+          .eq('listing_id', listingId)
+          .eq('user_id', user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null } as any)
+  ]);
+
+  if (countError) {
+    return { data: null, error: countError.message };
+  }
+
+  // maybeSingle() renvoie une erreur si "multiple rows" (devrait pas arriver avec UNIQUE)
+  const likedByMe = !!(likedRes as any)?.data;
+
+  return {
+    data: {
+      likesCount: count ?? 0,
+      likedByMe
+    },
+    error: null
+  };
 }
 
 // ============================================
