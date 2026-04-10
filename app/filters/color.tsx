@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
@@ -21,6 +21,12 @@ type ColorRow = {
 
 export default function ColorFilterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilters } = useFeedFiltersStore();
 
@@ -48,6 +54,17 @@ export default function ColorFilterScreen() {
       colorIds: selectedColorIds.length > 0 ? selectedColorIds : undefined,
       colors: selectedNames.length > 0 ? selectedNames : undefined
     });
+    if (params.returnTo === 'results') {
+      router.replace({
+        pathname: '/tabs/results' as any,
+        params: {
+          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
+          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
+          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
+        }
+      });
+      return;
+    }
     router.back();
   };
 

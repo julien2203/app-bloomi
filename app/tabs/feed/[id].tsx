@@ -149,14 +149,15 @@ export default function ListingDetailScreen() {
           .neq('id', listing.id)
           .limit(6);
 
+        // Similar items: be tolerant to category formatting differences.
+        // Some rows store category as a hierarchical string, so strict equality can easily miss matches.
         const similarPromise = category
           ? supabase
               .from('v_listing_detail')
               .select('*')
               .eq('status', 'published')
-              .eq('category', category)
+              .ilike('category', `%${category}%`)
               .neq('id', listing.id)
-              .neq('seller_id', listing.seller_id)
               .limit(6)
           : Promise.resolve({ data: [], error: null } as any);
 
@@ -668,7 +669,17 @@ export default function ListingDetailScreen() {
 
           {/* Seller block */}
           <View style={styles.sellerBlock}>
-            <View style={styles.sellerInfo}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push({
+                  pathname: '/tabs/public-profile' as any,
+                  params: { user_id: listing.seller_id }
+                })
+              }
+              style={styles.sellerInfo}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               {listing.seller_avatar_url ? (
                 <Image
                   source={{ uri: listing.seller_avatar_url }}
@@ -689,7 +700,7 @@ export default function ListingDetailScreen() {
                   {sellerItemsLabel}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
             {user?.id !== listing.seller_id && (
               <Button
                 title="Message seller"

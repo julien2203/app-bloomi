@@ -36,6 +36,30 @@ function normalizeAuthHeader(req: Request): string | null {
   return h;
 }
 
+async function sendNotification(params: {
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+  user_id: string;
+  title: string;
+  body: string;
+  data?: unknown;
+}) {
+  const url = `${params.supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`;
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.supabaseServiceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: params.user_id,
+      title: params.title,
+      body: params.body,
+      data: params.data ?? undefined,
+    }),
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -187,6 +211,20 @@ Deno.serve(async (req) => {
         delivery_mode: dm,
       },
     });
+
+    // Best-effort: notifier le vendeur (ne doit pas casser le flow principal)
+    try {
+      await sendNotification({
+        supabaseUrl,
+        supabaseServiceRoleKey,
+        user_id: String(seller_id),
+        title: "🎉 Ton article est vendu !",
+        body: "Quelqu'un vient d'acheter ton article. Pense à l'expédier !",
+        data: { listing_id: String(listing_id), buyer_id: String(buyer_id) },
+      });
+    } catch (e) {
+      console.warn("Erreur envoi notification vendeur:", e);
+    }
 
     return jsonResponse({
       client_secret: paymentIntent.client_secret,

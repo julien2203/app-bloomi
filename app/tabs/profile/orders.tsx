@@ -227,6 +227,9 @@ export default function OrdersScreen() {
 
       setConfirmingOrderIds((prev) => new Set(prev).add(orderId));
       try {
+        const order = orders.find((o) => o.id === orderId) ?? null;
+        const reviewedId = order?.seller_id ?? null;
+
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
         if (!accessToken) {
@@ -261,6 +264,29 @@ export default function OrdersScreen() {
           );
         }
 
+        if (reviewedId) {
+          const { data: reviewedProfile, error: reviewedErr } = await supabase
+            .from('profiles')
+            .select('id, display_name, avatar_url')
+            .eq('id', reviewedId)
+            .maybeSingle();
+
+          if (reviewedErr) {
+            // eslint-disable-next-line no-console
+            console.log('Erreur chargement profil à noter:', reviewedErr);
+          }
+
+          router.push({
+            pathname: '/tabs/profile/leave-review',
+            params: {
+              order_id: orderId,
+              reviewed_id: reviewedId,
+              reviewed_name: (reviewedProfile as any)?.display_name ?? 'Seller',
+              reviewed_avatar: (reviewedProfile as any)?.avatar_url ?? ''
+            }
+          });
+        }
+
         await loadOrders();
       } catch (e) {
         // eslint-disable-next-line no-console
@@ -278,7 +304,7 @@ export default function OrdersScreen() {
         });
       }
     },
-    [confirmingOrderIds, loadOrders, userId]
+    [confirmingOrderIds, loadOrders, orders, router, userId]
   );
 
   const cancelOrder = useCallback(

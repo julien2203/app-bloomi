@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/ui/Screen';
@@ -47,6 +47,12 @@ function getSectionTitle(gender?: string | null, type?: string | null): string {
 
 export default function SizeFilterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilters } = useFeedFiltersStore();
   const [sections, setSections] = useState<SizeSection[]>([]);
@@ -68,6 +74,17 @@ export default function SizeFilterScreen() {
     setFilters({
       sizeIds: selectedSizes.length > 0 ? selectedSizes : undefined
     });
+    if (params.returnTo === 'results') {
+      router.replace({
+        pathname: '/tabs/results' as any,
+        params: {
+          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
+          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
+          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
+        }
+      });
+      return;
+    }
     router.back();
   };
 

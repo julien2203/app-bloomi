@@ -15,15 +15,18 @@ const fontFamily = {
 // Couleurs principales
 const colors = {
   primary: '#C3EA4F',
+  lime: '#CCFF00',
   appleBlack: '#000000',
   googleWhite: '#FFFFFF',
   facebookBlue: '#425B90',
   textPrimary: '#111827',
   textSecondary: '#6B7280',
   border: '#E5E7EB',
+  separator: '#E5E5E5',
   background: '#FFFFFF',
   muted: '#F3F4F6',
   danger: '#EF4444',
+  sectionLabel: '#AAAAAA',
   // Alias pour compatibilité avec le code existant
   backgroundWhite: '#FFFFFF',
   heroCtaBorder: '#14141A'
@@ -65,6 +68,16 @@ const typography = {
     fontSize: 16,
     fontFamily: fontFamily.semiBold,
     lineHeight: 24
+  },
+  settingsSectionLabel: {
+    fontSize: 13,
+    fontFamily: fontFamily.regular,
+    lineHeight: 18
+  },
+  settingsHeaderTitle: {
+    fontSize: 16,
+    fontFamily: fontFamily.semiBold,
+    lineHeight: 24
   }
 } as const;
 
@@ -75,6 +88,12 @@ const spacing = {
   gapSm: 8,
   gapMd: 16,
   gapLg: 24,
+  settingsPaddingX: 20,
+  settingsRowPaddingY: 16,
+  settingsSectionTop: 20,
+  settingsSectionBottom: 8,
+  settingsHeaderPaddingY: 12,
+  settingsHeaderSideWidth: 28,
   // Alias pour compatibilité avec le code existant
   horizontalPadding: 16
 } as const;

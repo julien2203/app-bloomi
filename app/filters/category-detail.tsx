@@ -19,7 +19,15 @@ type CategoryRow = {
 export default function CategoryDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ parentId?: string; title?: string; gender?: string }>();
+  const params = useLocalSearchParams<{
+    parentId?: string;
+    title?: string;
+    gender?: string;
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const parentId = params.parentId ? Number(params.parentId) : NaN;
   const headerTitle = params.title || 'Category';
   const gender = params.gender as string | undefined;
@@ -45,6 +53,17 @@ export default function CategoryDetailScreen() {
             }
           : undefined
     });
+    if (params.returnTo === 'results') {
+      router.replace({
+        pathname: '/tabs/results' as any,
+        params: {
+          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
+          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
+          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
+        }
+      });
+      return;
+    }
     router.back();
   };
 

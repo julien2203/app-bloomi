@@ -34,6 +34,10 @@ export default function BrandFilterScreen() {
     gender?: string;
     type?: string;
     title?: string;
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
   }>();
 
   const genderParam = typeof params.gender === 'string' ? params.gender : undefined;
@@ -65,6 +69,17 @@ export default function BrandFilterScreen() {
       brandIds: selectedBrandIds.length > 0 ? selectedBrandIds : undefined,
       brands: selectedNames.length > 0 ? selectedNames : undefined
     });
+    if (params.returnTo === 'results') {
+      router.replace({
+        pathname: '/tabs/results' as any,
+        params: {
+          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
+          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
+          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
+        }
+      });
+      return;
+    }
     router.back();
   };
 

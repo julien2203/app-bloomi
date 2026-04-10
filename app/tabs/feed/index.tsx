@@ -1,11 +1,23 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, RefreshControl, StyleSheet, View, Image } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  Image,
+  TouchableOpacity,
+  TextInput
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
   getFeedListings,
   getMyLikedListingIds,
   type FeedListing
 } from '../../../lib/api';
+import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
 import { HomeHero } from '../../../components/home/HomeHero';
 import { SectionHeader } from '../../../components/home/SectionHeader';
@@ -15,6 +27,9 @@ import { ProductCard } from '../../../components/ProductCard';
 import { useFeedFiltersStore } from '../../../lib/store/feedFilters';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
+import { Feather } from '@expo/vector-icons';
+import { AppIcon } from '../../../components/ui/AppIcon';
+import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -24,14 +39,30 @@ export default function HomeScreen() {
   const setCounts = useLikesStore((s) => s.setCounts);
   const clearLikes = useLikesStore((s) => s.clear);
   const [listings, setListings] = useState<FeedListing[]>([]);
+  const [sponsoredListings, setSponsoredListings] = useState<FeedListing[]>([]);
+  const [trendingListings, setTrendingListings] = useState<FeedListing[]>([]);
+  const [influencerListings, setInfluencerListings] = useState<FeedListing[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchText, setSearchText] = useState('');
+
+  const notificationsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const screenWidth = Dimensions.get('window').width;
   const gridPaddingX = 16;
   const gridGap = 12;
   const gridCardWidth = (screenWidth - gridPaddingX * 2 - gridGap) / 2;
+
+  const submitSearch = useCallback(() => {
+    const q = searchText.trim();
+    if (!q) return;
+    router.push({
+      pathname: '/tabs/results' as any,
+      params: { section: 'search', query: q, title: 'Recherche' }
+    });
+  }, [router, searchText]);
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -43,8 +74,110 @@ export default function HomeScreen() {
       });
       const likedIdsPromise = user ? getMyLikedListingIds() : Promise.resolve({ data: [], error: null });
 
-      const [{ data, error: fetchError }, { data: likedIds, error: likedIdsError }] =
-        await Promise.all([feedPromise, likedIdsPromise]);
+      const sponsoredPromise = (async () => {
+        try {
+          const nowIso = new Date().toISOString();
+          const { data, error: sErr } = await supabase
+            .from('v_feed_listings')
+            .select('*')
+            .eq('is_sponsored', true)
+            .gt('sponsored_until', nowIso)
+            .order('sponsored_until', { ascending: false })
+            .limit(10);
+          if (sErr) throw sErr;
+          return (data || []) as FeedListing[];
+        } catch {
+          return [] as FeedListing[];
+        }
+      })();
+
+      const trendingPromise = (async () => {
+        try {
+          const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          // 1) Récupérer les annonces récentes + views_count depuis `listings`
+          const { data: recentListings, error: recentErr } = await supabase
+            .from('listings')
+            .select('id, views_count')
+            .eq('status', 'published')
+            .gte('created_at', from)
+            .order('created_at', { ascending: false })
+            .limit(80);
+          if (recentErr) throw recentErr;
+
+          const ids = (recentListings || []).map((r: any) => String(r.id)).filter(Boolean);
+          if (ids.length === 0) return [] as FeedListing[];
+
+          const viewsById: Record<string, number> = {};
+          for (const r of recentListings as any[]) {
+            const id = String(r.id);
+            const v = typeof r.views_count === 'number' ? r.views_count : Number(r.views_count ?? 0);
+            viewsById[id] = Number.isFinite(v) ? v : 0;
+          }
+
+          // 2) Récupérer les cartes via la view (inclut likes_count)
+          const { data: cards, error: cardsErr } = await supabase
+            .from('v_feed_listings')
+            .select('*')
+            .in('id', ids);
+          if (cardsErr) throw cardsErr;
+
+          const rows = (cards || []) as FeedListing[];
+          const scored = rows
+            .map((r) => {
+              const views = viewsById[r.id] ?? 0;
+              const likes = typeof (r as any).likes_count === 'number' ? (r as any).likes_count : 0;
+              return { r, score: views + likes * 2 };
+            })
+            // Ne pas afficher des tendances sans signaux
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10)
+            .map((x) => x.r);
+
+          return scored;
+        } catch {
+          return [] as FeedListing[];
+        }
+      })();
+
+      const influencersPromise = (async () => {
+        try {
+          const { data: profs, error: pErr } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('is_influencer', true)
+            .limit(50);
+          if (pErr) throw pErr;
+          const ids = (profs || []).map((p: any) => String(p.id)).filter(Boolean);
+          if (ids.length === 0) return [] as FeedListing[];
+
+          const { data, error: iErr } = await supabase
+            .from('v_feed_listings')
+            .select('*')
+            .in('seller_id', ids)
+            .eq('status', 'published')
+            .order('created_at', { ascending: false })
+            .limit(10);
+          if (iErr) throw iErr;
+          return (data || []) as FeedListing[];
+        } catch {
+          return [] as FeedListing[];
+        }
+      })();
+
+      const [
+        { data, error: fetchError },
+        { data: likedIds, error: likedIdsError },
+        sponsoredRes,
+        trendingRes,
+        influencersRes
+      ] = await Promise.all([
+        feedPromise,
+        likedIdsPromise,
+        sponsoredPromise,
+        trendingPromise,
+        influencersPromise
+      ]);
 
       if (fetchError) {
         setError(fetchError);
@@ -52,6 +185,10 @@ export default function HomeScreen() {
       } else {
         setListings(data);
       }
+
+      setSponsoredListings(sponsoredRes);
+      setTrendingListings(trendingRes);
+      setInfluencerListings(influencersRes);
 
       // Hydrate store instantanément dès qu'on a l'info user-likes.
       if (!user) {
@@ -77,6 +214,58 @@ export default function HomeScreen() {
     }
   }, [filters, user, setLikedIds, setCounts, clearLikes]);
 
+  const loadUnreadNotificationsCount = useCallback(async () => {
+    if (!user?.id) {
+      setUnreadNotificationsCount(0);
+      return;
+    }
+    try {
+      const { count, error: cErr } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .is('read_at', null);
+      if (cErr) throw cErr;
+      setUnreadNotificationsCount(count ?? 0);
+    } catch {
+      setUnreadNotificationsCount(0);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadUnreadNotificationsCount();
+  }, [loadUnreadNotificationsCount]);
+
+  // Realtime: badge mis à jour sur nouvelles notifications
+  useEffect(() => {
+    // cleanup
+    if (notificationsChannelRef.current) {
+      void supabase.removeChannel(notificationsChannelRef.current);
+      notificationsChannelRef.current = null;
+    }
+
+    if (!user?.id) return;
+
+    const ch = supabase
+      .channel(`notifications:user:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          // simple & robuste: recalculer le count
+          void loadUnreadNotificationsCount();
+        }
+      )
+      .subscribe();
+
+    notificationsChannelRef.current = ch;
+
+    return () => {
+      void supabase.removeChannel(ch);
+      notificationsChannelRef.current = null;
+    };
+  }, [loadUnreadNotificationsCount, user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       if (listings.length === 0) {
@@ -100,17 +289,7 @@ export default function HomeScreen() {
     router.push(`/tabs/feed/${id}`);
   };
 
-  const { sponsored, trending, influencers, all } = useMemo(() => {
-    const s = listings.slice(0, 8);
-    const t = listings.slice(8, 16);
-    const i = listings.slice(16, 24);
-    return {
-      sponsored: s,
-      trending: t.length > 0 ? t : s,
-      influencers: i.length > 0 ? i : s,
-      all: listings
-    };
-  }, [listings]);
+  const all = listings;
 
   const chunk = <T,>(arr: T[], size: number): T[][] =>
     Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
@@ -155,113 +334,191 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <Screen scroll noHorizontalPadding>
-        <HomeHero backgroundUri={null} />
-
-        <View style={styles.section}>
-          <SectionHeader
-            title="Sponsorisés"
-            onPressSeeAll={() => {
-              console.log('Voir tout - Sponsorisés');
-            }}
-          />
-          <FlatList
-            data={sponsored}
-            keyExtractor={(item) => `sponsored-${item.id}`}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-            renderItem={({ item }) => (
-              <ProductCard
-                listingId={item.id}
-                title={item.title}
-                price={item.price}
-                currency="CHF"
-                brand={item.brand ?? undefined}
-                size={(item as any).size ?? undefined}
-                condition={item.condition ?? undefined}
-                imageUrl={item.cover_photo_url}
-                onPress={() => handleListingPress(item.id)}
-                cardWidth={167}
-                imageRatio={1}
-                style={styles.horizontalCard}
-              />
-            )}
-          />
+      <Screen scroll={false} noHorizontalPadding>
+        {/* Sticky search bar (not scrolling) */}
+        <View style={styles.stickyHeader}>
+          <View style={styles.searchBar}>
+            <Feather
+              name="search"
+              size={20}
+              color={theme.colors.textSecondary}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              placeholder="Rechercher un article"
+              placeholderTextColor={theme.colors.textSecondary}
+              style={styles.searchInput}
+              value={searchText}
+              onChangeText={setSearchText}
+              returnKeyType="search"
+              onSubmitEditing={submitSearch}
+            />
+            <TouchableOpacity
+              onPress={() => router.push('/tabs/profile/orders')}
+              activeOpacity={0.7}
+              style={styles.headerIconHit}
+              hitSlop={HIT_SLOP_EXTRA}
+              accessibilityRole="button"
+              accessibilityLabel="Panier"
+            >
+              <AppIcon name="cartLargeOutline" size={22} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/tabs/profile/notifications' as any)}
+              activeOpacity={0.7}
+              style={styles.headerIconHit}
+              hitSlop={HIT_SLOP_EXTRA}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+            >
+              <View style={styles.bellWrap}>
+                <AppIcon name="notificationsBellOutline" size={22} color={theme.colors.primary} />
+                {unreadNotificationsCount > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unreadNotificationsCount > 99 ? '99+' : String(unreadNotificationsCount)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <SectionHeader
-            title="Tendances"
-            onPressSeeAll={() => {
-              console.log('Voir tout - Tendances');
-            }}
-          />
-          <FlatList
-            data={trending}
-            keyExtractor={(item) => `trending-${item.id}`}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-            renderItem={({ item }) => (
-              <ProductCard
-                listingId={item.id}
-                title={item.title}
-                price={item.price}
-                currency="CHF"
-                brand={item.brand ?? undefined}
-                size={(item as any).size ?? undefined}
-                condition={item.condition ?? undefined}
-                imageUrl={item.cover_photo_url}
-                onPress={() => handleListingPress(item.id)}
-                cardWidth={167}
-                imageRatio={1}
-                style={styles.horizontalCard}
-              />
-            )}
-          />
-        </View>
+        {/* Scroll only below */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        >
+          {/* 12px gap below sticky bar */}
+          <View style={{ height: 12 }} />
 
-        <View style={styles.section}>
-          <SectionHeader
-            title="Influenceurs"
-            onPressSeeAll={() => {
-              console.log('Voir tout - Influenceurs');
-            }}
-          />
-          <FlatList
-            data={influencers}
-            keyExtractor={(item) => `influencers-${item.id}`}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-            renderItem={({ item }) => (
-              <ProductCard
-                listingId={item.id}
-                title={item.title}
-                price={item.price}
-                currency="CHF"
-                brand={item.brand ?? undefined}
-                size={(item as any).size ?? undefined}
-                condition={item.condition ?? undefined}
-                imageUrl={item.cover_photo_url}
-                onPress={() => handleListingPress(item.id)}
-                cardWidth={167}
-                imageRatio={1}
-                style={styles.horizontalCard}
+          <HomeHero backgroundUri={null} unreadNotificationsCount={unreadNotificationsCount} />
+
+          {sponsoredListings.length > 0 ? (
+            <View style={styles.section}>
+              <SectionHeader
+                title="Sponsorisés"
+                onPressSeeAll={() => {
+                  router.push({
+                    pathname: '/tabs/results' as any,
+                    params: { section: 'sponsored', title: 'Sponsorisés' }
+                  });
+                }}
               />
-            )}
-          />
-        </View>
+              <FlatList
+                data={sponsoredListings}
+                keyExtractor={(item) => `sponsored-${item.id}`}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalList}
+                ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
+                renderItem={({ item }) => (
+                  <ProductCard
+                    listingId={item.id}
+                    title={item.title}
+                    price={item.price}
+                    currency="CHF"
+                    brand={item.brand ?? undefined}
+                    size={(item as any).size ?? undefined}
+                    condition={item.condition ?? undefined}
+                    imageUrl={item.cover_photo_url}
+                    onPress={() => handleListingPress(item.id)}
+                    cardWidth={167}
+                    imageRatio={1}
+                    style={styles.horizontalCard}
+                  />
+                )}
+              />
+            </View>
+          ) : null}
+
+        {trendingListings.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Tendances"
+              onPressSeeAll={() => {
+                router.push({
+                  pathname: '/tabs/results' as any,
+                  params: { section: 'trending', title: 'Tendances' }
+                });
+              }}
+            />
+            <FlatList
+              data={trendingListings}
+              keyExtractor={(item) => `trending-${item.id}`}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
+              renderItem={({ item }) => (
+                <ProductCard
+                  listingId={item.id}
+                  title={item.title}
+                  price={item.price}
+                  currency="CHF"
+                  brand={item.brand ?? undefined}
+                  size={(item as any).size ?? undefined}
+                  condition={item.condition ?? undefined}
+                  imageUrl={item.cover_photo_url}
+                  onPress={() => handleListingPress(item.id)}
+                  cardWidth={167}
+                  imageRatio={1}
+                  style={styles.horizontalCard}
+                />
+              )}
+            />
+          </View>
+        ) : null}
+
+        {influencerListings.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Influenceurs"
+              onPressSeeAll={() => {
+                router.push({
+                  pathname: '/tabs/results' as any,
+                  params: { section: 'influencer', title: 'Influenceurs' }
+                });
+              }}
+            />
+            <FlatList
+              data={influencerListings}
+              keyExtractor={(item) => `influencers-${item.id}`}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
+              renderItem={({ item }) => (
+                <ProductCard
+                  listingId={item.id}
+                  title={item.title}
+                  price={item.price}
+                  currency="CHF"
+                  brand={item.brand ?? undefined}
+                  size={(item as any).size ?? undefined}
+                  condition={item.condition ?? undefined}
+                  imageUrl={item.cover_photo_url}
+                  onPress={() => handleListingPress(item.id)}
+                  cardWidth={167}
+                  imageRatio={1}
+                  style={styles.horizontalCard}
+                />
+              )}
+            />
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <SectionHeader
             title="Tous les articles"
             onPressSeeAll={() => {
-              console.log('Voir tout - Tous les articles');
+              router.push({
+                pathname: '/tabs/results' as any,
+                params: { section: 'all', title: 'Tous les articles' }
+              });
             }}
           />
           {listings.length === 0 && !loading ? (
@@ -286,13 +543,21 @@ export default function HomeScreen() {
                   {pair.map((item) => (
                     <View key={item.id} style={{ flex: 1 }}>
                       {/* Header vendeur */}
-                      <View
+                      <TouchableOpacity
+                        onPress={() =>
+                          router.push({
+                            pathname: '/tabs/public-profile' as any,
+                            params: { user_id: item.seller_id }
+                          })
+                        }
+                        activeOpacity={0.85}
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 6,
                           marginBottom: 6
                         }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
                         {item.seller_avatar_url ? (
                           <Image
@@ -305,7 +570,7 @@ export default function HomeScreen() {
                               width: 24,
                               height: 24,
                               borderRadius: 12,
-                              backgroundColor: '#E5E5E5'
+                              backgroundColor: theme.colors.muted
                             }}
                           />
                         )}
@@ -315,7 +580,7 @@ export default function HomeScreen() {
                         >
                           {item.seller_display_name ?? 'Seller'}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
 
                       {/* Card produit réutilisée */}
                       <ProductCard
@@ -339,6 +604,7 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+        </ScrollView>
       </Screen>
     </View>
   );
@@ -348,6 +614,62 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.colors.background
+  },
+  stickyHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    backgroundColor: theme.colors.background
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 48,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.googleWhite,
+    borderRadius: theme.radius.input,
+    ...theme.shadows.card
+  },
+  searchIcon: {
+    marginRight: theme.spacing.gapSm
+  },
+  searchInput: {
+    flex: 1,
+    ...theme.typography.body,
+    color: theme.colors.textPrimary
+  },
+  headerIconHit: {
+    ...HEADER_ICON_TOUCH_CONTAINER
+  },
+  bellWrap: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  badge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF'
+  },
+  scroll: {
+    flex: 1
+  },
+  scrollContent: {
+    paddingBottom: theme.spacing.gapLg * 2
   },
   centerContent: {
     flex: 1,

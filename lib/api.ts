@@ -71,6 +71,124 @@ export async function getFeedListings(params?: {
   const { limit = 20, offset = 0, filters } = params || {};
 
   try {
+    // Nearby: use RPC that filters + sorts by distance.
+    if (
+      filters?.nearbyKm != null &&
+      Number.isFinite(filters.nearbyKm) &&
+      filters.nearbyKm! > 0 &&
+      filters?.nearbyLat != null &&
+      filters?.nearbyLon != null
+    ) {
+      const { data, error } = await supabase.rpc('nearby_feed_listings', {
+        p_lat: Number(filters.nearbyLat),
+        p_lon: Number(filters.nearbyLon),
+        p_radius_km: Number(filters.nearbyKm),
+        p_limit: limit,
+        p_offset: offset,
+        p_section: 'feed',
+        p_query: null,
+        p_category: filters.category ?? null,
+        p_conditions: (filters.conditions ?? null) as any,
+        p_price_min: filters.priceMin ?? null,
+        p_price_max: filters.priceMax ?? null,
+        p_brands: (filters.brands ?? null) as any,
+        p_sizes: (filters.sizes ?? null) as any,
+        p_colors: (filters.colors ?? null) as any,
+        p_influencer_ids: null
+      });
+      if (error) return { data: [], error: new Error(error.message) };
+      return { data: (data || []) as FeedListing[], error: null };
+    }
+
+    // Relevance: liked listings first (by like date desc), then newest.
+    if (filters?.sort === 'relevance') {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) {
+        const { data, error } = await supabase
+          .from('v_feed_listings')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+        if (error) return { data: [], error: new Error(error.message) };
+        return { data: (data || []) as FeedListing[], error: null };
+      }
+
+      const { data: likesRows, error: likesErr } = await supabase
+        .from('likes')
+        .select('listing_id, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (likesErr) {
+        const { data, error } = await supabase
+          .from('v_feed_listings')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+        if (error) return { data: [], error: new Error(error.message) };
+        return { data: (data || []) as FeedListing[], error: null };
+      }
+
+      const likedIds = (likesRows || [])
+        .map((r: any) => String(r.listing_id))
+        .filter(Boolean);
+      if (likedIds.length === 0) {
+        const { data, error } = await supabase
+          .from('v_feed_listings')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+        if (error) return { data: [], error: new Error(error.message) };
+        return { data: (data || []) as FeedListing[], error: null };
+      }
+
+      // Liked items matching current filters
+      let likedQ = supabase.from('v_feed_listings').select('*').in('id', likedIds);
+      if (filters?.category) likedQ = likedQ.eq('category', filters.category);
+      if (filters?.conditions && filters.conditions.length > 0) likedQ = likedQ.in('condition', filters.conditions);
+      if (filters?.priceMin !== undefined) likedQ = likedQ.gte('price', filters.priceMin);
+      if (filters?.priceMax !== undefined) likedQ = likedQ.lte('price', filters.priceMax);
+
+      const { data: likedData, error: likedErr } = await likedQ;
+      if (likedErr) return { data: [], error: new Error(likedErr.message) };
+
+      const likedById = new Map<string, FeedListing>();
+      (likedData || []).forEach((row: any) => likedById.set(String(row.id), row as FeedListing));
+      const likedOrdered = likedIds.map((id) => likedById.get(id)).filter(Boolean) as FeedListing[];
+
+      const likedLen = likedOrdered.length;
+      const likedSlice = offset < likedLen ? likedOrdered.slice(offset, offset + limit) : [];
+      const remaining = Math.max(0, limit - likedSlice.length);
+
+      if (remaining === 0) {
+        return { data: likedSlice, error: null };
+      }
+
+      // Rest of feed, newest first, excluding liked
+      const restOffset = Math.max(0, offset - likedLen);
+      let restQ = supabase
+        .from('v_feed_listings')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(restOffset, restOffset + remaining - 1);
+
+      if (filters?.category) restQ = restQ.eq('category', filters.category);
+      if (filters?.conditions && filters.conditions.length > 0) restQ = restQ.in('condition', filters.conditions);
+      if (filters?.priceMin !== undefined) restQ = restQ.gte('price', filters.priceMin);
+      if (filters?.priceMax !== undefined) restQ = restQ.lte('price', filters.priceMax);
+
+      const quoted = likedIds.map((x) => `"${x}"`).join(',');
+      restQ = restQ.not('id', 'in', `(${quoted})`);
+
+      const { data: restData, error: restErr } = await restQ;
+      if (restErr) return { data: [], error: new Error(restErr.message) };
+
+      return { data: [...likedSlice, ...((restData || []) as FeedListing[])], error: null };
+    }
+
     let orderColumn: 'created_at' | 'price' = 'created_at';
     let ascending = false;
 
@@ -84,7 +202,6 @@ export async function getFeedListings(params?: {
         ascending = false;
         break;
       case 'newest':
-      case 'relevance':
       default:
         orderColumn = 'created_at';
         ascending = false;

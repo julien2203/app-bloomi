@@ -8,18 +8,35 @@ import { Text } from '../ui/Text';
 interface VerticalListingCardProps {
   item: FeedListing;
   onPress: () => void;
+  onPressSeller?: () => void;
 }
 
-export function VerticalListingCard({ item, onPress }: VerticalListingCardProps) {
+export function VerticalListingCard({
+  item,
+  onPress,
+  onPressSeller
+}: VerticalListingCardProps) {
   const likeCount = 24;
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.header}>
-        <View style={styles.avatar} />
-        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {item.seller_display_name ?? 'Vendeur'}
-        </Text>
+        <TouchableOpacity
+          onPress={onPressSeller}
+          activeOpacity={onPressSeller ? 0.85 : 1}
+          disabled={!onPressSeller}
+          style={styles.sellerChip}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          {item.seller_avatar_url ? (
+            <Image source={{ uri: item.seller_avatar_url }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar} />
+          )}
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            {item.seller_display_name ?? 'Vendeur'}
+          </Text>
+        </TouchableOpacity>
       </View>
       {item.cover_photo_url ? (
         <Image source={{ uri: item.cover_photo_url }} style={styles.image} resizeMode="cover" />
@@ -60,13 +77,21 @@ const styles = StyleSheet.create({
     ...theme.shadows.card
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: theme.spacing.gapSm,
     paddingHorizontal: theme.spacing.gapSm,
     paddingTop: theme.spacing.gapSm
   },
+  sellerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: theme.spacing.gapSm
+  },
   avatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.colors.muted
+  },
+  avatarImage: {
     width: 24,
     height: 24,
     borderRadius: 12,

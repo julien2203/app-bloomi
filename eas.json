@@ -48,6 +48,9 @@
       "ios": {
         "appleId": "contact@easyweb-agency.fr",
         "ascAppId": "6760400669"
+      },
+      "android": {
+        "releaseStatus": "draft"
       }
     }
   }

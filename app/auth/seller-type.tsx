@@ -29,6 +29,7 @@ export default function SellerTypeScreen() {
   const [ideNumber, setIdeNumber] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
   const [companySocial, setCompanySocial] = useState('');
+  const [isInfluencer, setIsInfluencer] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,15 +59,6 @@ export default function SellerTypeScreen() {
   const handleContinue = async () => {
     if (!sellerType) return;
 
-    if (!isPro) {
-      goToVerifyEmail();
-      return;
-    }
-
-    if (!validateProFields()) {
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
@@ -77,19 +69,42 @@ export default function SellerTypeScreen() {
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          company_name: companyName.trim(),
-          ide_number: ideNumber.trim(),
-          company_address: companyAddress.trim(),
-          company_social: companySocial.trim() || null
-        })
-        .eq('id', data.user.id);
+      // 1) Demande influenceur (optionnelle)
+      if (isInfluencer === true) {
+        const { error: influencerErr } = await supabase
+          .from('profiles')
+          .update({
+            is_influencer_request: true,
+            influencer_request_at: new Date().toISOString()
+          })
+          .eq('id', data.user.id);
 
-      if (updateError) {
-        setError(updateError.message);
-        return;
+        if (influencerErr) {
+          setError(influencerErr.message);
+          return;
+        }
+      }
+
+      // 2) Champs pro (si nécessaire)
+      if (isPro) {
+        if (!validateProFields()) {
+          return;
+        }
+
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            company_name: companyName.trim(),
+            ide_number: ideNumber.trim(),
+            company_address: companyAddress.trim(),
+            company_social: companySocial.trim() || null
+          })
+          .eq('id', data.user.id);
+
+        if (updateError) {
+          setError(updateError.message);
+          return;
+        }
       }
 
       goToVerifyEmail();
@@ -208,6 +223,40 @@ export default function SellerTypeScreen() {
                 </View>
               )}
 
+              {/* Influenceur / créateur */}
+              <View style={styles.influencerBlock}>
+                <Text style={styles.influencerTitle}>
+                  Es-tu influenceur ou créateur de contenu ?
+                </Text>
+                <View style={styles.pillsColumn}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[
+                      styles.pillFull,
+                      isInfluencer === true ? styles.pillActive : styles.pillInactive
+                    ]}
+                    onPress={() => setIsInfluencer(true)}
+                  >
+                    <Text style={styles.pillText}>Oui, je suis influenceur</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[
+                      styles.pillFull,
+                      isInfluencer === false ? styles.pillActive : styles.pillInactive
+                    ]}
+                    onPress={() => setIsInfluencer(false)}
+                  >
+                    <Text style={styles.pillText}>Non</Text>
+                  </TouchableOpacity>
+                </View>
+                {isInfluencer === true ? (
+                  <Text style={styles.influencerHint}>
+                    Votre demande sera examinée par notre équipe
+                  </Text>
+                ) : null}
+              </View>
+
               {error ? (
                 <Text style={styles.errorText}>
                   {error}
@@ -280,6 +329,10 @@ const styles = StyleSheet.create({
     columnGap: 12,
     marginBottom: 24
   },
+  pillsColumn: {
+    flexDirection: 'column',
+    rowGap: 12
+  },
   pill: {
     flex: 1,
     borderRadius: 12,
@@ -301,6 +354,28 @@ const styles = StyleSheet.create({
   pillText: {
     fontSize: 15,
     color: theme.colors.textPrimary
+  },
+  pillFull: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  influencerBlock: {
+    marginTop: 8,
+    marginBottom: 16
+  },
+  influencerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    marginBottom: 12
+  },
+  influencerHint: {
+    marginTop: 10,
+    fontSize: 13,
+    color: theme.colors.textSecondary
   },
   proForm: {
     marginTop: 8

@@ -21,10 +21,21 @@ export default function ProfileStackLayout() {
       <Stack.Screen name="wallet" options={{ title: 'Wallet' }} />
       <Stack.Screen name="orders" options={{ title: 'My orders' }} />
       <Stack.Screen
+        name="leave-review"
+        options={{ title: 'Laisser un avis', headerShown: false }}
+      />
+      <Stack.Screen
         name="activate-seller-account"
         options={{ title: 'Activer mon compte vendeur', headerShown: false }}
       />
+      <Stack.Screen
+        name="notifications"
+        options={{ title: 'Notifications', headerShown: false }}
+      />
+      <Stack.Screen name="notification-settings" options={{ title: 'Push notifications' }} />
+      <Stack.Screen name="account-settings" options={{ title: 'Account settings' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+      <Stack.Screen name="shipping" options={{ title: 'Shipping' }} />
       <Stack.Screen name="legal" options={{ title: 'Legal information' }} />
       <Stack.Screen name="help" options={{ title: 'Help center' }} />
       <Stack.Screen name="feedback" options={{ title: 'Send your feedback' }} />

@@ -31,7 +31,12 @@ export type SellFormFieldKey =
   | 'price'
   | 'color'
   | 'categoryGender'
-  | 'categoryType';
+  | 'categoryType'
+  | 'draftTitle'
+  | 'draftDescription'
+  | 'draftCity'
+  | 'draftPriceText'
+  | 'draftPhotos';
 
 export type SellFormState = {
   category: SellCategory | null;
@@ -43,6 +48,12 @@ export type SellFormState = {
   size: SellSize | null;
   color: SellColor[];
   price?: number;
+  /** Champs locaux de l'écran Sell, persistés pour éviter les pertes au retour */
+  draftTitle?: string;
+  draftDescription?: string;
+  draftCity?: string;
+  draftPriceText?: string;
+  draftPhotos?: Array<{ uri: string; type?: string; name?: string }>;
 };
 
 type SellFieldValue =
@@ -69,7 +80,12 @@ const defaultValues: SellFormState = {
   size: null,
   color: [],
   condition: undefined,
-  price: undefined
+  price: undefined,
+  draftTitle: '',
+  draftDescription: '',
+  draftCity: '',
+  draftPriceText: '',
+  draftPhotos: []
 };
 
 export const useSellFormStore = create<SellFormStore>((set) => ({

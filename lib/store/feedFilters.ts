@@ -45,6 +45,13 @@ export type FeedFilters = {
     max?: number;
   };
   sort?: FeedSort;
+
+  /**
+   * Nearby filter (distance in km) + cached coords used for queries.
+   */
+  nearbyKm?: number | null;
+  nearbyLat?: number | null;
+  nearbyLon?: number | null;
 };
 
 interface FeedFiltersState {

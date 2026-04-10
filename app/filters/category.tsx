@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
@@ -14,6 +14,12 @@ const GENDERS = ['Woman', 'Men', 'Kids', 'Baby'] as const;
 
 export default function CategoryFilterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilters } = useFeedFiltersStore();
 
@@ -35,8 +41,14 @@ export default function CategoryFilterScreen() {
   const handleOpenGender = (gender: (typeof GENDERS)[number]) => {
     setIsAllSelected(false);
     router.push({
-      pathname: '/filters/category-gender',
-      params: { gender }
+      pathname: '/tabs/filters/category-gender',
+      params: {
+        gender,
+        ...(params.returnTo ? { returnTo: params.returnTo } : {}),
+        ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
+        ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
+        ...(typeof params.resultsTitle === 'string' ? { resultsTitle: params.resultsTitle } : {})
+      }
     });
   };
 

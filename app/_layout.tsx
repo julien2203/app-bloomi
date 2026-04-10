@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View, Linking } from 'react-native';
+import { ActivityIndicator, View, Linking, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -9,6 +9,8 @@ import { useInterFonts } from '../lib/ui/fonts';
 import { ensureNotificationsConfigured, notifyNewMessage } from '../lib/notifications';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { SUPABASE_URL } from '../lib/env';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -121,6 +123,64 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // }; // TODO: réactiver le realtime
   }, [session, user?.id, pathname]);
 
+  // Enregistrement du push token Expo au démarrage (si connecté)
+  const didRegisterPushRef = useRef<string | null>(null);
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    if (didRegisterPushRef.current === userId) return;
+    didRegisterPushRef.current = userId;
+
+    void (async () => {
+      try {
+        if (Platform.OS === 'web') return;
+        if (Constants.appOwnership === 'expo') return;
+
+        // Import dynamique pour éviter le crash Expo Go (SDK 53+)
+        const Notifications = await import('expo-notifications');
+
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.DEFAULT
+          });
+        }
+
+        const permission = await Notifications.requestPermissionsAsync();
+        const granted =
+          (permission as any).granted ||
+          permission.status === Notifications.PermissionStatus.GRANTED ||
+          permission.status === 'granted';
+        if (!granted) return;
+
+        const expoToken = await Notifications.getExpoPushTokenAsync({
+          projectId: '6e1bb048-f2d6-4907-99b6-f8c631fe594e'
+        });
+
+        const token = (expoToken as any)?.data;
+        if (!token) return;
+
+        // Associer le token à l'utilisateur courant + dédupliquer côté serveur (évite qu'un autre compte
+        // sur le même device reçoive les notifications).
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/register-push-token`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session?.access_token ?? ''}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ expo_push_token: token })
+        });
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => '');
+          console.warn('Erreur register-push-token:', text || `${response.status}`);
+        }
+      } catch (e) {
+        console.warn("Erreur enregistrement push token Expo:", e);
+      }
+    })();
+  }, [session]);
+
   if (!initialized) {
     return (
       <View
@@ -141,6 +201,58 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const { fontsLoaded, fontError } = useInterFonts();
   const router = useRouter();
+
+  // Navigation au tap sur une notification (push/local)
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (Constants.appOwnership === 'expo') return;
+
+    let subscription: { remove: () => void } | null = null;
+    let cancelled = false;
+
+    const handleNotificationResponse = (response: any) => {
+      const data = response?.notification?.request?.content?.data ?? {};
+      const threadId = typeof data?.thread_id === 'string' ? data.thread_id : null;
+      const listingId = typeof data?.listing_id === 'string' ? data.listing_id : null;
+      const orderId = typeof data?.order_id === 'string' ? data.order_id : null;
+
+      if (threadId) {
+        router.push({ pathname: '/tabs/messages/[id]', params: { id: threadId } });
+        return;
+      }
+      if (listingId) {
+        router.push({ pathname: '/tabs/feed/[id]', params: { id: listingId } });
+        return;
+      }
+      if (orderId) {
+        router.push('/tabs/profile/orders');
+      }
+    };
+
+    void (async () => {
+      try {
+        const Notifications = await import('expo-notifications');
+        if (cancelled) return;
+
+        // Cold start: app ouverte depuis une notification
+        const last = await Notifications.getLastNotificationResponseAsync();
+        if (last) {
+          handleNotificationResponse(last);
+        }
+
+        subscription = Notifications.addNotificationResponseReceivedListener((resp) => {
+          handleNotificationResponse(resp);
+        });
+      } catch {
+        // silencieux
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription?.remove();
+    };
+  }, [router]);
 
   // Gestion des deep links (bloomi://auth/callback...)
   useEffect(() => {

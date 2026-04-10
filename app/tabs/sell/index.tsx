@@ -2,7 +2,7 @@
  * Écran Sell - Création d'annonce
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,15 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
-  Modal
+  Modal,
+  Keyboard
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
+import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
@@ -26,6 +28,7 @@ import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { createListing, uploadListingPhoto, addListingPhoto } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
+import { SUPABASE_URL } from '../../../lib/env';
 import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
 import { useSellFormStore } from '../../../lib/store/sellForm';
@@ -55,12 +58,14 @@ export default function SellScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const { values: sellValues, resetForm } = useSellFormStore();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [city, setCity] = useState('');
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { values: sellValues, resetForm, setField } = useSellFormStore();
+  const [title, setTitle] = useState(sellValues.draftTitle ?? '');
+  const titleRef = useRef(sellValues.draftTitle ?? '');
+  const [description, setDescription] = useState(sellValues.draftDescription ?? '');
+  const [price, setPrice] = useState(sellValues.draftPriceText ?? '');
+  const [city, setCity] = useState(sellValues.draftCity ?? '');
+  const [photos, setPhotos] = useState<Photo[]>((sellValues.draftPhotos as any) ?? []);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
     title?: string;
@@ -69,6 +74,11 @@ export default function SellScreen() {
   }>({});
   const [showPublishSheet, setShowPublishSheet] = useState(false);
   const [showPhotoTips, setShowPhotoTips] = useState(false);
+  const [lastPublishedListingId, setLastPublishedListingId] = useState<string | null>(null);
+  const [selectedSponsorType, setSelectedSponsorType] = useState<'listing' | 'dressing' | null>(
+    null
+  );
+  const [boostPaying, setBoostPaying] = useState(false);
 
   React.useEffect(() => {
     const loadCityFromProfile = async () => {
@@ -92,6 +102,28 @@ export default function SellScreen() {
 
     void loadCityFromProfile();
   }, [user]);
+
+  // Garder le store en sync pour éviter de perdre le draft en naviguant vers Condition/Brand/etc.
+  React.useEffect(() => {
+    setField('draftTitle', title);
+  }, [setField, title]);
+  React.useEffect(() => {
+    // Assurer que la validation voit toujours la dernière valeur (même si le titre
+    // provient du store au remount, sans déclencher onChangeText).
+    titleRef.current = title;
+  }, [title]);
+  React.useEffect(() => {
+    setField('draftDescription', description);
+  }, [setField, description]);
+  React.useEffect(() => {
+    setField('draftPriceText', price);
+  }, [setField, price]);
+  React.useEffect(() => {
+    setField('draftCity', city);
+  }, [setField, city]);
+  React.useEffect(() => {
+    setField('draftPhotos', photos as any);
+  }, [setField, photos]);
 
   const resolveGeoForListing = async (): Promise<{
     latitude: number | null;
@@ -202,7 +234,8 @@ export default function SellScreen() {
   const validate = (): boolean => {
     const newErrors: typeof errors = {};
 
-    if (!title.trim()) {
+    const latestTitle = titleRef.current;
+    if (!latestTitle.trim()) {
       newErrors.title = 'Le titre est requis';
     }
 
@@ -250,6 +283,10 @@ export default function SellScreen() {
       Alert.alert('Erreur', 'Vous devez être connecté pour créer une annonce');
       return;
     }
+
+    // S'assurer que la dernière saisie (IME/composition) est prise en compte avant validation
+    Keyboard.dismiss();
+    titleRef.current = title;
 
     if (!validate()) {
       return;
@@ -311,7 +348,8 @@ export default function SellScreen() {
         title: title.trim(),
         description: description.trim() || null,
         price: priceNum,
-        status: 'published',
+        // Ne pas publier immédiatement : on publie après l'étape "mise en avant" (payer ou passer)
+        status: 'draft',
         category: sellValues.category?.name ?? null,
         condition: sellValues.condition ?? null,
         brand: sellValues.brand?.name ?? null,
@@ -334,6 +372,8 @@ export default function SellScreen() {
       }
 
       const listing = listingResult.data;
+      setLastPublishedListingId(listing.id);
+      setSelectedSponsorType(null);
 
       // Upload les photos
       for (let i = 0; i < photos.length; i++) {
@@ -357,15 +397,7 @@ export default function SellScreen() {
         await addListingPhoto(listing.id, photoUrl, i);
       }
 
-      // Réinitialiser le formulaire pour la prochaine annonce (store + état local)
-      resetForm();
-      setTitle('');
-      setDescription('');
-      setPrice('');
-      setPhotos([]);
-      setErrors({});
-
-      // Afficher la bottom sheet de mise en avant
+      // Afficher la bottom sheet de mise en avant (la publication se fera après)
       setShowPublishSheet(true);
     } catch (error) {
       Alert.alert(
@@ -462,6 +494,7 @@ export default function SellScreen() {
               value={title}
               onChangeText={(text) => {
                 setTitle(text);
+                titleRef.current = text;
                 if (errors.title) {
                   setErrors((prev) => ({ ...prev, title: undefined }));
                 }
@@ -713,22 +746,29 @@ export default function SellScreen() {
         visible={showPublishSheet}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowPublishSheet(false)}
+        onRequestClose={() => {
+          // Ne pas fermer via bouton Android back sans choix explicite
+        }}
       >
         <View style={styles.sheetOverlay}>
           <TouchableOpacity
             style={styles.sheetOverlayTouchable}
             activeOpacity={1}
-            onPress={() => setShowPublishSheet(false)}
+            onPress={() => {
+              // Ne rien faire : l'utilisateur doit payer ou passer
+            }}
           />
           <View style={styles.sheetContainer}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Mise en ligne du produit</Text>
 
             <TouchableOpacity
-              style={styles.sheetCard}
+              style={[
+                styles.sheetCard,
+                selectedSponsorType === 'listing' && styles.sheetCardSelected
+              ]}
               activeOpacity={0.8}
-              onPress={() => console.log('coming soon')}
+              onPress={() => setSelectedSponsorType('listing')}
             >
               <View style={styles.sheetCardHeader}>
                 <View style={styles.sheetIconCircle}>
@@ -743,9 +783,12 @@ export default function SellScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.sheetCard}
+              style={[
+                styles.sheetCard,
+                selectedSponsorType === 'dressing' && styles.sheetCardSelected
+              ]}
               activeOpacity={0.8}
-              onPress={() => console.log('coming soon')}
+              onPress={() => setSelectedSponsorType('dressing')}
             >
               <View style={styles.sheetCardHeader}>
                 <View style={styles.sheetIconCircle}>
@@ -764,8 +807,201 @@ export default function SellScreen() {
             </Text>
 
             <Button
+              title={
+                boostPaying
+                  ? 'Paiement...'
+                  : selectedSponsorType === 'listing'
+                  ? 'Payer 5.99 CHF'
+                  : selectedSponsorType === 'dressing'
+                  ? 'Payer 12.99 CHF'
+                  : 'Choisir une option'
+              }
+              onPress={async () => {
+                if (boostPaying) return;
+                if (!user?.id) {
+                  Alert.alert('Erreur', 'Vous devez être connecté pour payer');
+                  setShowPublishSheet(false);
+                  router.push('/auth/login');
+                  return;
+                }
+                if (!selectedSponsorType) return;
+                if (!lastPublishedListingId) {
+                  Alert.alert('Erreur', "Annonce introuvable pour la mise en avant.");
+                  return;
+                }
+
+                setBoostPaying(true);
+                try {
+                  const { data: sessionData } = await supabase.auth.getSession();
+                  const accessToken = sessionData.session?.access_token;
+                  if (!accessToken) {
+                    throw new Error('Session expirée. Veuillez vous reconnecter.');
+                  }
+
+                  const createRes = await fetch(`${SUPABASE_URL}/functions/v1/boost-listing`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${accessToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      action: 'create',
+                      listing_id: lastPublishedListingId,
+                      seller_id: user.id,
+                      sponsor_type: selectedSponsorType
+                    })
+                  });
+
+                  const createJson = (await createRes.json()) as {
+                    client_secret?: string;
+                    error?: string;
+                    details?: string;
+                  };
+
+                  if (!createRes.ok) {
+                    throw new Error(
+                      createJson.error && createJson.details
+                        ? `${createJson.error} (${createJson.details})`
+                        : createJson.error || createJson.details || 'boost-listing create failed'
+                    );
+                  }
+
+                  const clientSecret = createJson.client_secret;
+                  if (!clientSecret) throw new Error('client_secret manquant');
+
+                  const initRes = await initPaymentSheet({
+                    merchantDisplayName: 'Bloomi',
+                    paymentIntentClientSecret: clientSecret,
+                    defaultBillingDetails: {
+                      address: { country: 'CH' }
+                    }
+                  });
+                  if (initRes.error) throw new Error(initRes.error.message);
+
+                  const presentRes = await presentPaymentSheet();
+                  if (presentRes.error) throw new Error(presentRes.error.message);
+
+                  const paymentIntentId = clientSecret.split('_secret')[0];
+                  if (!paymentIntentId) throw new Error('payment_intent_id invalide');
+
+                  const confirmRes = await fetch(`${SUPABASE_URL}/functions/v1/boost-listing`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${accessToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      action: 'confirm',
+                      payment_intent_id: paymentIntentId
+                    })
+                  });
+
+                  const confirmJson = (await confirmRes.json()) as {
+                    success?: boolean;
+                    updated_count?: number;
+                    error?: string;
+                    details?: string;
+                  };
+
+                  if (!confirmRes.ok || confirmJson.success !== true) {
+                    throw new Error(
+                      confirmJson.error && confirmJson.details
+                        ? `${confirmJson.error} (${confirmJson.details})`
+                        : confirmJson.error || confirmJson.details || 'boost-listing confirm failed'
+                    );
+                  }
+
+                  // Publier l'annonce maintenant (après paiement réussi)
+                  const { error: publishErr } = await supabase
+                    .from('listings')
+                    .update({
+                      status: 'published',
+                      published_at: new Date().toISOString()
+                    })
+                    .eq('id', lastPublishedListingId)
+                    .eq('seller_id', user.id);
+
+                  if (publishErr) {
+                    throw new Error(publishErr.message);
+                  }
+
+                  // Réinitialiser le formulaire (store + état local) uniquement après publication
+                  resetForm();
+                  setTitle('');
+                  titleRef.current = '';
+                  setDescription('');
+                  setPrice('');
+                  setCity('');
+                  setPhotos([]);
+                  setErrors({});
+                  setField('draftTitle', '');
+                  setField('draftDescription', '');
+                  setField('draftPriceText', '');
+                  setField('draftCity', '');
+                  setField('draftPhotos', [] as any);
+
+                  setShowPublishSheet(false);
+                  router.replace('/tabs/feed');
+                } catch (e) {
+                  Alert.alert(
+                    'Paiement impossible',
+                    e instanceof Error ? e.message : 'Erreur inconnue'
+                  );
+                } finally {
+                  setBoostPaying(false);
+                }
+              }}
+              variant="primary"
+              disabled={!selectedSponsorType || boostPaying}
+              loading={boostPaying}
+              style={styles.sheetPayButton}
+            />
+
+            <Button
               title="Passer cette étape"
-              onPress={() => {
+              onPress={async () => {
+                if (!user?.id || !lastPublishedListingId) {
+                  setShowPublishSheet(false);
+                  router.replace('/tabs/feed');
+                  return;
+                }
+
+                try {
+                  // Publier sans boost
+                  const { error: publishErr } = await supabase
+                    .from('listings')
+                    .update({
+                      status: 'published',
+                      published_at: new Date().toISOString()
+                    })
+                    .eq('id', lastPublishedListingId)
+                    .eq('seller_id', user.id);
+
+                  if (publishErr) {
+                    throw new Error(publishErr.message);
+                  }
+
+                  resetForm();
+                  setTitle('');
+                  titleRef.current = '';
+                  setDescription('');
+                  setPrice('');
+                  setCity('');
+                  setPhotos([]);
+                  setErrors({});
+                  setField('draftTitle', '');
+                  setField('draftDescription', '');
+                  setField('draftPriceText', '');
+                  setField('draftCity', '');
+                  setField('draftPhotos', [] as any);
+                } catch (e) {
+                  Alert.alert(
+                    'Erreur',
+                    e instanceof Error ? e.message : 'Impossible de publier pour le moment.'
+                  );
+                  return;
+                }
+
                 setShowPublishSheet(false);
                 router.replace('/tabs/feed');
               }}
@@ -1018,6 +1254,10 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12
   },
+  sheetCardSelected: {
+    borderColor: theme.colors.appleBlack,
+    backgroundColor: theme.colors.googleWhite
+  },
   sheetCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1055,6 +1295,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 16
+  },
+  sheetPayButton: {
+    marginBottom: 10
   },
   sheetSkipButton: {
     marginTop: 4

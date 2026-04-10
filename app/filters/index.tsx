@@ -12,7 +12,14 @@ import { useFeedFiltersStore, type FeedSort } from '../../lib/store/feedFilters'
 export default function FiltersIndexScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ title?: string; from?: string }>();
+  const params = useLocalSearchParams<{
+    title?: string;
+    from?: string;
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const { filters } = useFeedFiltersStore();
 
   const headerTitle = params.title || 'Filters';
@@ -61,16 +68,20 @@ export default function FiltersIndexScreen() {
     return undefined;
   }, [filters.priceMin, filters.priceMax]);
 
-  const goTo = (route: string) => {
-    router.push(route);
+  const goTo = (pathname: string) => {
+    router.push({
+      pathname: pathname as any,
+      params: {
+        ...(params.returnTo ? { returnTo: params.returnTo } : {}),
+        ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
+        ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
+        ...(typeof params.resultsTitle === 'string' ? { resultsTitle: params.resultsTitle } : {})
+      }
+    });
   };
 
   const handleShowResult = () => {
-    if (params.from === 'search') {
-      router.replace('/tabs/search');
-    } else {
-      router.replace('/tabs/feed');
-    }
+    router.back();
   };
 
   return (
@@ -85,7 +96,7 @@ export default function FiltersIndexScreen() {
         </View>
 
         <View style={styles.content}>
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/sort')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/sort')}>
             <Text variant="body" style={styles.rowLabel}>
               Sort by
             </Text>
@@ -99,7 +110,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/category')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/category')}>
             <Text variant="body" style={styles.rowLabel}>
               Category
             </Text>
@@ -124,7 +135,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/size')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/size')}>
             <Text variant="body" style={styles.rowLabel}>
               Size
             </Text>
@@ -150,7 +161,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/brand-gender')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/brand-gender')}>
             <Text variant="body" style={styles.rowLabel}>
               Brand
             </Text>
@@ -176,7 +187,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/condition')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/condition')}>
             <Text variant="body" style={styles.rowLabel}>
               Condition
             </Text>
@@ -205,7 +216,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/color')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/color')}>
             <Text variant="body" style={styles.rowLabel}>
               Color
             </Text>
@@ -231,7 +242,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/filters/price')}>
+          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/price')}>
             <Text variant="body" style={styles.rowLabel}>
               Price
             </Text>

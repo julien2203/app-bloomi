@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/ui/Screen';
@@ -41,6 +41,12 @@ const PRICE_OPTIONS: PriceOption[] = [
 
 export default function PriceFilterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilters } = useFeedFiltersStore();
   const [min, setMin] = useState<string>(
@@ -85,7 +91,17 @@ export default function PriceFilterScreen() {
           ? { min: priceMin, max: priceMax }
           : undefined
     });
-
+    if (params.returnTo === 'results') {
+      router.replace({
+        pathname: '/tabs/results' as any,
+        params: {
+          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
+          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
+          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
+        }
+      });
+      return;
+    }
     router.back();
   };
 

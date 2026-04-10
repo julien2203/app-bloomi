@@ -27,7 +27,13 @@ const UI_TO_DB_GENDER: Record<GenderKey, string> = {
 export default function CategoryGenderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ gender?: string }>();
+  const params = useLocalSearchParams<{
+    gender?: string;
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const genderParam = params.gender as GenderKey | undefined;
   const gender: GenderKey = useMemo(
     () =>
@@ -85,11 +91,15 @@ export default function CategoryGenderScreen() {
 
   const openDetail = (category: RootCategory) => {
     router.push({
-      pathname: '/filters/category-detail',
+      pathname: '/tabs/filters/category-detail',
       params: {
         parentId: String(category.id),
         title: category.name,
-        gender: dbGender
+        gender: dbGender,
+        ...(params.returnTo ? { returnTo: params.returnTo } : {}),
+        ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
+        ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
+        ...(typeof params.resultsTitle === 'string' ? { resultsTitle: params.resultsTitle } : {})
       }
     });
   };

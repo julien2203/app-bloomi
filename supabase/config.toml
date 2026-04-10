@@ -77,3 +77,21 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/get-dashboard-link/deno.json"
 entrypoint = "./functions/get-dashboard-link/index.ts"
+
+[functions.send-notification]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-notification/deno.json"
+entrypoint = "./functions/send-notification/index.ts"
+
+[functions.notify-new-message]
+enabled = true
+verify_jwt = false
+import_map = "./functions/notify-new-message/deno.json"
+entrypoint = "./functions/notify-new-message/index.ts"
+
+[functions.register-push-token]
+enabled = true
+verify_jwt = false
+import_map = "./functions/register-push-token/deno.json"
+entrypoint = "./functions/register-push-token/index.ts"

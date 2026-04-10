@@ -47,6 +47,27 @@ export default function TabsLayout() {
         options={{ title: 'Recherche' }}
       />
       <Tabs.Screen
+        name="results/index"
+        options={{
+          title: 'Résultats',
+          href: null
+        }}
+      />
+      <Tabs.Screen
+        name="filters/index"
+        options={{
+          title: 'Filters',
+          href: null
+        }}
+      />
+      <Tabs.Screen
+        name="public-profile/index"
+        options={{
+          title: 'Profil',
+          href: null
+        }}
+      />
+      <Tabs.Screen
         name="sell"
         options={{ title: 'Vendre' }}
       />

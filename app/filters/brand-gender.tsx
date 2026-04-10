@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
@@ -23,18 +23,28 @@ const GENDER_SEGMENTS: GenderSegment[] = [
 export default function BrandGenderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
 
   const openGender = (segment: GenderSegment) => {
     router.push({
-      pathname: '/filters/brand-segment',
+      pathname: '/tabs/filters/brand-segment',
       params: {
-        gender: segment.gender
+        gender: segment.gender,
+        ...(params.returnTo ? { returnTo: params.returnTo } : {}),
+        ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
+        ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
+        ...(typeof params.resultsTitle === 'string' ? { resultsTitle: params.resultsTitle } : {})
       }
     });
   };
 
   const handleShowResult = () => {
-    router.replace('/tabs/feed');
+    router.back();
   };
 
   return (

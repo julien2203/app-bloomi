@@ -185,6 +185,11 @@ export default function ProfileScreen() {
         onPress={() => router.push('/tabs/profile/orders')}
       />
       <ProfileItem
+        label="Notifications"
+        icon="notificationsBellOutline"
+        onPress={() => router.push('/tabs/profile/notifications')}
+      />
+      <ProfileItem
         label="Activer mon compte vendeur"
         icon="walletOutline"
         onPress={() => router.push('/tabs/profile/activate-seller-account' as any)}

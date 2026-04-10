@@ -163,7 +163,15 @@ export default function SellBrandScreen() {
     if (selected) {
       setField('brand', selected);
     }
-    router.replace('/tabs/sell');
+    // Éviter de dupliquer l'écran Sell dans la stack:
+    // - si on vient de Sell -> Brand : back suffit
+    // - sinon fallback vers Sell
+    const canGoBack = typeof (router as any).canGoBack === 'function' ? (router as any).canGoBack() : true;
+    if (canGoBack) {
+      router.back();
+    } else {
+      router.replace('/tabs/sell');
+    }
   };
 
   return (

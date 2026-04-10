@@ -8,9 +8,14 @@ import { Text } from '../ui/Text';
 interface HorizontalListingCardProps {
   item: FeedListing;
   onPress: () => void;
+  onPressSeller?: () => void;
 }
 
-export function HorizontalListingCard({ item, onPress }: HorizontalListingCardProps) {
+export function HorizontalListingCard({
+  item,
+  onPress,
+  onPressSeller
+}: HorizontalListingCardProps) {
   const likeCount = 12;
 
   return (
@@ -25,6 +30,18 @@ export function HorizontalListingCard({ item, onPress }: HorizontalListingCardPr
         </View>
       )}
       <View style={styles.body}>
+        {onPressSeller ? (
+          <TouchableOpacity
+            onPress={onPressSeller}
+            style={styles.sellerRow}
+            activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {item.seller_display_name ?? 'Vendeur'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         <View style={styles.priceRow}>
           <Text variant="button">{Math.round(item.price)} CHF</Text>
           <Text variant="caption" color="danger">
@@ -77,6 +94,9 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: theme.spacing.gapMd,
     paddingVertical: theme.spacing.gapSm
+  },
+  sellerRow: {
+    marginBottom: theme.spacing.gapSm / 2
   },
   priceRow: {
     flexDirection: 'row',

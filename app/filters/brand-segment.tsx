@@ -18,7 +18,13 @@ export default function BrandSegmentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const params = useLocalSearchParams<{ gender?: string }>();
+  const params = useLocalSearchParams<{
+    gender?: string;
+    returnTo?: string;
+    resultsSection?: string;
+    resultsQuery?: string;
+    resultsTitle?: string;
+  }>();
   const genderParam = typeof params.gender === 'string' ? params.gender : 'femme';
 
   const segments = useMemo<Segment[]>(() => {
@@ -101,17 +107,21 @@ export default function BrandSegmentScreen() {
 
   const openSegment = (segment: Segment) => {
     router.push({
-      pathname: '/filters/brand',
+      pathname: '/tabs/filters/brand',
       params: {
         gender: segment.gender,
         type: segment.type ?? undefined,
-        title: segment.label
+        title: segment.label,
+        ...(params.returnTo ? { returnTo: params.returnTo } : {}),
+        ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
+        ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
+        ...(typeof params.resultsTitle === 'string' ? { resultsTitle: params.resultsTitle } : {})
       }
     });
   };
 
   const handleShowResult = () => {
-    router.replace('/tabs/feed');
+    router.back();
   };
 
   return (

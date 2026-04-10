@@ -26,6 +26,30 @@ function chfToCents(value: unknown): number {
   return Math.round(n * 100);
 }
 
+async function sendNotification(params: {
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+  user_id: string;
+  title: string;
+  body: string;
+  data?: unknown;
+}) {
+  const url = `${params.supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`;
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.supabaseServiceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: params.user_id,
+      title: params.title,
+      body: params.body,
+      data: params.data ?? undefined,
+    }),
+  });
+}
+
 type OrderRow = {
   id: string;
   listing_id: string;
@@ -277,6 +301,20 @@ Deno.serve(async (req) => {
         },
         { status: 500 },
       );
+    }
+
+    // Best-effort: notifier le vendeur (ne doit pas casser le flow principal)
+    try {
+      await sendNotification({
+        supabaseUrl,
+        supabaseServiceRoleKey,
+        user_id: row.seller_id,
+        title: "💰 Paiement reçu, bravo !",
+        body: "La transaction est terminée, les fonds ont été transférés.",
+        data: { order_id: row.id },
+      });
+    } catch (e) {
+      console.warn("Erreur envoi notification vendeur:", e);
     }
 
     return jsonResponse({ success: true });

@@ -21,6 +21,7 @@ import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import type { ThreadListItem } from '../../../lib/api_queries';
+import { SUPABASE_URL } from '../../../lib/env';
 
 type MessageRow = {
   id: string;
@@ -245,6 +246,29 @@ export default function ThreadScreen() {
           .from('threads')
           .update({ last_message_at: (data as MessageRow).created_at })
           .eq('id', threadId);
+
+        // Best-effort: notifier l'autre participant via Edge Function
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (accessToken) {
+            const clipped = body.trim().slice(0, 100);
+            await fetch(`${SUPABASE_URL}/functions/v1/notify-new-message`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                thread_id: threadId,
+                sender_id: user.id,
+                message_body: clipped
+              })
+            });
+          }
+        } catch (e) {
+          // silencieux: ne doit pas bloquer l'envoi du message
+        }
 
         setInput('');
         // Scroll vers le bas
