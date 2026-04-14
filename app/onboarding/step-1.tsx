@@ -25,7 +25,7 @@ export default function OnboardingStep1() {
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
             <Image
-              source={require('../../assets/brand/logo-b.png')}
+              source={require('../../assets/brand/logo-bloomi-white.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />

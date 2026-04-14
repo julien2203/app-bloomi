@@ -280,7 +280,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: -20,
-    paddingHorizontal: 20,
+    paddingLeft: 20,
+    paddingRight: 32,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5'

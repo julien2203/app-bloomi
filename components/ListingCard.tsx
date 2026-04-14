@@ -39,13 +39,15 @@ export function ListingCard({ listing, onPress }: ListingCardProps) {
       activeOpacity={0.7}
     >
       {listing.cover_photo_url ? (
-        <Image
-          source={{ uri: listing.cover_photo_url }}
-          style={styles.image}
-          resizeMode="cover"
-        />
+        <View style={[styles.imageContainer, styles.imageFrame]}>
+          <Image
+            source={{ uri: listing.cover_photo_url }}
+            style={styles.image}
+            resizeMode="cover"
+          />
+        </View>
       ) : (
-        <View style={styles.imagePlaceholder}>
+        <View style={styles.imageContainer}>
           <Text style={styles.imagePlaceholderText}>Pas d'image</Text>
         </View>
       )}
@@ -78,17 +80,20 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2
   },
-  image: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#f3f4f6'
-  },
-  imagePlaceholder: {
+  imageContainer: {
     width: '100%',
     height: 200,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center'
+  },
+  imageFrame: {
+    overflow: 'hidden',
+    backgroundColor: '#F5F5F5'
+  },
+  image: {
+    width: '100%',
+    height: '100%'
   },
   imagePlaceholderText: {
     ...theme.typography.caption,

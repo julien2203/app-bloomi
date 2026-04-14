@@ -21,9 +21,11 @@ export function HorizontalListingCard({
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
       {item.cover_photo_url ? (
-        <Image source={{ uri: item.cover_photo_url }} style={styles.image} resizeMode="cover" />
+        <View style={[styles.imageContainer, styles.imageFrame]}>
+          <Image source={{ uri: item.cover_photo_url }} style={styles.image} resizeMode="cover" />
+        </View>
       ) : (
-        <View style={styles.imagePlaceholder}>
+        <View style={styles.imageContainer}>
           <Text variant="caption" color="textSecondary">
             Pas d&apos;image
           </Text>
@@ -79,17 +81,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...theme.shadows.card
   },
-  image: {
-    width: '100%',
-    height: IMAGE_HEIGHT,
-    backgroundColor: theme.colors.muted
-  },
-  imagePlaceholder: {
+  imageContainer: {
     width: '100%',
     height: IMAGE_HEIGHT,
     backgroundColor: theme.colors.muted,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  imageFrame: {
+    overflow: 'hidden',
+    backgroundColor: '#F5F5F5'
+  },
+  image: {
+    width: '100%',
+    height: '100%'
   },
   body: {
     paddingHorizontal: theme.spacing.gapMd,

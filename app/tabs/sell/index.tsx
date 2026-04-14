@@ -203,6 +203,18 @@ export default function SellScreen() {
     return true;
   };
 
+  const appendPickedAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
+    const newPhotos = assets.map((asset) => ({
+      uri: asset.uri,
+      type: asset.type || 'image/jpeg',
+      name: asset.fileName || `photo-${Date.now()}.jpg`
+    }));
+    setPhotos((prev) => [...prev, ...newPhotos]);
+    if (errors.photos) {
+      setErrors((prev) => ({ ...prev, photos: undefined }));
+    }
+  };
+
   const pickImage = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
@@ -215,15 +227,26 @@ export default function SellScreen() {
     });
 
     if (!result.canceled && result.assets) {
-      const newPhotos = result.assets.map((asset) => ({
-        uri: asset.uri,
-        type: asset.type || 'image/jpeg',
-        name: asset.fileName || `photo-${Date.now()}.jpg`
-      }));
-      setPhotos((prev) => [...prev, ...newPhotos]);
-      if (errors.photos) {
-        setErrors((prev) => ({ ...prev, photos: undefined }));
-      }
+      appendPickedAssets(result.assets);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', "Autorisez l'accès à la caméra dans vos réglages");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      quality: 0.8,
+      allowsEditing: false
+    });
+
+    if (!result.canceled && result.assets) {
+      appendPickedAssets(result.assets);
     }
   };
 
@@ -432,14 +455,24 @@ export default function SellScreen() {
             {errors.photos && <Text style={styles.error}>{errors.photos}</Text>}
 
             {photos.length === 0 ? (
-              <TouchableOpacity
-                style={styles.photoUploadButton}
-                onPress={pickImage}
-                activeOpacity={0.85}
-              >
-                <AppIcon name="addSquareOutline" size={20} color="#121212" />
-                <Text style={styles.photoUploadText}>Upload photos</Text>
-              </TouchableOpacity>
+              <View style={styles.photoActionsRow}>
+                <TouchableOpacity
+                  style={styles.photoUploadButton}
+                  onPress={pickImage}
+                  activeOpacity={0.85}
+                >
+                  <AppIcon name="addSquareOutline" size={20} color="#121212" />
+                  <Text style={styles.photoUploadText}>Galerie</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.photoUploadButton}
+                  onPress={takePhoto}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="camera" size={20} color="#121212" />
+                  <Text style={styles.photoUploadText}>Appareil photo</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <ScrollView
                 horizontal
@@ -465,6 +498,14 @@ export default function SellScreen() {
                   activeOpacity={0.85}
                 >
                   <Feather name="plus" size={20} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.photoAddTile}
+                  onPress={takePhoto}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="camera" size={20} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
               </ScrollView>
             )}
@@ -1076,10 +1117,9 @@ const styles = StyleSheet.create({
     height: '100%'
   },
   photoUploadButton: {
-    alignSelf: 'center',
-    width: 167,
+    width: 220,
     height: 56,
-    marginTop: 8,
+    alignSelf: 'center',
     borderWidth: 1.5,
     borderColor: '#C3EA4F',
     borderRadius: 12,
@@ -1088,6 +1128,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.colors.backgroundWhite,
     gap: 8
+  },
+  photoActionsRow: {
+    marginTop: 8,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    gap: 12
   },
   photoUploadIcon: {
     marginRight: 8

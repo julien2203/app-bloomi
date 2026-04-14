@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Envelope clean (no overflow lines) -->
+  <rect x="36" y="44" width="56" height="40" rx="6" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Inner flap (stays inside) -->
+  <path d="M40 48L64 68L88 48" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

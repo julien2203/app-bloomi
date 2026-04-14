@@ -111,13 +111,11 @@ export function ProductCard({
       onPress={onPress}
     >
       {imageUrl ? (
-        <Image
-          source={{ uri: imageUrl }}
-          style={[styles.image, { height: effectiveImageHeight }]}
-          resizeMode="cover"
-        />
+        <View style={[styles.imageContainer, styles.imageFrame, { height: effectiveImageHeight }]}>
+          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+        </View>
       ) : (
-        <View style={[styles.imagePlaceholder, { height: effectiveImageHeight }]}>
+        <View style={[styles.imageContainer, { height: effectiveImageHeight }]}>
           <Text variant="caption" color="textSecondary">
             Pas d&apos;image
           </Text>
@@ -183,8 +181,6 @@ export function ProductCard({
   );
 }
 
-/** Légèrement réduit pour laisser 2 lignes de prix lisibles sur petites largeurs */
-const IMAGE_HEIGHT = 160;
 const RADIUS = 8;
 
 const styles = StyleSheet.create({
@@ -195,19 +191,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     overflow: 'hidden'
   },
-  image: {
-    width: '100%',
-    borderTopLeftRadius: RADIUS,
-    borderTopRightRadius: RADIUS,
-    backgroundColor: theme.colors.muted
-  },
-  imagePlaceholder: {
+  imageContainer: {
     width: '100%',
     borderTopLeftRadius: RADIUS,
     borderTopRightRadius: RADIUS,
     backgroundColor: theme.colors.muted,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  imageFrame: {
+    overflow: 'hidden',
+    backgroundColor: '#F5F5F5'
+  },
+  image: {
+    width: '100%',
+    height: '100%'
   },
   body: {
     paddingHorizontal: 8,

@@ -23,10 +23,10 @@
         }
       ]
     ],
-    "icon": "./assets/brand/logo-bloomi.png",
+    "icon": "./assets/brand/android-chrome-512x512.png",
     "splash": {
       "backgroundColor": "#ffffff",
-      "image": "./assets/brand/logo-bloomi.png",
+      "image": "./assets/brand/android-chrome-512x512.png",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": [

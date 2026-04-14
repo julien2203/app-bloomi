@@ -1,30 +1,32 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, usePathname } from 'expo-router';
 import { theme } from '../../lib/theme';
 import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
-import { AppIcon } from '../ui/AppIcon';
-import type { IconName } from '../../lib/assets';
+import HomeIcon from '../../assets/icons/icon_home_simple_outline.svg';
+import SearchIcon from '../../assets/icons/icon_search_short_handle.svg';
+import SellIcon from '../../assets/icons/icon_plus_shadow_C3EA4F.svg';
+import InboxIcon from '../../assets/icons/icon_message_envelope_clean.svg';
+import ProfileIcon from '../../assets/icons/icon_user_outline_premium.svg';
 
 /** Largeur cible ; réduite automatiquement sur très petits écrans */
 const BAR_WIDTH_IDEAL = 400;
 const HORIZONTAL_SCREEN_GUTTER = 24;
-const BAR_HEIGHT = 68;
+const BAR_HEIGHT = 84;
 const BAR_RADIUS = 18;
-const ICON_SIZE = 28;
+const ICON_SIZE = 40;
+const SELL_ICON_SIZE = 40;
 
 // Ordre visuel fixe : Home, Search, Sell (+), Messages, Profile
 const TAB_ROUTES = [
-  { href: '/tabs/feed', icon: 'home' as const },
-  { href: '/tabs/search', icon: 'search' as const },
-  { href: '/tabs/sell', icon: 'addCircle' as const },
-  { href: '/tabs/messages', icon: 'messagesLetter' as const },
-  { href: '/tabs/profile', icon: 'user' as const }
+  { href: '/tabs/feed', key: 'home' as const, label: 'Home' },
+  { href: '/tabs/search', key: 'search' as const, label: 'Search' },
+  { href: '/tabs/sell', key: 'sell' as const, label: 'Sell' },
+  { href: '/tabs/messages', key: 'inbox' as const, label: 'Inbox' },
+  { href: '/tabs/profile', key: 'profile' as const, label: 'Profile' }
 ] as const;
-
-type BaseIcon = (typeof TAB_ROUTES)[number]['icon'];
 
 export function FloatingTabBar(_: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -66,11 +68,6 @@ export function FloatingTabBar(_: BottomTabBarProps) {
     return null;
   }
 
-  const getIconName = (icon: BaseIcon, focused: boolean): IconName => {
-    const suffix = focused ? 'Bold' : 'Outline';
-    return `${icon}${suffix}` as IconName;
-  };
-
   return (
     <View
       style={[
@@ -85,7 +82,6 @@ export function FloatingTabBar(_: BottomTabBarProps) {
       <View style={[styles.container, { width: barWidth }]} collapsable={false}>
         {TAB_ROUTES.map((tab) => {
           const isFocused = pathname.startsWith(tab.href);
-          const icon = getIconName(tab.icon, isFocused);
 
           const onPress = () => {
             if (!isFocused) {
@@ -107,11 +103,22 @@ export function FloatingTabBar(_: BottomTabBarProps) {
                 Platform.OS === 'ios' && pressed && styles.itemPressed
               ]}
             >
-              <AppIcon
-                name={icon}
-                size={ICON_SIZE}
-                color={isFocused ? theme.colors.primary : theme.colors.textSecondary}
-              />
+              {tab.key === 'home' ? (
+                <HomeIcon width={ICON_SIZE} height={ICON_SIZE} />
+              ) : tab.key === 'search' ? (
+                <SearchIcon width={ICON_SIZE} height={ICON_SIZE} />
+              ) : tab.key === 'sell' ? (
+                <View style={styles.sellIconWrap}>
+                  <SellIcon width={SELL_ICON_SIZE} height={SELL_ICON_SIZE} />
+                </View>
+              ) : tab.key === 'inbox' ? (
+                <InboxIcon width={ICON_SIZE} height={ICON_SIZE} />
+              ) : (
+                <ProfileIcon width={ICON_SIZE} height={ICON_SIZE} />
+              )}
+              <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive]}>
+                {tab.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -150,10 +157,25 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48
+    minHeight: 60
   },
   itemPressed: {
     opacity: 0.75
+  },
+  sellIconWrap: {
+    marginTop: 0,
+    marginBottom: 0
+  },
+  label: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '500'
+  },
+  labelActive: {
+    color: theme.colors.textPrimary
+  },
+  labelInactive: {
+    color: '#AAAAAA'
   }
 });
 

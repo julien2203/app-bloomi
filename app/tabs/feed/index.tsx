@@ -338,21 +338,24 @@ export default function HomeScreen() {
         {/* Sticky search bar (not scrolling) */}
         <View style={styles.stickyHeader}>
           <View style={styles.searchBar}>
-            <Feather
-              name="search"
-              size={20}
-              color={theme.colors.textSecondary}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              placeholder="Rechercher un article"
-              placeholderTextColor={theme.colors.textSecondary}
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-              returnKeyType="search"
-              onSubmitEditing={submitSearch}
-            />
+            <View style={styles.searchInputWrap}>
+              <Feather
+                name="search"
+                size={20}
+                color={theme.colors.textSecondary}
+                style={styles.searchIcon}
+              />
+              <TextInput
+                placeholder="Rechercher un article"
+                placeholderTextColor={theme.colors.textSecondary}
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                returnKeyType="search"
+                onSubmitEditing={submitSearch}
+              />
+            </View>
+
             <TouchableOpacity
               onPress={() => router.push('/tabs/profile/orders')}
               activeOpacity={0.7}
@@ -624,11 +627,18 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 48
+  },
+  searchInputWrap: {
+    flex: 1,
     minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     backgroundColor: theme.colors.googleWhite,
     borderRadius: theme.radius.input,
-    ...theme.shadows.card
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.separator
   },
   searchIcon: {
     marginRight: theme.spacing.gapSm
@@ -639,7 +649,8 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary
   },
   headerIconHit: {
-    ...HEADER_ICON_TOUCH_CONTAINER
+    ...HEADER_ICON_TOUCH_CONTAINER,
+    marginLeft: 4
   },
   bellWrap: {
     position: 'relative',

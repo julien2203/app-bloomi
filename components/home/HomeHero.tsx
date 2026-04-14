@@ -61,7 +61,12 @@ const styles = StyleSheet.create({
     height: 220
   },
   imageInner: {
-    borderRadius: 12
+    borderRadius: 12,
+    objectFit: 'cover',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -69,9 +74,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 16
   },
   bottomCtaContainer: {

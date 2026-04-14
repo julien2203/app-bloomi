@@ -251,9 +251,13 @@ export default function ProfileScreen() {
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Text style={styles.footerLink}>Privacy Policy</Text>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/tabs/profile/legal')}>
+          <Text style={styles.footerLink}>Privacy Policy</Text>
+        </TouchableOpacity>
         <Text style={styles.footerSeparator}>·</Text>
-        <Text style={styles.footerLink}>Terms &amp; Conditions</Text>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/tabs/profile/legal')}>
+          <Text style={styles.footerLink}>Terms &amp; Conditions</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
