@@ -131,7 +131,7 @@ export default function SellColorScreen() {
           ]}
         >
           <Button
-            title="Confirmer"
+            title="Confirm"
             onPress={handleConfirm}
             variant="primary"
             disabled={selected.length === 0}

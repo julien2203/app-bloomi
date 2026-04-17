@@ -44,12 +44,12 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="search/index"
-        options={{ title: 'Recherche' }}
+        options={{ title: 'Search' }}
       />
       <Tabs.Screen
         name="results/index"
         options={{
-          title: 'Résultats',
+          title: 'Results',
           href: null
         }}
       />
@@ -63,13 +63,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="public-profile/index"
         options={{
-          title: 'Profil',
+          title: 'Profile',
           href: null
         }}
       />
       <Tabs.Screen
         name="sell"
-        options={{ title: 'Vendre' }}
+        options={{ title: 'Sell' }}
       />
       <Tabs.Screen
         name="messages/index"
@@ -77,7 +77,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profil' }}
+        options={{ title: 'Profile' }}
       />
     </Tabs>
   );

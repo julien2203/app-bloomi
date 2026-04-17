@@ -80,7 +80,7 @@ export default function SignUpScreen() {
         params: { email }
       });
     } catch (e) {
-      setError('Une erreur est survenue lors de l’inscription. Merci de réessayer.');
+      setError('Something went wrong during sign-up. Please try again.');
       setLoading(false);
     }
   };

@@ -109,7 +109,7 @@ export default function AccountSettingsScreen() {
       if (error) throw error;
       setEmail(next);
       setEmailModalOpen(false);
-      Alert.alert('Email', 'Votre demande de changement email a été envoyée.');
+      Alert.alert('Email', 'Your email change request has been sent.');
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Unable to update email.');
     } finally {
@@ -172,7 +172,7 @@ export default function AccountSettingsScreen() {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
-      Alert.alert('Password', 'Un email de réinitialisation a été envoyé');
+      Alert.alert('Password', 'A password reset email has been sent.');
     } catch (e) {
       Alert.alert('Error', formatErrorMessage(e, 'Unable to send reset email.'));
     }

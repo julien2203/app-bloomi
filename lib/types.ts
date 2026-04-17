@@ -9,7 +9,7 @@ import type { Database } from './supabase';
 // ENUMS
 // ============================================
 
-export type ListingStatus = 'draft' | 'published' | 'sold' | 'archived';
+export type ListingStatus = 'draft' | 'published' | 'sold' | 'archived' | 'reserved' | 'deleted';
 export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
 export type DeliveryMode = 'pickup' | 'shipping' | 'both';
 
@@ -132,9 +132,10 @@ export interface ThreadWithRelations extends Thread {
 export interface Message {
   id: string;
   thread_id: string;
-  sender_id: string;
+  sender_id: string | null;
   body: string;
-  type?: 'text' | 'offer' | string;
+  type?: 'text' | 'offer' | 'system' | string;
+  is_system?: boolean | null;
   offer_amount?: number | null;
   offer_status?: 'pending' | 'accepted' | 'declined' | string | null;
   offer_currency?: string | null;

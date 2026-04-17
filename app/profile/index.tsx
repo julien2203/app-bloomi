@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
   Pressable,
@@ -17,12 +18,19 @@ import { useAuthStore } from '../../stores/authStore';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import type { FeedListing } from '../../lib/api';
-import { createOrGetThreadForListing } from '../../lib/api';
+import {
+  createOrGetThreadForListing,
+  deactivateListingToDraft,
+  deleteListing,
+  getSellerDraftListingsForCloset,
+  isListingDeleteBlockedByOrders
+} from '../../lib/api';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
+import { OwnerListingBottomSheet } from '../../components/listing/OwnerListingBottomSheet';
 
 type PublicProfileParams = {
   user_id?: string;
@@ -81,13 +89,13 @@ function formatRelativeDate(dateString: string | null): string {
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
 
-  if (diffMinutes < 1) return "à l'instant";
-  if (diffHours < 1) return `il y a ${diffMinutes} min`;
-  if (diffDays < 1) return `il y a ${diffHours} h`;
-  if (diffWeeks < 1) return `il y a ${diffDays} j`;
-  if (diffMonths < 1) return `il y a ${diffWeeks} sem`;
-  if (diffYears < 1) return `il y a ${diffMonths} mois`;
-  return `il y a ${diffYears} an${diffYears > 1 ? 's' : ''}`;
+  if (diffMinutes < 1) return 'Just now';
+  if (diffHours < 1) return `${diffMinutes}m ago`;
+  if (diffDays < 1) return `${diffHours}h ago`;
+  if (diffWeeks < 1) return `${diffDays}d ago`;
+  if (diffMonths < 1) return `${diffWeeks}w ago`;
+  if (diffYears < 1) return `${diffMonths}mo ago`;
+  return `${diffYears}y ago`;
 }
 
 function formatMemberSince(dateString: string | null): string {
@@ -97,13 +105,13 @@ function formatMemberSince(dateString: string | null): string {
   const diffMs = now.getTime() - date.getTime();
   if (Number.isNaN(diffMs) || diffMs < 0) return '';
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays < 7) return `${diffDays} j`;
+  if (diffDays < 7) return `${diffDays}d`;
   const diffWeeks = Math.floor(diffDays / 7);
-  if (diffWeeks < 8) return `${diffWeeks} sem`;
+  if (diffWeeks < 8) return `${diffWeeks}w`;
   const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 24) return `${diffMonths} mois`;
+  if (diffMonths < 24) return `${diffMonths}mo`;
   const diffYears = Math.floor(diffDays / 365);
-  return `${diffYears} an${diffYears > 1 ? 's' : ''}`;
+  return `${diffYears}y`;
 }
 
 function formatTimeAgoEn(dateString: string | null): string {
@@ -150,6 +158,7 @@ export default function PublicProfileScreen() {
   const [togglingFollow, setTogglingFollow] = useState(false);
 
   const [closetItems, setClosetItems] = useState<FeedListing[]>([]);
+  const [closetDraftItems, setClosetDraftItems] = useState<FeedListing[]>([]);
   const [closetOffset, setClosetOffset] = useState(0);
   const [closetLoadingMore, setClosetLoadingMore] = useState(false);
   const [closetHasMore, setClosetHasMore] = useState(true);
@@ -159,6 +168,7 @@ export default function PublicProfileScreen() {
   const [reviewersById, setReviewersById] = useState<Record<string, ReviewerMini>>({});
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const lastLoadMoreScrollYRef = useRef<number>(-1);
+  const [closetOwnerMenuListing, setClosetOwnerMenuListing] = useState<FeedListing | null>(null);
 
   const resolvedUsername = profile?.display_name ?? usernameParam ?? 'Profil';
   const myId = user?.id ?? null;
@@ -243,7 +253,7 @@ export default function PublicProfileScreen() {
     } catch (e) {
       setProfile(null);
       const message =
-        e instanceof Error && e.message ? e.message : 'Impossible de charger ce profil.';
+        e instanceof Error && e.message ? e.message : 'Unable to load this profile.';
       Alert.alert('Error', message);
     } finally {
       setLoadingInitial(false);
@@ -262,6 +272,9 @@ export default function PublicProfileScreen() {
       if (reset) {
         setClosetHasMore(true);
         setClosetOffset(0);
+        if (!myId || myId !== sellerId) {
+          setClosetDraftItems([]);
+        }
       }
 
       closetLoadingRef.current = true;
@@ -281,6 +294,17 @@ export default function PublicProfileScreen() {
         setClosetItems((prev) => (reset ? rows : [...prev, ...rows]));
         setClosetOffset(nextOffset + rows.length);
         setClosetHasMore(rows.length === PAGE_SIZE);
+
+        if (reset && myId && myId === sellerId) {
+          const draftRes = await getSellerDraftListingsForCloset(sellerId);
+          if (draftRes.error) {
+            // eslint-disable-next-line no-console
+            console.log('Erreur chargement brouillons:', draftRes.error);
+            setClosetDraftItems([]);
+          } else {
+            setClosetDraftItems(draftRes.data ?? []);
+          }
+        }
       } catch (e) {
         // eslint-disable-next-line no-console
         console.log('Erreur chargement closet:', e);
@@ -289,7 +313,7 @@ export default function PublicProfileScreen() {
         setClosetLoadingMore(false);
       }
     },
-    [closetHasMore, closetOffset, profile?.id]
+    [closetHasMore, closetOffset, profile?.id, myId]
   );
 
   const loadReviews = useCallback(async () => {
@@ -357,7 +381,7 @@ export default function PublicProfileScreen() {
     if (!profile?.id) return;
     void loadClosetPageRef.current({ reset: true });
     void loadReviewsRef.current();
-  }, [profile?.id]);
+  }, [profile?.id, myId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -373,15 +397,15 @@ export default function PublicProfileScreen() {
   const openMenu = useCallback(() => {
     Alert.alert('Options', '', [
       {
-        text: 'Signaler',
-        onPress: () => Alert.alert('Merci', 'Le signalement sera disponible bientôt.')
+        text: 'Report',
+        onPress: () => Alert.alert('Thanks', 'Reporting will be available soon.')
       },
       {
-        text: 'Bloquer',
+        text: 'Block',
         style: 'destructive',
-        onPress: () => Alert.alert('Bloquer', 'Le blocage sera disponible bientôt.')
+        onPress: () => Alert.alert('Block', 'Blocking will be available soon.')
       },
-      { text: 'Annuler', style: 'cancel' }
+      { text: 'Cancel', style: 'cancel' }
     ]);
   }, []);
 
@@ -424,7 +448,7 @@ export default function PublicProfileScreen() {
       setIsFollowing(prev);
       setFollowersCount(prevFollowers);
       const message =
-        e instanceof Error && e.message ? e.message : "Impossible de mettre à jour l'abonnement.";
+        e instanceof Error && e.message ? e.message : 'Unable to update follow status.';
       Alert.alert('Error', message);
     } finally {
       setTogglingFollow(false);
@@ -440,14 +464,17 @@ export default function PublicProfileScreen() {
 
     const firstListing = closetItems[0] ?? null;
     if (!firstListing?.id) {
-      Alert.alert('Message', "Ce vendeur n'a pas d'annonce active pour démarrer une conversation.");
+      Alert.alert(
+        'Message',
+        'This seller has no active listing to start a conversation from.'
+      );
       return;
     }
 
     void (async () => {
       const { data, error } = await createOrGetThreadForListing(firstListing.id, profile.id);
       if (error || !data) {
-        Alert.alert('Error', error ?? 'Impossible de créer la conversation.');
+        Alert.alert('Error', error ?? 'Unable to create conversation.');
         return;
       }
       router.push({ pathname: '/tabs/messages/[id]', params: { id: data.id } });
@@ -464,26 +491,146 @@ export default function PublicProfileScreen() {
     [profile?.created_at]
   );
 
-  const closetCountLabel = useMemo(() => `${closetItems.length} article${closetItems.length > 1 ? 's' : ''}`, [closetItems.length]);
+  const closetListData = useMemo(() => {
+    if (isMe) return [...closetDraftItems, ...closetItems];
+    return closetItems;
+  }, [closetDraftItems, closetItems, isMe]);
+
+  const closetCountLabel = useMemo(() => {
+    const n = isMe ? closetDraftItems.length + closetItems.length : closetItems.length;
+    return `${n} item${n !== 1 ? 's' : ''}`;
+  }, [closetDraftItems.length, closetItems.length, isMe]);
+
+  const closetCardWidth = useMemo(() => {
+    const { width } = Dimensions.get('window');
+    const pad = theme.spacing.screenPaddingX * 2;
+    const gap = 8;
+    return (width - pad - gap) / 2;
+  }, []);
+
+  const handleDeleteClosetListing = useCallback(async (listingId: string) => {
+    let removedSnapshot: FeedListing | undefined;
+    setClosetItems((prev) => {
+      removedSnapshot = prev.find((x) => x.id === listingId);
+      return prev.filter((x) => x.id !== listingId);
+    });
+
+    const { error } = await deleteListing(listingId);
+    if (error) {
+      if (removedSnapshot) {
+        setClosetItems((prev) =>
+          prev.some((x) => x.id === listingId) ? prev : [removedSnapshot, ...prev]
+        );
+      }
+      if (isListingDeleteBlockedByOrders(error)) {
+        Alert.alert('Suppression impossible', error, [
+          { text: 'OK', style: 'cancel' },
+          {
+            text: "Désactiver l'annonce",
+            onPress: () => {
+              void (async () => {
+                const { error: deactErr } = await deactivateListingToDraft(listingId);
+                if (deactErr) {
+                  Alert.alert('Erreur', deactErr);
+                  return;
+                }
+                setClosetItems((prev) => prev.filter((x) => x.id !== listingId));
+                setClosetDraftItems((prev) => prev.filter((x) => x.id !== listingId));
+                setClosetOwnerMenuListing(null);
+              })();
+            }
+          }
+        ]);
+        throw new Error(error);
+      }
+      Alert.alert('Error', error);
+      throw new Error(error);
+    }
+  }, []);
+
+  const handleDeactivateClosetListing = useCallback(async () => {
+    const listing = closetOwnerMenuListing;
+    if (!listing) return;
+    const { error } = await deactivateListingToDraft(listing.id);
+    if (error) {
+      Alert.alert('Erreur', error);
+      throw new Error(error);
+    }
+    setClosetItems((prev) => prev.filter((x) => x.id !== listing.id));
+  }, [closetOwnerMenuListing]);
+
+  const handlePermanentDeleteDraftRequest = useCallback((listingId: string) => {
+    setClosetOwnerMenuListing(null);
+    setTimeout(() => {
+      Alert.alert('Cette action est irréversible.', 'Supprimer définitivement ?', [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              let removedSnapshot: FeedListing | undefined;
+              setClosetDraftItems((prev) => {
+                removedSnapshot = prev.find((x) => x.id === listingId);
+                return prev.filter((x) => x.id !== listingId);
+              });
+              const { error } = await deleteListing(listingId);
+              if (error) {
+                if (removedSnapshot) {
+                  setClosetDraftItems((prev) =>
+                    prev.some((x) => x.id === listingId) ? prev : [...prev, removedSnapshot]
+                  );
+                }
+                Alert.alert('Suppression impossible', error);
+                return;
+              }
+            })();
+          }
+        }
+      ]);
+    }, 300);
+  }, []);
+
+  const openClosetListingMenu = useCallback((listing: FeedListing) => {
+    if (!isMe) return;
+    setClosetOwnerMenuListing(listing);
+  }, [isMe]);
 
   const renderClosetItem = useCallback(
     ({ item }: { item: FeedListing }) => (
       <View style={styles.gridItem}>
-        <ProductCard
-          listingId={item.id}
-          title={item.title}
-          price={Number(item.price)}
-          currency="CHF"
-          brand={(item as any)?.brand ?? undefined}
-          size={(item as any)?.size ?? undefined}
-          condition={item.condition ?? undefined}
-          imageUrl={item.cover_photo_url}
-          onPress={() => router.push({ pathname: '/tabs/feed/[id]', params: { id: item.id } })}
-          imageRatio={1}
-        />
+        <View style={styles.closetCardWrap}>
+          <ProductCard
+            listingId={item.id}
+            sellerId={item.seller_id}
+            title={item.title}
+            price={Number(item.price)}
+            currency="CHF"
+            brand={(item as any)?.brand ?? undefined}
+            size={(item as any)?.size ?? undefined}
+            condition={item.condition ?? undefined}
+            imageUrl={item.cover_photo_url}
+            cardWidth={closetCardWidth}
+            onPress={() => router.push({ pathname: '/tabs/feed/[id]', params: { id: item.id } })}
+            imageRatio={1}
+          />
+          {isMe ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Listing menu"
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              style={styles.closetMenuBtn}
+              onPress={() => openClosetListingMenu(item)}
+            >
+              <Text variant="captionSm" style={styles.closetMenuBtnText}>
+                •••
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     ),
-    [router]
+    [closetCardWidth, isMe, openClosetListingMenu, router]
   );
 
   const renderReviewStars = useCallback((value: number) => {
@@ -672,7 +819,7 @@ export default function PublicProfileScreen() {
               {closetCountLabel}
             </Text>
 
-            {loadingInitial && closetItems.length === 0 ? (
+            {loadingInitial && closetListData.length === 0 ? (
               <View style={styles.skeletonGrid}>
                 {[0, 1, 2, 3].map((k) => (
                   <View key={k} style={styles.skeletonCard} />
@@ -680,7 +827,7 @@ export default function PublicProfileScreen() {
               </View>
             ) : (
               <FlatList
-                data={closetItems}
+                data={closetListData}
                 keyExtractor={(it) => it.id}
                 numColumns={2}
                 renderItem={renderClosetItem}
@@ -749,6 +896,28 @@ export default function PublicProfileScreen() {
 
         <View style={{ height: 28 }} />
       </ScrollView>
+
+      <OwnerListingBottomSheet
+        visible={!!closetOwnerMenuListing}
+        onClose={() => setClosetOwnerMenuListing(null)}
+        onEdit={() => {
+          if (closetOwnerMenuListing) {
+            router.push(`/tabs/profile/edit-listing/${closetOwnerMenuListing.id}` as any);
+          }
+        }}
+        onDeleteConfirmed={async () => {
+          if (!closetOwnerMenuListing) return;
+          await handleDeleteClosetListing(closetOwnerMenuListing.id);
+        }}
+        onDeactivateListing={
+          String(closetOwnerMenuListing?.status ?? '').toLowerCase() === 'draft'
+            ? undefined
+            : handleDeactivateClosetListing
+        }
+        activeListingId={closetOwnerMenuListing?.id ?? null}
+        listingStatus={closetOwnerMenuListing?.status ?? null}
+        onRequestPermanentDeleteDraft={handlePermanentDeleteDraftRequest}
+      />
     </SafeAreaView>
   );
 }
@@ -982,6 +1151,29 @@ const styles = StyleSheet.create({
   gridItem: {
     flex: 1,
     marginBottom: 8
+  },
+  closetCardWrap: {
+    position: 'relative'
+  },
+  closetMenuBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 10,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border
+  },
+  closetMenuBtnText: {
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    letterSpacing: 0.5
   },
   loadingMore: {
     paddingVertical: 16

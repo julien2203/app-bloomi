@@ -117,7 +117,7 @@ export default function SellConditionScreen() {
           ]}
         >
           <Button
-            title="Confirmer"
+            title="Confirm"
             onPress={handleConfirm}
             variant="primary"
             disabled={!selected}

@@ -74,12 +74,20 @@ export default function CategoryDetailScreen() {
       try {
         setLoading(true);
         const data = await getChildCategories(parentId);
-        setCategories(
-          (data as any[]).map((row) => ({
-            id: row.id as number,
-            name: row.name as string
-          }))
-        );
+        let mapped = (data as any[]).map((row) => ({
+          id: row.id as number,
+          name: row.name as string
+        }));
+
+        const normalizedHeader = String(headerTitle).trim().toLowerCase();
+        const isWomenOthers =
+          gender === 'femme' && (normalizedHeader === 'other' || normalizedHeader === 'others');
+
+        if (isWomenOthers) {
+          mapped = mapped.filter((cat) => cat.name.trim().toLowerCase() !== 'influencers picks');
+        }
+
+        setCategories(mapped);
       } catch {
         setCategories([]);
       } finally {

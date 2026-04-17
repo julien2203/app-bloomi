@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Keyboard,
+  KeyboardEvent,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,7 +18,6 @@ import { Screen } from '../../components/ui/Screen';
 import { Text as UiText } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
-import { theme } from '../../lib/theme';
 import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { getPriceBounds } from '../../lib/api';
@@ -61,7 +61,7 @@ export default function PriceFilterScreen() {
   const [loadingBounds, setLoadingBounds] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isToFocused, setIsToFocused] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const applyOption = (option: PriceOption) => {
     setSelectedOption(option.label);
@@ -106,8 +106,16 @@ export default function PriceFilterScreen() {
   };
 
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const handleShow = (event: KeyboardEvent) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    };
+    const handleHide = () => {
+      setKeyboardHeight(0);
+    };
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, handleShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleHide);
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -144,7 +152,7 @@ export default function PriceFilterScreen() {
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'android' ? 'height' : undefined}
         style={styles.kav}
         keyboardVerticalOffset={0}
       >
@@ -261,7 +269,8 @@ export default function PriceFilterScreen() {
             style={[
               styles.footer,
               {
-                paddingBottom: (keyboardVisible ? 0 : 24) + insets.bottom
+                paddingBottom:
+                  (keyboardHeight > 0 ? keyboardHeight + 8 : 24) + insets.bottom
               }
             ]}
           >

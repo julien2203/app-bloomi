@@ -60,7 +60,7 @@ export default function SellPriceScreen() {
 
           <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
             <Button
-              title="Confirmer"
+              title="Confirm"
               onPress={handleConfirm}
               variant="primary"
               textStyle={{ fontWeight: '700' }}

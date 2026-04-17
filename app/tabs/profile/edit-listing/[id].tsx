@@ -52,7 +52,7 @@ export default function EditListingScreen() {
 
   useEffect(() => {
     if (!id) {
-      setError(new Error('ID manquant'));
+      setError(new Error('Missing ID'));
       setLoading(false);
       return;
     }
@@ -70,7 +70,7 @@ export default function EditListingScreen() {
         }
 
         if (!data) {
-          setError(new Error('Annonce introuvable'));
+          setError(new Error('Listing not found'));
           setListing(null);
           return;
         }
@@ -97,7 +97,7 @@ export default function EditListingScreen() {
         setField('size', data.size ?? undefined);
         setField('price', data.price);
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Erreur inconnue'));
+        setError(err instanceof Error ? err : new Error('Unknown error'));
         setListing(null);
       } finally {
         setLoading(false);
@@ -111,8 +111,8 @@ export default function EditListingScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        'Permission requise',
-        'Nous avons besoin de l\'accès à vos photos pour modifier une annonce.'
+        'Permission required',
+        'We need access to your photos to edit a listing.'
       );
       return false;
     }
@@ -154,7 +154,7 @@ export default function EditListingScreen() {
     const priceNumber = priceFromStore ?? rawPriceNumber;
 
     if (Number.isNaN(priceNumber) || priceNumber <= 0) {
-      Alert.alert('Erreur', 'Veuillez saisir un prix valide.');
+      Alert.alert('Error', 'Please enter a valid price.');
       return;
     }
 
@@ -175,25 +175,25 @@ export default function EditListingScreen() {
 
       if (apiError) {
         setError(apiError);
-        Alert.alert('Erreur', apiError.message);
+        Alert.alert('Error', apiError.message);
         return;
       }
 
       if (!data) {
-        Alert.alert('Erreur', 'Impossible de mettre à jour l’annonce.');
+        Alert.alert('Error', 'Unable to update listing.');
         return;
       }
 
-      Alert.alert('Succès', 'Annonce mise à jour avec succès.', [
+      Alert.alert('Success', 'Listing updated successfully.', [
         {
           text: 'OK',
           onPress: () => router.back()
         }
       ]);
     } catch (err) {
-      const finalError = err instanceof Error ? err : new Error('Erreur inconnue');
+      const finalError = err instanceof Error ? err : new Error('Unknown error');
       setError(finalError);
-      Alert.alert('Erreur', finalError.message);
+      Alert.alert('Error', finalError.message);
     } finally {
       setSaving(false);
     }
@@ -206,7 +206,7 @@ export default function EditListingScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement de l&apos;annonce...</Text>
+            <Text style={styles.loadingText}>Loading listing...</Text>
           </View>
         </SafeAreaView>
       </>
@@ -220,10 +220,10 @@ export default function EditListingScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.centerContent}>
             <Text style={styles.errorTitle}>
-              {error?.message || 'Annonce introuvable'}
+              {error?.message || 'Listing not found'}
             </Text>
             <Button
-              title="Retour"
+              title="Back"
               onPress={() => router.back()}
               variant="primary-green"
               style={styles.backButton}
@@ -365,7 +365,7 @@ export default function EditListingScreen() {
               <Text style={styles.fieldLabel}>City</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="Ex: Genève"
+                placeholder="e.g. Geneva"
                 placeholderTextColor={theme.colors.textSecondary}
                 value={city}
                 onChangeText={setCity}

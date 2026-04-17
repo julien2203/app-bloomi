@@ -319,7 +319,7 @@ export default function SellBrandScreen() {
           ]}
         >
           <Button
-            title="Confirmer"
+            title="Confirm"
             onPress={handleConfirm}
             variant="primary"
             style={styles.showResultButton}

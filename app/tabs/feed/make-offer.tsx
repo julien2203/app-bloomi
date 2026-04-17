@@ -44,7 +44,7 @@ export default function MakeOfferScreen() {
   useEffect(() => {
     const load = async () => {
       if (!listingId) {
-        setError('Annonce introuvable');
+        setError('Listing not found');
         setLoading(false);
         return;
       }
@@ -52,13 +52,13 @@ export default function MakeOfferScreen() {
         setError(null);
         const { data, error: fetchError } = await getListingById(listingId);
         if (fetchError || !data) {
-          setError(fetchError?.message || 'Annonce introuvable');
+          setError(fetchError?.message || 'Listing not found');
           setListing(null);
         } else {
           setListing(data);
         }
       } catch {
-        setError("Impossible de charger l'annonce.");
+        setError('Unable to load listing.');
         setListing(null);
       } finally {
         setLoading(false);
@@ -125,7 +125,7 @@ export default function MakeOfferScreen() {
       if (threadError || !thread) {
         // eslint-disable-next-line no-console
         console.warn('Erreur thread pour offre:', threadError);
-        setError("Impossible d'envoyer l'offre pour le moment.");
+        setError('Unable to send offer right now.');
         return;
       }
 
@@ -138,7 +138,7 @@ export default function MakeOfferScreen() {
       if (msgError) {
         // eslint-disable-next-line no-console
         console.warn('Erreur message offre:', msgError);
-        setError("Impossible d'envoyer l'offre pour le moment.");
+        setError('Unable to send offer right now.');
         return;
       }
 
@@ -159,7 +159,7 @@ export default function MakeOfferScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
             <Text variant="captionSm" color="textSecondary" style={styles.loadingText}>
-              Chargement de l&apos;offre...
+              Loading offer...
             </Text>
           </View>
         </SafeAreaView>
@@ -174,9 +174,9 @@ export default function MakeOfferScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.center}>
             <Text variant="body" style={styles.errorText}>
-              {error || 'Annonce introuvable.'}
+              {error || 'Listing not found.'}
             </Text>
-            <Button title="Retour" onPress={handleBack} variant="secondary" />
+            <Button title="Back" onPress={handleBack} variant="secondary" />
           </View>
         </SafeAreaView>
       </>
@@ -260,7 +260,7 @@ export default function MakeOfferScreen() {
                     {quickOffers.minus10.total}CHF Total
                   </Text>
                   <Text variant="captionSm" style={styles.quickDiscount}>
-                    10% DE RÉDUCTION
+                    10% OFF
                   </Text>
                 </TouchableOpacity>
 
@@ -280,7 +280,7 @@ export default function MakeOfferScreen() {
                     {quickOffers.minus20.total}CHF Total
                   </Text>
                   <Text variant="captionSm" style={styles.quickDiscount}>
-                    20% DE RÉDUCTION
+                    20% OFF
                   </Text>
                 </TouchableOpacity>
 
@@ -300,7 +300,7 @@ export default function MakeOfferScreen() {
                     Other
                   </Text>
                   <Text variant="captionSm" style={styles.quickDiscount}>
-                    PROPOSE UN PRIX
+                    NAME YOUR PRICE
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -350,7 +350,7 @@ export default function MakeOfferScreen() {
               ]}
             >
               <Button
-                title="Proposer"
+                title="Send offer"
                 onPress={handleSubmit}
                 variant="primary"
                 disabled={!isValidAmount || submitting}

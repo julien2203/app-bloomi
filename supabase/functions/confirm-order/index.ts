@@ -1,5 +1,9 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  findOrCreateThreadForOrderChat,
+  insertThreadSystemMessage,
+} from "../_shared/orderChatSystemMessage.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -303,18 +307,47 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Best-effort: notifier le vendeur (ne doit pas casser le flow principal)
+    try {
+      const threadId = await findOrCreateThreadForOrderChat(supabaseAdmin, {
+        listingId: row.listing_id,
+        buyerId: row.buyer_id,
+        sellerId: row.seller_id,
+      });
+      if (threadId) {
+        await insertThreadSystemMessage(
+          supabaseAdmin,
+          threadId,
+          "✅ Réception confirmée — La transaction est terminée. Merci d'utiliser Bloomi !",
+        );
+      }
+    } catch {
+      // silent
+    }
+
+    // Best-effort: notify buyer + seller after successful transfer (must not break main flow)
+    try {
+      await sendNotification({
+        supabaseUrl,
+        supabaseServiceRoleKey,
+        user_id: row.buyer_id,
+        title: "✅ Transaction terminée, bien joué !",
+        body: "Votre achat est confirmé. Profitez bien !",
+        data: { order_id: row.id },
+      });
+    } catch {
+      // silent
+    }
     try {
       await sendNotification({
         supabaseUrl,
         supabaseServiceRoleKey,
         user_id: row.seller_id,
         title: "💰 Paiement reçu, bravo !",
-        body: "La transaction est terminée, les fonds ont été transférés.",
+        body: "Le paiement a été transféré sur votre compte.",
         data: { order_id: row.id },
       });
-    } catch (e) {
-      console.warn("Erreur envoi notification vendeur:", e);
+    } catch {
+      // silent
     }
 
     return jsonResponse({ success: true });

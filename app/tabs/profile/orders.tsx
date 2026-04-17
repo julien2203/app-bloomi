@@ -4,17 +4,24 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text as RNText,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../lib/supabase';
 import { SUPABASE_URL } from '../../../lib/env';
+import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
@@ -31,6 +38,12 @@ type OrderRow = {
   payment_status: string | null;
   seller_amount: number | string | null;
   created_at: string | null;
+  delivery_mode?: string | null;
+  shipping_address?: string | null;
+  shipping_city?: string | null;
+  shipping_postal_code?: string | null;
+  shipping_country?: string | null;
+  tracking_number?: string | null;
   listing_title?: string | null;
   listing_price?: number | string | null;
   listing_cover_photo_url?: string | null;
@@ -50,6 +63,13 @@ type EnrichedOrder = OrderRow & {
   listing: ListingForOrder | null;
   coverPhotoUrl: string | null;
   displayAmount: string;
+};
+
+type SenderAddress = {
+  street: string;
+  city: string;
+  zip: string;
+  country: string;
 };
 
 function formatAmount(amount: number | string | null | undefined) {
@@ -79,6 +99,22 @@ export default function OrdersScreen() {
   const [cancellingOrderIds, setCancellingOrderIds] = useState<Set<string>>(
     () => new Set()
   );
+  const [generatingLabelOrderIds, setGeneratingLabelOrderIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [markingShippedOrderIds, setMarkingShippedOrderIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [reviewedOrderIds, setReviewedOrderIds] = useState<Set<string>>(() => new Set());
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [addressModalOrder, setAddressModalOrder] = useState<EnrichedOrder | null>(null);
+  const [addressModalSellerName, setAddressModalSellerName] = useState('Vendeur');
+  const [senderStreetInput, setSenderStreetInput] = useState('');
+  const [senderCityInput, setSenderCityInput] = useState('');
+  const [senderZipInput, setSenderZipInput] = useState('');
+  const [senderCountryInput, setSenderCountryInput] = useState('');
+  const [saveSenderAddress, setSaveSenderAddress] = useState(true);
+  const [submittingAddressModal, setSubmittingAddressModal] = useState(false);
 
   const userId = user?.id ?? null;
 
@@ -105,6 +141,12 @@ export default function OrdersScreen() {
           payment_status,
           seller_amount,
           created_at,
+          delivery_mode,
+          shipping_address,
+          shipping_city,
+          shipping_postal_code,
+          shipping_country,
+          tracking_number,
           listing_title,
           listing_price,
           listing_cover_photo_url,
@@ -177,6 +219,27 @@ export default function OrdersScreen() {
       });
 
       setOrders(enriched);
+
+      if (rows.length > 0) {
+        const orderIds = rows.map((row) => row.id);
+        const { data: reviewRows, error: reviewErr } = await supabase
+          .from('reviews')
+          .select('order_id')
+          .eq('reviewer_id', userId)
+          .in('order_id', orderIds);
+        if (reviewErr) {
+          // eslint-disable-next-line no-console
+          console.log('Erreur chargement reviews orders:', reviewErr);
+          setReviewedOrderIds(new Set());
+        } else {
+          const ids = (reviewRows ?? [])
+            .map((r: any) => String(r.order_id ?? '').trim())
+            .filter(Boolean);
+          setReviewedOrderIds(new Set(ids));
+        }
+      } else {
+        setReviewedOrderIds(new Set());
+      }
     } catch (e) {
       // Log détaillé pour debug Supabase/SQL
       // eslint-disable-next-line no-console
@@ -210,7 +273,7 @@ export default function OrdersScreen() {
       tab === 'purchases' &&
       userId != null &&
       order.buyer_id === userId &&
-      String(order.status ?? '').toLowerCase() === 'pending',
+      String(order.status ?? '').toLowerCase() === 'shipped',
     [tab, userId]
   );
 
@@ -220,16 +283,26 @@ export default function OrdersScreen() {
     [userId]
   );
 
+  const canGenerateShippingLabel = useCallback(
+    (order: EnrichedOrder) =>
+      tab === 'sales' &&
+      userId != null &&
+      order.seller_id === userId &&
+      String(order.delivery_mode ?? '').toLowerCase() !== 'pickup' &&
+      (String(order.status ?? '').toLowerCase() === 'pending' ||
+        (String(order.status ?? '').toLowerCase() === 'shipped' &&
+          !String(order.tracking_number ?? '').trim())),
+    [tab, userId]
+  );
+
   const confirmReception = useCallback(
-    async (orderId: string) => {
+    async (order: EnrichedOrder) => {
+      const orderId = order.id;
       if (!userId) return;
       if (confirmingOrderIds.has(orderId)) return;
 
       setConfirmingOrderIds((prev) => new Set(prev).add(orderId));
       try {
-        const order = orders.find((o) => o.id === orderId) ?? null;
-        const reviewedId = order?.seller_id ?? null;
-
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
         if (!accessToken) {
@@ -264,30 +337,14 @@ export default function OrdersScreen() {
           );
         }
 
-        if (reviewedId) {
-          const { data: reviewedProfile, error: reviewedErr } = await supabase
-            .from('profiles')
-            .select('id, display_name, avatar_url')
-            .eq('id', reviewedId)
-            .maybeSingle();
-
-          if (reviewedErr) {
-            // eslint-disable-next-line no-console
-            console.log('Erreur chargement profil à noter:', reviewedErr);
-          }
-
-          router.push({
-            pathname: '/tabs/profile/leave-review',
-            params: {
-              order_id: orderId,
-              reviewed_id: reviewedId,
-              reviewed_name: (reviewedProfile as any)?.display_name ?? 'Seller',
-              reviewed_avatar: (reviewedProfile as any)?.avatar_url ?? ''
-            }
-          });
-        }
-
         await loadOrders();
+
+        void sendPushNotificationWithUserJwt({
+          user_id: order.buyer_id,
+          title: '⭐ Donne ton avis sur ton achat',
+          body: "Comment s'est passée ta commande ? Laisse un avis au vendeur !",
+          data: { order_id: orderId, listing_id: order.listing_id }
+        });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.log('Erreur confirmReception:', e);
@@ -304,7 +361,7 @@ export default function OrdersScreen() {
         });
       }
     },
-    [confirmingOrderIds, loadOrders, orders, router, userId]
+    [confirmingOrderIds, loadOrders, userId]
   );
 
   const cancelOrder = useCallback(
@@ -381,18 +438,377 @@ export default function OrdersScreen() {
     [cancellingOrderIds, loadOrders, userId]
   );
 
+  const invokeGenerateShippingLabel = useCallback(
+    async (order: EnrichedOrder, sender: SenderAddress, sellerName: string) => {
+      const recipientStreet = String(order.shipping_address ?? '').trim();
+      const recipientCity = String(order.shipping_city ?? '').trim();
+      const recipientZip = String(order.shipping_postal_code ?? '').trim();
+      const recipientCountry = String(order.shipping_country ?? '')
+        .trim()
+        .toUpperCase();
+
+      if (!recipientStreet || !recipientCity || !recipientZip || !recipientCountry) {
+        throw new Error('Shipping address is incomplete for this order.');
+      }
+
+      const { data: buyerProfile, error: buyerErr } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', order.buyer_id)
+        .maybeSingle();
+
+      if (buyerErr) {
+        throw new Error(buyerErr.message);
+      }
+
+      const buyerName = String((buyerProfile as any)?.display_name ?? '').trim() || 'Buyer';
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error('Session expired. Please sign in again.');
+      }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/generate-shipping-label`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            order_id: order.id,
+            sender_name: sellerName,
+            sender_street: sender.street,
+            sender_zip: sender.zip,
+            sender_city: sender.city,
+            sender_country: sender.country,
+            recipient_name: buyerName,
+            recipient_street: recipientStreet,
+            recipient_zip: recipientZip,
+            recipient_city: recipientCity,
+            recipient_country: recipientCountry
+          })
+        }
+      );
+
+      const responseText = await response.text();
+      let data: any = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok || (data as any)?.success !== true) {
+        throw new Error(
+          (data as any)?.error ??
+            (data as any)?.details ??
+            responseText ??
+            'generate-shipping-label: failed'
+        );
+      }
+
+      const trackingNumber = String((data as any)?.tracking_number ?? '').trim() || null;
+      if (trackingNumber) {
+        setOrders((prev) =>
+          prev.map((row) =>
+            row.id === order.id ? { ...row, tracking_number: trackingNumber } : row
+          )
+        );
+      }
+
+      const labelPdfBase64 = String((data as any)?.label_pdf_base64 ?? '').trim();
+      const labelUrl = String((data as any)?.label_url ?? '').trim();
+
+      if (labelPdfBase64) {
+        const cacheDir = FileSystem.cacheDirectory;
+        if (!cacheDir) {
+          throw new Error('Cache directory unavailable');
+        }
+        const fileUri = `${cacheDir}etiquette_bloomi.pdf`;
+        await FileSystem.writeAsStringAsync(fileUri, labelPdfBase64, {
+          encoding: FileSystem.EncodingType.Base64
+        });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Étiquette La Poste'
+          });
+        } else {
+          await Print.printAsync({ uri: fileUri });
+        }
+      } else if (labelUrl) {
+        await Linking.openURL(labelUrl);
+      } else {
+        Alert.alert('Success', 'Label was generated, but no document was returned.');
+      }
+
+      await loadOrders();
+    },
+    [loadOrders]
+  );
+
+  const generateShippingLabel = useCallback(
+    async (order: EnrichedOrder) => {
+      if (!userId) return;
+      if (generatingLabelOrderIds.has(order.id)) return;
+
+      setGeneratingLabelOrderIds((prev) => new Set(prev).add(order.id));
+      try {
+        const { data: sellerProfile, error: sellerErr } = await supabase
+          .from('profiles')
+          .select('display_name, street, postal_code, city, country')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (sellerErr) {
+          throw new Error(sellerErr.message);
+        }
+
+        const sellerName =
+          String((sellerProfile as any)?.display_name ?? '').trim() ||
+          'Vendeur';
+        const sellerStreet = String((sellerProfile as any)?.street ?? '').trim();
+        const sellerCity = String((sellerProfile as any)?.city ?? '').trim();
+        const sellerZip = String((sellerProfile as any)?.postal_code ?? '').trim();
+        const sellerCountry = String((sellerProfile as any)?.country ?? '')
+          .trim()
+          .toUpperCase();
+
+        if (!sellerStreet || !sellerCity || !sellerZip || !sellerCountry) {
+          setAddressModalOrder(order);
+          setAddressModalSellerName(sellerName);
+          setSenderStreetInput(sellerStreet);
+          setSenderCityInput(sellerCity);
+          setSenderZipInput(sellerZip);
+          setSenderCountryInput(sellerCountry);
+          setSaveSenderAddress(true);
+          setAddressModalVisible(true);
+          return;
+        }
+
+        await invokeGenerateShippingLabel(
+          order,
+          {
+            street: sellerStreet,
+            city: sellerCity,
+            zip: sellerZip,
+            country: sellerCountry
+          },
+          sellerName
+        );
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.log('Erreur generateShippingLabel:', e);
+        const message =
+          e instanceof Error && e.message
+            ? `Could not generate label: ${e.message}`
+            : 'Could not generate label.';
+        Alert.alert('Error', message);
+      } finally {
+        setGeneratingLabelOrderIds((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      }
+    },
+    [generatingLabelOrderIds, invokeGenerateShippingLabel, userId]
+  );
+
+  const submitSenderAddressModal = useCallback(async () => {
+    if (!addressModalOrder || !userId || submittingAddressModal) return;
+
+    const street = senderStreetInput.trim();
+    const city = senderCityInput.trim();
+    const zip = senderZipInput.trim();
+    const country = senderCountryInput.trim().toUpperCase();
+
+    if (!street || !city || !zip || !country) {
+      Alert.alert('Incomplete address', 'Please fill in street, city, postal code, and country.');
+      return;
+    }
+
+    setSubmittingAddressModal(true);
+    try {
+      if (saveSenderAddress) {
+        const { error: updateErr } = await supabase
+          .from('profiles')
+          .update({
+            street,
+            city,
+            postal_code: zip,
+            country
+          })
+          .eq('id', userId);
+        if (updateErr) {
+          throw new Error(updateErr.message);
+        }
+      }
+
+      await invokeGenerateShippingLabel(
+        addressModalOrder,
+        { street, city, zip, country },
+        addressModalSellerName
+      );
+
+      setAddressModalVisible(false);
+      setAddressModalOrder(null);
+    } catch (e) {
+      const message =
+        e instanceof Error && e.message
+          ? `Could not generate label: ${e.message}`
+          : 'Could not generate label.';
+      Alert.alert('Error', message);
+    } finally {
+      setSubmittingAddressModal(false);
+      setGeneratingLabelOrderIds((prev) => {
+        if (!addressModalOrder) return prev;
+        const next = new Set(prev);
+        next.delete(addressModalOrder.id);
+        return next;
+      });
+    }
+  }, [
+    addressModalOrder,
+    addressModalSellerName,
+    invokeGenerateShippingLabel,
+    saveSenderAddress,
+    senderCityInput,
+    senderCountryInput,
+    senderStreetInput,
+    senderZipInput,
+    submittingAddressModal,
+    userId
+  ]);
+
+  const markAsShipped = useCallback(
+    async (order: EnrichedOrder) => {
+      if (!userId) return;
+      if (markingShippedOrderIds.has(order.id)) return;
+
+      setMarkingShippedOrderIds((prev) => new Set(prev).add(order.id));
+      try {
+        const { error } = await supabase
+          .from('orders')
+          .update({ status: 'shipped', shipped_at: new Date().toISOString() })
+          .eq('id', order.id)
+          .eq('seller_id', userId);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        await loadOrders();
+
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (accessToken) {
+            void fetch(`${SUPABASE_URL}/functions/v1/insert-order-shipped-chat-message`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ order_id: order.id })
+            });
+          }
+        } catch {
+          // silencieux — message chat best-effort
+        }
+
+        void sendPushNotificationWithUserJwt({
+          user_id: order.buyer_id,
+          title: "📦 C'est parti ! Ton colis est en route",
+          body: 'Votre vendeur a expédié votre commande.',
+          data: { order_id: order.id, listing_id: order.listing_id }
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.log('Erreur markAsShipped:', e);
+        const message =
+          e instanceof Error && e.message
+            ? `Could not mark order as shipped: ${e.message}`
+            : 'Could not mark order as shipped.';
+        Alert.alert('Error', message);
+      } finally {
+        setMarkingShippedOrderIds((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      }
+    },
+    [loadOrders, markingShippedOrderIds, userId]
+  );
+
+  const leaveReview = useCallback(
+    async (order: EnrichedOrder) => {
+      const reviewedId = tab === 'purchases' ? order.seller_id : order.buyer_id;
+      if (!reviewedId) return;
+
+      const { data: reviewedProfile, error: reviewedErr } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .eq('id', reviewedId)
+        .maybeSingle();
+
+      if (reviewedErr) {
+        // eslint-disable-next-line no-console
+        console.log('Erreur chargement profil à noter:', reviewedErr);
+      }
+
+      router.push({
+        pathname: '/tabs/profile/leave-review',
+        params: {
+          order_id: order.id,
+          reviewed_id: reviewedId,
+          reviewed_name: (reviewedProfile as any)?.display_name ?? 'User',
+          reviewed_avatar: (reviewedProfile as any)?.avatar_url ?? ''
+        }
+      });
+    },
+    [router, tab]
+  );
+
+  const followPackage = useCallback(async (trackingNumber: string) => {
+    const trimmed = String(trackingNumber ?? '').trim();
+    if (!trimmed) return;
+    await Linking.openURL(
+      `https://service.post.ch/ekp-web/ui/list?lang=fr#/item/${encodeURIComponent(trimmed)}`
+    );
+  }, []);
+
   const renderOrderItem = useCallback(
     ({ item }: { item: EnrichedOrder }) => {
       const statusNorm = String(item.status ?? 'unknown').toLowerCase();
-      const statusText = String(item.status ?? 'unknown');
-      const paymentStatusText = item.payment_status
-        ? ` • ${item.payment_status}`
-        : '';
-
+      const isPurchasesTab = tab === 'purchases';
       const showConfirm = canConfirmReception(item);
       const isConfirming = confirmingOrderIds.has(item.id);
       const showCancel = canCancelOrder(item);
       const isCancelling = cancellingOrderIds.has(item.id);
+      const showGenerateLabel = canGenerateShippingLabel(item);
+      const isGeneratingLabel = generatingLabelOrderIds.has(item.id);
+      const isMarkingShipped = markingShippedOrderIds.has(item.id);
+      const trackingNumber = String(item.tracking_number ?? '').trim();
+      const hasTracking = Boolean(trackingNumber);
+      const hasReviewed = reviewedOrderIds.has(item.id);
+      const showLeaveReview = statusNorm === 'completed' && !hasReviewed;
+
+      let statusText = String(item.status ?? 'unknown');
+      if (isPurchasesTab) {
+        if (statusNorm === 'pending') statusText = 'Awaiting shipment';
+        if (statusNorm === 'shipped') statusText = 'Package on the way 📦';
+        if (statusNorm === 'completed') statusText = 'Order completed ✅';
+        if (statusNorm === 'cancelled') statusText = 'Order cancelled';
+      } else {
+        if (statusNorm === 'shipped') statusText = 'Shipped ✅';
+        if (statusNorm === 'completed') statusText = 'Completed ✅ — Payment received';
+        if (statusNorm === 'cancelled') statusText = 'Cancelled';
+      }
 
       const statusColor: any =
         statusNorm === 'cancelled' ? 'danger' : 'textSecondary';
@@ -410,7 +826,7 @@ export default function OrdersScreen() {
 
             <View style={styles.orderInfo}>
               <Text variant="body" style={styles.orderTitle} numberOfLines={2}>
-                {item.listing?.title ?? 'Annonce'}
+                {item.listing?.title ?? 'Listing'}
               </Text>
               <Text variant="body" color="textSecondary" style={styles.orderAmount}>
                 {item.displayAmount}
@@ -421,18 +837,29 @@ export default function OrdersScreen() {
                 style={styles.orderStatus}
               >
                 {statusText}
-                {paymentStatusText}
               </Text>
+              {hasTracking ? (
+                <Text variant="captionSm" color="textSecondary">
+                  Tracking: {trackingNumber}
+                </Text>
+              ) : null}
             </View>
           </View>
 
-          {(showConfirm || showCancel) ? (
+          {((isPurchasesTab &&
+            ((statusNorm === 'pending' && showCancel) ||
+              (statusNorm === 'shipped' && (showConfirm || hasTracking)) ||
+              (statusNorm === 'completed' && showLeaveReview))) ||
+            (!isPurchasesTab &&
+              ((statusNorm === 'pending' &&
+                (showCancel || (!hasTracking && showGenerateLabel) || hasTracking)) ||
+                (statusNorm === 'completed' && showLeaveReview)))) ? (
             <View style={styles.actionsWrap}>
-              {showConfirm ? (
+              {isPurchasesTab && statusNorm === 'shipped' && showConfirm ? (
                 <View style={styles.confirmButtonWrap}>
                   <Button
-                    title={isConfirming ? 'Confirmation…' : 'Confirmer la réception'}
-                    onPress={() => confirmReception(item.id)}
+                    title={isConfirming ? 'Confirming…' : 'Confirm receipt'}
+                    onPress={() => void confirmReception(item)}
                     disabled={isConfirming}
                     loading={isConfirming}
                     variant="primary"
@@ -440,13 +867,78 @@ export default function OrdersScreen() {
                 </View>
               ) : null}
 
-              {showCancel ? (
+              {isPurchasesTab && statusNorm === 'pending' && showCancel ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title={isCancelling ? 'Annulation…' : 'Annuler la commande'}
+                    title={isCancelling ? 'Cancelling…' : 'Cancel order'}
                     onPress={() => cancelOrder(item.id)}
                     disabled={isCancelling}
                     loading={isCancelling}
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
+              {isPurchasesTab && statusNorm === 'shipped' && hasTracking ? (
+                <View style={styles.cancelButtonWrap}>
+                  <Button
+                    title="Track my parcel"
+                    onPress={() => void followPackage(trackingNumber)}
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
+              {isPurchasesTab && statusNorm === 'completed' && showLeaveReview ? (
+                <View style={styles.cancelButtonWrap}>
+                  <Button
+                    title="Leave a review"
+                    onPress={() => void leaveReview(item)}
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
+
+              {!isPurchasesTab && statusNorm === 'pending' && showGenerateLabel ? (
+                <View style={styles.generateLabelButtonWrap}>
+                  <Button
+                    title={
+                      isGeneratingLabel
+                        ? 'Generating...'
+                        : 'Generate Swiss Post label'
+                    }
+                    onPress={() => generateShippingLabel(item)}
+                    disabled={isGeneratingLabel}
+                    loading={isGeneratingLabel}
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
+              {!isPurchasesTab && statusNorm === 'pending' && hasTracking ? (
+                <View style={styles.generateLabelButtonWrap}>
+                  <Button
+                    title={isMarkingShipped ? 'Updating…' : 'Mark as shipped'}
+                    onPress={() => markAsShipped(item)}
+                    disabled={isMarkingShipped}
+                    loading={isMarkingShipped}
+                    variant="primary"
+                  />
+                </View>
+              ) : null}
+              {!isPurchasesTab && statusNorm === 'pending' && showCancel ? (
+                <View style={styles.cancelButtonWrap}>
+                  <Button
+                    title={isCancelling ? 'Cancelling…' : 'Cancel'}
+                    onPress={() => cancelOrder(item.id)}
+                    disabled={isCancelling}
+                    loading={isCancelling}
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
+              {!isPurchasesTab && statusNorm === 'completed' && showLeaveReview ? (
+                <View style={styles.cancelButtonWrap}>
+                  <Button
+                    title="Leave a review"
+                    onPress={() => void leaveReview(item)}
                     variant="secondary"
                   />
                 </View>
@@ -459,10 +951,19 @@ export default function OrdersScreen() {
     [
       canCancelOrder,
       canConfirmReception,
+      canGenerateShippingLabel,
       cancellingOrderIds,
       confirmingOrderIds,
+      generatingLabelOrderIds,
+      markingShippedOrderIds,
+      reviewedOrderIds,
       confirmReception,
-      cancelOrder
+      cancelOrder,
+      generateShippingLabel,
+      leaveReview,
+      followPackage,
+      markAsShipped,
+      tab
     ]
   );
 
@@ -522,6 +1023,88 @@ export default function OrdersScreen() {
           ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
         />
       )}
+      <Modal
+        visible={addressModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (submittingAddressModal) return;
+          setAddressModalVisible(false);
+          setAddressModalOrder(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text variant="h3" style={styles.modalTitle}>
+              Sender address
+            </Text>
+            <Text variant="captionSm" color="textSecondary" style={styles.modalSubtitle}>
+              Enter your address to generate the label.
+            </Text>
+
+            <TextInput
+              value={senderStreetInput}
+              onChangeText={setSenderStreetInput}
+              placeholder="Street and number"
+              style={styles.modalInput}
+              editable={!submittingAddressModal}
+            />
+            <TextInput
+              value={senderCityInput}
+              onChangeText={setSenderCityInput}
+              placeholder="City"
+              style={styles.modalInput}
+              editable={!submittingAddressModal}
+            />
+            <TextInput
+              value={senderZipInput}
+              onChangeText={setSenderZipInput}
+              placeholder="Postal code"
+              style={styles.modalInput}
+              editable={!submittingAddressModal}
+            />
+            <TextInput
+              value={senderCountryInput}
+              onChangeText={setSenderCountryInput}
+              placeholder="Country (e.g. CH)"
+              autoCapitalize="characters"
+              style={styles.modalInput}
+              editable={!submittingAddressModal}
+            />
+
+            <TouchableOpacity
+              style={styles.modalCheckboxRow}
+              activeOpacity={0.8}
+              onPress={() => setSaveSenderAddress((prev) => !prev)}
+              disabled={submittingAddressModal}
+            >
+              <View style={[styles.checkbox, saveSenderAddress && styles.checkboxChecked]} />
+              <Text variant="captionSm" color="textSecondary">
+                Save this address to my profile
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalActions}>
+              <Button
+                title="Cancel"
+                onPress={() => {
+                  setAddressModalVisible(false);
+                  setAddressModalOrder(null);
+                }}
+                variant="secondary"
+                disabled={submittingAddressModal}
+              />
+              <Button
+                title={submittingAddressModal ? 'Generating…' : 'Generate label'}
+                onPress={() => void submitSenderAddressModal()}
+                loading={submittingAddressModal}
+                disabled={submittingAddressModal}
+                variant="primary"
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -644,6 +1227,61 @@ const styles = StyleSheet.create({
   },
   cancelButtonWrap: {
     marginTop: 0
+  },
+  generateLabelButtonWrap: {
+    marginTop: 0
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: theme.colors.googleWhite,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    gap: 10
+  },
+  modalTitle: {
+    marginBottom: 2
+  },
+  modalSubtitle: {
+    marginBottom: 8
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: theme.colors.text
+  },
+  modalCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2
+  },
+  checkbox: {
+    width: 16,
+    height: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 4
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8
   }
 });
 

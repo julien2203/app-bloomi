@@ -22,13 +22,15 @@ import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import type { ThreadListItem } from '../../../lib/api_queries';
 import { SUPABASE_URL } from '../../../lib/env';
+import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
 
 type MessageRow = {
   id: string;
   thread_id: string;
-  sender_id: string;
+  sender_id: string | null;
   body: string;
-  type?: 'text' | 'offer' | string | null;
+  type?: 'text' | 'offer' | 'system' | string | null;
+  is_system?: boolean | null;
   offer_amount?: number | null;
   offer_status?: 'pending' | 'accepted' | 'declined' | string | null;
   offer_currency?: string | null;
@@ -98,7 +100,7 @@ export default function ThreadScreen() {
 
       setMessages((data || []) as MessageRow[]);
     } catch {
-      setError('Impossible de charger cette conversation.');
+      setError('Unable to load this conversation.');
       setMessages([]);
     } finally {
       setLoading(false);
@@ -132,7 +134,7 @@ export default function ThreadScreen() {
   useEffect(() => {
     if (!threadId) {
       setLoading(false);
-      setError('Conversation introuvable.');
+      setError('Conversation not found.');
       return;
     }
     void loadThreadMeta();
@@ -189,6 +191,7 @@ export default function ThreadScreen() {
         .from('messages')
         .update({ read_at: now })
         .eq('thread_id', threadId)
+        .eq('is_system', false)
         .neq('sender_id', user.id)
         .is('read_at', null);
     })();
@@ -214,6 +217,64 @@ export default function ThreadScreen() {
     if (!threadMeta) return null;
     return (threadMeta as any).listing_cover_photo_url as string | null;
   }, [threadMeta]);
+
+  const listingAllowsCheckout = useMemo(() => {
+    const listingSt = String((threadMeta as any)?.listing_status ?? '').toLowerCase();
+    return !listingSt || listingSt === 'published';
+  }, [threadMeta]);
+
+  const acceptedOfferPayAction = useMemo(() => {
+    if (!user?.id || !threadMeta || threadMeta.buyer_id !== user.id) return null;
+    if (!listingAllowsCheckout) return null;
+    if (!threadMeta.listing_id || !threadMeta.seller_id) return null;
+
+    const orderStatusNorm = String(latestOrderStatus ?? '').toLowerCase();
+    const hasAnyOrder =
+      orderStatusNorm === 'pending' ||
+      orderStatusNorm === 'completed' ||
+      orderStatusNorm === 'cancelled' ||
+      orderStatusNorm === 'confirmed' ||
+      orderStatusNorm === 'shipped' ||
+      orderStatusNorm === 'delivered';
+    if (hasAnyOrder) return null;
+
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      const isOffer = m.type === 'offer' || (m.body && m.body.startsWith('Offer:'));
+      if (!isOffer) continue;
+      if (String(m.offer_status ?? '').toLowerCase() !== 'accepted') continue;
+      const fromCol = typeof m.offer_amount === 'number' ? m.offer_amount : null;
+      const amountMatch = m.body?.match(/Offer:\s*([0-9]+(?:\.[0-9]{1,2})?)/i);
+      const amountFromBody = amountMatch ? parseFloat(amountMatch[1]) : null;
+      const amt = fromCol ?? amountFromBody;
+      if (amt == null || !Number.isFinite(amt)) continue;
+      return { messageId: m.id, amount: amt };
+    }
+    return null;
+  }, [
+    user?.id,
+    threadMeta,
+    messages,
+    latestOrderStatus,
+    listingAllowsCheckout
+  ]);
+
+  const handlePayAcceptedOfferFromBar = useCallback(() => {
+    if (!threadMeta || !acceptedOfferPayAction) return;
+    router.push({
+      pathname: '/tabs/feed/listing/checkout' as any,
+      params: {
+        listing_id: threadMeta.listing_id,
+        seller_id: threadMeta.seller_id,
+        amount: String(acceptedOfferPayAction.amount),
+        title: threadMeta.listing_title,
+        offer_message_id: acceptedOfferPayAction.messageId,
+        ...(threadMeta.listing_cover_photo_url
+          ? { cover_photo: threadMeta.listing_cover_photo_url }
+          : {})
+      }
+    });
+  }, [acceptedOfferPayAction, router, threadMeta]);
 
   const handleSend = async () => {
     const body = input.trim();
@@ -280,7 +341,20 @@ export default function ThreadScreen() {
   };
 
   const renderItem = ({ item, index }: { item: MessageRow; index: number }) => {
-    const isMine = item.sender_id === user?.id;
+    const isMine = item.sender_id != null && item.sender_id === user?.id;
+
+    const isSystem = item.is_system === true || item.type === 'system';
+    if (isSystem) {
+      return (
+        <View style={styles.systemMessageRow}>
+          <View style={styles.systemMessagePill}>
+            <Text variant="captionSm" style={styles.systemMessageText}>
+              {item.body}
+            </Text>
+          </View>
+        </View>
+      );
+    }
 
     const isOffer = item.type === 'offer' || item.body.startsWith('Offer:');
 
@@ -319,7 +393,7 @@ export default function ThreadScreen() {
         !!threadMeta?.listing_id &&
         !!threadMeta?.seller_id &&
         !hasAnyOrder &&
-        String((threadMeta as any)?.listing_status ?? '').toLowerCase() === 'published';
+        listingAllowsCheckout;
 
       const updateOfferStatus = async (next: 'accepted' | 'declined') => {
         if (!threadId || !user) return;
@@ -334,28 +408,79 @@ export default function ThreadScreen() {
             prev.map((m) => (m.id === item.id ? { ...m, offer_status: next } : m))
           );
 
-          const autoBody =
-            next === 'accepted' ? 'Offer accepted.' : 'Offer declined.';
+          const buyerId = threadMeta?.buyer_id;
 
-          const { data: inserted, error: insertError } = await supabase
-            .from('messages')
-            .insert({
-              thread_id: threadId,
-              sender_id: user.id,
-              body: autoBody,
-              type: 'text'
-            });
-          if (insertError) throw insertError;
+          if (next === 'accepted') {
+            const { data: insertedRow, error: insertError } = await supabase
+              .from('messages')
+              .insert({
+                thread_id: threadId,
+                sender_id: user.id,
+                body: "✅ Offre acceptée ! L'acheteur peut maintenant finaliser son achat.",
+                type: 'system',
+                is_system: true
+              })
+              .select('*')
+              .single();
+            if (insertError) throw insertError;
+            if (insertedRow) {
+              const row = insertedRow as MessageRow;
+              setMessages((prev) =>
+                [...prev, row].sort((a, b) => a.created_at.localeCompare(b.created_at))
+              );
+              await supabase
+                .from('threads')
+                .update({ last_message_at: row.created_at })
+                .eq('id', threadId);
+            }
 
-          if (inserted && Array.isArray(inserted) && inserted[0]) {
-            setMessages((prev) =>
-              [...prev, inserted[0] as MessageRow].sort((a, b) =>
-                a.created_at.localeCompare(b.created_at)
-              )
-            );
+            if (buyerId && amount != null) {
+              void sendPushNotificationWithUserJwt({
+                user_id: buyerId,
+                title: "✅ Offre acceptée, let's gooo !",
+                body: `Le vendeur a accepté ton offre de ${amount.toFixed(2)} CHF. Finalise ton achat !`,
+                data: {
+                  thread_id: threadId,
+                  listing_id: threadMeta?.listing_id ?? '',
+                  offer_amount: amount
+                }
+              });
+            }
           } else {
-            // fallback: recharger si on ne récupère pas la row
-            void loadMessages();
+            const { data: insertedRow, error: insertError } = await supabase
+              .from('messages')
+              .insert({
+                thread_id: threadId,
+                sender_id: user.id,
+                body: 'Offer declined.',
+                type: 'text'
+              })
+              .select('*')
+              .single();
+            if (insertError) throw insertError;
+            if (insertedRow) {
+              const row = insertedRow as MessageRow;
+              setMessages((prev) =>
+                [...prev, row].sort((a, b) => a.created_at.localeCompare(b.created_at))
+              );
+              await supabase
+                .from('threads')
+                .update({ last_message_at: row.created_at })
+                .eq('id', threadId);
+            }
+
+            if (buyerId) {
+              void sendPushNotificationWithUserJwt({
+                user_id: buyerId,
+                title: '❌ Offre refusée… next !',
+                body:
+                  "Le vendeur n'a pas accepté ton offre. Tu peux faire une nouvelle offre ou acheter au prix normal.",
+                data: {
+                  thread_id: threadId,
+                  listing_id: threadMeta?.listing_id ?? ''
+                }
+              });
+            }
           }
         } catch {
           // no-op: on garde l'UI existante (errors gérés globalement)
@@ -371,6 +496,7 @@ export default function ThreadScreen() {
             seller_id: threadMeta.seller_id,
             amount: String(amount),
             title: threadMeta.listing_title,
+            offer_message_id: item.id,
             ...(threadMeta.listing_cover_photo_url
               ? { cover_photo: threadMeta.listing_cover_photo_url }
               : {})
@@ -432,11 +558,17 @@ export default function ThreadScreen() {
             )}
             {canBuyAcceptedOffer && (
               <View style={styles.offerBuyWrap}>
-                <Button
-                  title={`Buy for ${amount!.toFixed(2)} CHF`}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.offerPayLimeButton}
                   onPress={handleBuyAcceptedOffer}
-                  variant="primary"
-                />
+                  accessibilityRole="button"
+                  accessibilityLabel={`Payer ${amount!.toFixed(2)} CHF maintenant`}
+                >
+                  <Text variant="body" style={styles.offerPayLimeButtonText}>
+                    {`💳 Payer ${amount!.toFixed(2)} CHF maintenant`}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -491,7 +623,7 @@ export default function ThreadScreen() {
             {error}
           </Text>
           <Button
-            title="Retour"
+            title="Back"
             variant="secondary"
             onPress={() => router.back()}
             style={styles.errorButton}
@@ -510,7 +642,17 @@ export default function ThreadScreen() {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
     );
-  }, [loading, error, messages]);
+  }, [
+    loading,
+    error,
+    messages,
+    threadMeta,
+    user?.id,
+    listingPrice,
+    latestOrderStatus,
+    latestOrderPaymentStatus,
+    listingAllowsCheckout
+  ]);
 
   const handleBack = () => {
     // @ts-expect-error canGoBack peut exister
@@ -578,6 +720,22 @@ export default function ThreadScreen() {
         )}
 
         <View style={styles.messagesContainer}>{content}</View>
+
+        {!loading && !error && acceptedOfferPayAction && (
+          <View style={styles.payOfferStickyBar}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.offerPayLimeButton}
+              onPress={handlePayAcceptedOfferFromBar}
+              accessibilityRole="button"
+              accessibilityLabel={`Payer ${acceptedOfferPayAction.amount.toFixed(2)} CHF`}
+            >
+              <Text variant="body" style={styles.offerPayLimeButtonText}>
+                {`💳 Payer ${acceptedOfferPayAction.amount.toFixed(2)} CHF`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View
           style={[
@@ -688,6 +846,24 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     paddingBottom: 8
+  },
+  systemMessageRow: {
+    width: '100%',
+    alignItems: 'center',
+    marginVertical: 8,
+    paddingHorizontal: 8
+  },
+  systemMessagePill: {
+    maxWidth: '92%',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  systemMessageText: {
+    color: '#888888',
+    fontStyle: 'italic',
+    textAlign: 'center'
   },
   messageRow: {
     marginVertical: 4,
@@ -861,6 +1037,28 @@ const styles = StyleSheet.create({
   },
   offerBuyWrap: {
     marginTop: 10
+  },
+  offerPayLimeButton: {
+    backgroundColor: '#CCFF00',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  offerPayLimeButtonText: {
+    ...theme.typography.body,
+    fontWeight: '700',
+    color: theme.colors.appleBlack,
+    textAlign: 'center'
+  },
+  payOfferStickyBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5E5',
+    backgroundColor: theme.colors.backgroundWhite
   }
 });
 

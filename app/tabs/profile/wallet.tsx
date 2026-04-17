@@ -296,14 +296,14 @@ export default function WalletScreen() {
 
             <View style={styles.actions}>
               <Button
-                title="Virer sur mon compte bancaire"
+                title="Transfer to my bank account"
                 onPress={handlePayout}
                 variant="primary"
                 disabled={!canPayout}
                 loading={payoutLoading}
               />
               <Button
-                title="Accéder au dashboard Stripe"
+                title="Open Stripe dashboard"
                 onPress={openStripeDashboard}
                 variant="secondary"
               />

@@ -33,7 +33,7 @@ export default function VerifyEmailScreen() {
 
   const handleResend = async () => {
     if (!email) {
-      setError('Adresse e-mail manquante.');
+      setError('Email address missing.');
       return;
     }
 
@@ -50,10 +50,10 @@ export default function VerifyEmailScreen() {
       if (resendError) {
         setError(resendError.message);
       } else {
-        setMessage("Un nouvel e-mail de confirmation vient d'être envoyé.");
+        setMessage('A new confirmation email has been sent.');
       }
     } catch (e) {
-      setError("Impossible de renvoyer l'e-mail pour le moment.");
+      setError('Unable to resend the email right now.');
     } finally {
       setLoadingResend(false);
     }
@@ -112,7 +112,7 @@ export default function VerifyEmailScreen() {
 
             {/* Bouton principal */}
             <Button
-              title="Ouvrir ma boîte mail"
+              title="Open my email app"
               onPress={handleOpenMailbox}
               variant="primary-green"
               style={styles.primaryButton}
@@ -132,8 +132,8 @@ export default function VerifyEmailScreen() {
             {/* Lien renvoi email + messages */}
             <TouchableOpacity onPress={handleResend} style={styles.resendLink}>
               <Text style={styles.resendText}>
-                Vous n'avez pas reçu notre e-mail ?{' '}
-                <Text style={styles.resendTextUnderline}>Renvoyer le lien</Text>
+                Didn&apos;t get our email?{' '}
+                <Text style={styles.resendTextUnderline}>Resend link</Text>
               </Text>
             </TouchableOpacity>
 

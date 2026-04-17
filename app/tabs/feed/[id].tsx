@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -18,9 +19,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons';
 import {
   createOrGetThreadForListing,
+  deactivateListingToDraft,
+  deleteListing,
   getListingById,
   getListingLikesInfo,
   getPublishedListingsCountForSeller,
+  isListingDeleteBlockedByOrders,
   likeListing,
   unlikeListing,
   type ListingDetail
@@ -31,10 +35,15 @@ import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { OwnerListingBottomSheet } from '../../../components/listing/OwnerListingBottomSheet';
 import { ProductCard } from '../../../components/ProductCard';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
 import { supabase } from '../../../lib/supabase';
+import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
+
+/** Paliers de vues déjà notifiés pour un listing (évite les doublons si l’écran se remonte). */
+const listingViewMilestonesNotified = new Map<string, Set<number>>();
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_WIDTH = SCREEN_WIDTH - 48; // marge 16 gauche + 16 droite + 16 peek
@@ -79,6 +88,7 @@ export default function ListingDetailScreen() {
   const [togglingLike, setTogglingLike] = useState(false);
 
   const [viewsCount, setViewsCount] = useState<number>(0);
+  const prevViewsCountRef = useRef(0);
   /** Uniquement si la vue SQL n’expose pas encore seller_published_count */
   const [sellerCountFallback, setSellerCountFallback] = useState<number | 'loading' | 'error'>(
     'loading'
@@ -93,6 +103,7 @@ export default function ListingDetailScreen() {
   const [similarItems, setSimilarItems] = useState<ListingDetail[]>([]);
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [showBuyerProtectionInfo, setShowBuyerProtectionInfo] = useState(false);
+  const [ownerSheetVisible, setOwnerSheetVisible] = useState(false);
 
   const fetchListing = useCallback(async () => {
     if (!id) {
@@ -110,13 +121,13 @@ export default function ListingDetailScreen() {
         setError(fetchError);
         setListing(null);
       } else if (!data) {
-        setError(new Error('Annonce introuvable'));
+        setError(new Error('Listing not found'));
         setListing(null);
       } else {
         setListing(data);
       }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Erreur inconnue'));
+      setError(err instanceof Error ? err : new Error('Unknown error'));
       setListing(null);
     } finally {
       setLoading(false);
@@ -255,6 +266,39 @@ export default function ListingDetailScreen() {
   }, [listing?.id, user?.id]);
 
   useEffect(() => {
+    prevViewsCountRef.current = 0;
+  }, [listing?.id]);
+
+  useEffect(() => {
+    if (!listing?.id || !listing.seller_id) return;
+
+    if (viewsCount < 10) {
+      prevViewsCountRef.current = viewsCount;
+      return;
+    }
+
+    const prev = prevViewsCountRef.current;
+    const notified = listingViewMilestonesNotified.get(listing.id) ?? new Set<number>();
+    if (!listingViewMilestonesNotified.has(listing.id)) {
+      listingViewMilestonesNotified.set(listing.id, notified);
+    }
+
+    for (let m = 10; m <= viewsCount; m += 10) {
+      if (prev >= m || m > viewsCount) continue;
+      if (notified.has(m)) continue;
+      notified.add(m);
+      void sendPushNotificationWithUserJwt({
+        user_id: listing.seller_id,
+        title: '👀 Ça regarde beaucoup par ici…',
+        body: `Ton article a été vu ${m} fois !`,
+        data: { listing_id: listing.id, views_milestone: m }
+      });
+    }
+
+    prevViewsCountRef.current = viewsCount;
+  }, [listing?.id, listing?.seller_id, viewsCount]);
+
+  useEffect(() => {
     if (!listing?.seller_id) return;
     if (typeof listing.seller_published_count === 'number') {
       return;
@@ -315,6 +359,105 @@ export default function ListingDetailScreen() {
     return status !== 'published';
   }, [listing?.status]);
 
+  const isOwner = useMemo(
+    () => Boolean(user?.id && listing?.seller_id && user.id === listing.seller_id),
+    [user?.id, listing?.seller_id]
+  );
+
+  const handleOwnerDeleteListing = useCallback(async () => {
+    if (!listing?.id) return;
+    const listingId = listing.id;
+    const { error } = await deleteListing(listingId);
+    if (error) {
+      if (isListingDeleteBlockedByOrders(error)) {
+        Alert.alert('Suppression impossible', error, [
+          { text: 'OK', style: 'cancel' },
+          {
+            text: "Désactiver l'annonce",
+            onPress: () => {
+              void (async () => {
+                const { error: deactErr } = await deactivateListingToDraft(listingId);
+                if (deactErr) {
+                  Alert.alert('Erreur', deactErr);
+                  return;
+                }
+                setOwnerSheetVisible(false);
+                if (router.canGoBack && router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/tabs/feed');
+                }
+              })();
+            }
+          }
+        ]);
+        throw new Error(error);
+      }
+      Alert.alert('Error', error);
+      throw new Error(error);
+    }
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/tabs/feed');
+    }
+  }, [listing?.id, router]);
+
+  const handleDeactivateOwnListing = useCallback(async () => {
+    if (!listing?.id) return;
+    const { error } = await deactivateListingToDraft(listing.id);
+    if (error) {
+      Alert.alert('Erreur', error);
+      throw new Error(error);
+    }
+    setOwnerSheetVisible(false);
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/tabs/feed');
+    }
+  }, [listing?.id, router]);
+
+  const handlePermanentDeleteDraftRequest = useCallback(
+    (listingId: string) => {
+      setOwnerSheetVisible(false);
+      setTimeout(() => {
+        Alert.alert('Cette action est irréversible.', 'Supprimer définitivement ?', [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Supprimer',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                const { error: delErr } = await deleteListing(listingId);
+                if (delErr) {
+                  Alert.alert('Suppression impossible', delErr);
+                  return;
+                }
+                if (router.canGoBack && router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/tabs/feed');
+                }
+              })();
+            }
+          }
+        ]);
+      }, 300);
+    },
+    [router]
+  );
+
+  const openOwnerListingMenu = useCallback(() => {
+    if (!listing || !isOwner) return;
+    setOwnerSheetVisible(true);
+  }, [isOwner, listing]);
+
+  const handleEditOwnListing = useCallback(() => {
+    if (!listing?.id) return;
+    router.push(`/tabs/profile/edit-listing/${listing.id}` as any);
+  }, [listing?.id, router]);
+
   const handleBack = () => {
     // Sur certains cas (deep link / ouverture directe), il n'y a pas de route précédente
     // donc on renvoie explicitement vers le feed.
@@ -332,6 +475,7 @@ export default function ListingDetailScreen() {
   const handleToggleLike = async () => {
     if (!listing?.id) return;
     if (togglingLike) return;
+    if (isOwner) return;
 
     if (!user) {
       router.push('/auth/login');
@@ -483,7 +627,7 @@ export default function ListingDetailScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.centerContent}>
             <Text variant="h2" style={styles.errorTitle}>
-              {error?.message || 'Annonce introuvable'}
+              {error?.message || 'Listing not found'}
             </Text>
             <Button title="Retry" onPress={fetchListing} variant="primary" />
             <Button
@@ -508,18 +652,33 @@ export default function ListingDetailScreen() {
           <Text variant="body" style={styles.headerTitle}>
             Detail product
           </Text>
-          <TouchableOpacity
-            onPress={handleMore}
-            activeOpacity={0.7}
-            hitSlop={HIT_SLOP_COMFORTABLE}
-            style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
-          >
-            <Feather
-              name="more-horizontal"
-              size={24}
-              color={theme.colors.textPrimary}
-            />
-          </TouchableOpacity>
+          {isOwner ? (
+            <TouchableOpacity
+              onPress={openOwnerListingMenu}
+              activeOpacity={0.7}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
+              accessibilityRole="button"
+              accessibilityLabel="Listing menu"
+            >
+              <Text variant="body" style={styles.headerMenuDots}>
+                •••
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={handleMore}
+              activeOpacity={0.7}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
+            >
+              <Feather
+                name="more-horizontal"
+                size={24}
+                color={theme.colors.textPrimary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Scrollable content */}
@@ -572,20 +731,22 @@ export default function ListingDetailScreen() {
                   onMomentumScrollEnd={handleCarouselMomentumEnd}
                 />
 
-                {/* Favorite icon */}
-                <TouchableOpacity
-                  style={styles.favoriteIconContainer}
-                  onPress={handleToggleLike}
-                  activeOpacity={0.8}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  disabled={togglingLike}
-                >
-                  <AppIcon
-                    name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
-                    size={30}
-                    color={likedByMe ? theme.colors.primary : theme.colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                {/* Favorite icon — hidden for your own listing */}
+                {!isOwner ? (
+                  <TouchableOpacity
+                    style={styles.favoriteIconContainer}
+                    onPress={handleToggleLike}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    disabled={togglingLike}
+                  >
+                    <AppIcon
+                      name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
+                      size={30}
+                      color={likedByMe ? theme.colors.primary : theme.colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                ) : null}
 
                 {/* Pagination dots */}
                 {photos.length > 1 && (
@@ -716,25 +877,29 @@ export default function ListingDetailScreen() {
           <View style={styles.lowerSection}>
             {/* Favorite / Share */}
             <View style={styles.favoriteShareRow}>
+              {!isOwner ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.favoriteShareButton}
+                    activeOpacity={0.8}
+                    onPress={handleToggleLike}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    disabled={togglingLike}
+                  >
+                    <AppIcon
+                      name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
+                      size={18}
+                      color={likedByMe ? theme.colors.primary : theme.colors.textPrimary}
+                    />
+                    <Text variant="captionSm" color="textPrimary">
+                      Favorite
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={styles.favoriteShareDivider} />
+                </>
+              ) : null}
               <TouchableOpacity
-                style={styles.favoriteShareButton}
-                activeOpacity={0.8}
-                onPress={handleToggleLike}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                disabled={togglingLike}
-              >
-                <AppIcon
-                  name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
-                  size={18}
-                  color={likedByMe ? theme.colors.primary : theme.colors.textPrimary}
-                />
-                <Text variant="captionSm" color="textPrimary">
-                  Favorite
-                </Text>
-              </TouchableOpacity>
-              <View style={styles.favoriteShareDivider} />
-              <TouchableOpacity
-                style={styles.favoriteShareButton}
+                style={[styles.favoriteShareButton, isOwner && styles.favoriteShareButtonFull]}
                 activeOpacity={0.8}
                 onPress={() => console.log('Share action')}
               >
@@ -825,6 +990,7 @@ export default function ListingDetailScreen() {
                     <ProductCard
                       key={l.id}
                       listingId={l.id}
+                      sellerId={l.seller_id}
                       title={l.title}
                       price={Number(l.price) || 0}
                       brand={(l as any).brand ?? undefined}
@@ -843,35 +1009,61 @@ export default function ListingDetailScreen() {
           </View>
         </ScrollView>
 
-        {/* Bottom CTAs */}
+        <OwnerListingBottomSheet
+          visible={ownerSheetVisible}
+          onClose={() => setOwnerSheetVisible(false)}
+          onEdit={handleEditOwnListing}
+          onDeleteConfirmed={handleOwnerDeleteListing}
+          onDeactivateListing={
+            String(listing?.status ?? '').toLowerCase() === 'draft'
+              ? undefined
+              : handleDeactivateOwnListing
+          }
+          activeListingId={listing?.id ?? null}
+          listingStatus={listing?.status ?? null}
+          onRequestPermanentDeleteDraft={handlePermanentDeleteDraftRequest}
+        />
+
+        {/* Bottom CTAs — buyer vs seller (owner) */}
         <View
           style={[
             styles.bottomCtas,
             { paddingBottom: insets.bottom + 16 }
           ]}
         >
-          <Button
-            title={isListingReservedOrUnavailable ? 'Reserved' : 'Make an offer'}
-            onPress={handleMakeOffer}
-            variant="secondary"
-            style={
-              isListingReservedOrUnavailable
-                ? styles.bottomButtonSecondaryDisabled
-                : styles.bottomButtonSecondary
-            }
-            disabled={isListingReservedOrUnavailable}
-          />
-          <Button
-            title={isListingReservedOrUnavailable ? 'Reserved' : 'Buy now'}
-            onPress={handleBuyNow}
-            variant="google"
-            style={
-              isListingReservedOrUnavailable
-                ? styles.bottomButtonDisabled
-                : styles.bottomButtonNoBorder
-            }
-            disabled={isListingReservedOrUnavailable}
-          />
+          {isOwner ? (
+            <Button
+              title="Edit listing"
+              onPress={handleEditOwnListing}
+              variant="google"
+              style={styles.bottomButtonOwnerFull}
+            />
+          ) : (
+            <>
+              <Button
+                title={isListingReservedOrUnavailable ? 'Reserved' : 'Make an offer'}
+                onPress={handleMakeOffer}
+                variant="secondary"
+                style={
+                  isListingReservedOrUnavailable
+                    ? styles.bottomButtonSecondaryDisabled
+                    : styles.bottomButtonSecondary
+                }
+                disabled={isListingReservedOrUnavailable}
+              />
+              <Button
+                title={isListingReservedOrUnavailable ? 'Reserved' : 'Buy now'}
+                onPress={handleBuyNow}
+                variant="google"
+                style={
+                  isListingReservedOrUnavailable
+                    ? styles.bottomButtonDisabled
+                    : styles.bottomButtonNoBorder
+                }
+                disabled={isListingReservedOrUnavailable}
+              />
+            </>
+          )}
         </View>
 
         {/* Image modal */}
@@ -1043,6 +1235,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...theme.typography.body,
     fontFamily: theme.fontFamily.semiBold
+  },
+  headerMenuDots: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    letterSpacing: 0.5,
+    paddingHorizontal: 4
   },
   iconTouch: {
     padding: 8
@@ -1325,6 +1524,11 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     borderColor: 'transparent'
   },
+  bottomButtonOwnerFull: {
+    flex: 1,
+    borderWidth: 0,
+    borderColor: 'transparent'
+  },
   bottomButtonSecondaryDisabled: {
     flex: 1,
     borderWidth: 1.5,
@@ -1404,6 +1608,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     columnGap: 8
+  },
+  favoriteShareButtonFull: {
+    flex: 1
   },
   favoriteShareDivider: {
     width: 1,

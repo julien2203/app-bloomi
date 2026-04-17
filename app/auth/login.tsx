@@ -46,7 +46,7 @@ export default function LoginScreen() {
       }
 
       if (!data.session) {
-        setError('Impossible de vous connecter. Merci de réessayer.');
+        setError('Unable to sign in. Please try again.');
         setLoading(false);
         return;
       }
@@ -66,7 +66,7 @@ export default function LoginScreen() {
       // Connexion réussie : on redirige vers le feed
       router.replace('/tabs/feed');
     } catch (e) {
-      setError('Une erreur est survenue lors de la connexion.');
+      setError('Something went wrong during sign-in.');
       setLoading(false);
     }
   };

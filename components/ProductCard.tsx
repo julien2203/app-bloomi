@@ -18,6 +18,8 @@ import { useLikesStore } from '../stores/likesStore';
 
 interface ProductCardProps {
   listingId: string;
+  /** When it matches the signed-in user, the like control is read-only (your own listing). */
+  sellerId?: string | null;
   title?: string;
   price: number;
   currency?: 'CHF';
@@ -36,6 +38,7 @@ interface ProductCardProps {
 
 export function ProductCard({
   listingId,
+  sellerId = null,
   title,
   price,
   currency = 'CHF',
@@ -51,6 +54,11 @@ export function ProductCard({
 }: ProductCardProps) {
   const router = useRouter();
   const { user } = useAuthStore();
+
+  const isOwnListing = useMemo(
+    () => Boolean(user?.id && sellerId && user.id === sellerId),
+    [user?.id, sellerId]
+  );
 
   const [toggling, setToggling] = useState<boolean>(false);
   const likedByMe = useLikesStore((s) => !!s.likedIds[listingId]);
@@ -69,6 +77,7 @@ export function ProductCard({
 
   const handleToggleLike = async () => {
     if (toggling) return;
+    if (isOwnListing) return;
     if (!user) {
       router.push('/auth/login');
       return;
@@ -161,20 +170,29 @@ export function ProductCard({
           </Text>
         </View>
 
-        {/* Like (condition supprimée) */}
+        {/* Like — disabled for your own listings */}
         <View style={styles.likesRow}>
-          <TouchableOpacity
-            style={styles.likes}
-            activeOpacity={0.8}
-            onPress={handleToggleLike}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={toggling}
-          >
-            <AppIcon name={heartIcon.name} size={16} color={heartIcon.color} />
-            <Text variant="captionSm" color="textSecondary">
-              {likesCount}
-            </Text>
-          </TouchableOpacity>
+          {isOwnListing ? (
+            <View style={styles.likes} accessibilityElementsHidden>
+              <AppIcon name="likeHeartOutline" size={16} color={theme.colors.textSecondary} />
+              <Text variant="captionSm" color="textSecondary">
+                {likesCount}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.likes}
+              activeOpacity={0.8}
+              onPress={handleToggleLike}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={toggling}
+            >
+              <AppIcon name={heartIcon.name} size={16} color={heartIcon.color} />
+              <Text variant="captionSm" color="textSecondary">
+                {likesCount}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </TouchableOpacity>

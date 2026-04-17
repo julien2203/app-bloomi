@@ -1,10 +1,9 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, usePathname } from 'expo-router';
 import { theme } from '../../lib/theme';
-import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import HomeIcon from '../../assets/icons/icon_home_simple_outline.svg';
 import SearchIcon from '../../assets/icons/icon_search_short_handle.svg';
 import SellIcon from '../../assets/icons/icon_plus_shadow_C3EA4F.svg';
@@ -90,36 +89,32 @@ export function FloatingTabBar(_: BottomTabBarProps) {
           };
 
           return (
-            <Pressable
+            <TouchableOpacity
               key={tab.href}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
               onPress={onPress}
-              delayPressIn={0}
-              hitSlop={HIT_SLOP_COMFORTABLE}
-              android_disableSound
-              style={({ pressed }) => [
-                styles.item,
-                Platform.OS === 'ios' && pressed && styles.itemPressed
-              ]}
+              activeOpacity={0.7}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              style={styles.item}
             >
               {tab.key === 'home' ? (
-                <HomeIcon width={ICON_SIZE} height={ICON_SIZE} />
+                <HomeIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
               ) : tab.key === 'search' ? (
-                <SearchIcon width={ICON_SIZE} height={ICON_SIZE} />
+                <SearchIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
               ) : tab.key === 'sell' ? (
                 <View style={styles.sellIconWrap}>
-                  <SellIcon width={SELL_ICON_SIZE} height={SELL_ICON_SIZE} />
+                  <SellIcon width={SELL_ICON_SIZE} height={SELL_ICON_SIZE} pointerEvents="none" />
                 </View>
               ) : tab.key === 'inbox' ? (
-                <InboxIcon width={ICON_SIZE} height={ICON_SIZE} />
+                <InboxIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
               ) : (
-                <ProfileIcon width={ICON_SIZE} height={ICON_SIZE} />
+                <ProfileIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
               )}
               <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive]}>
                 {tab.label}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -135,7 +130,8 @@ const styles = StyleSheet.create({
     bottom: 20,
     alignItems: 'center',
     zIndex: 99999,
-    elevation: 999
+    elevation: 999,
+    overflow: 'visible'
   },
   container: {
     height: BAR_HEIGHT,
@@ -151,20 +147,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 12
+    elevation: 12,
+    overflow: 'visible'
   },
   item: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 60
-  },
-  itemPressed: {
-    opacity: 0.75
+    minHeight: 60,
+    overflow: 'visible'
   },
   sellIconWrap: {
     marginTop: 0,
-    marginBottom: 0
+    marginBottom: 0,
+    overflow: 'visible'
   },
   label: {
     marginTop: 2,

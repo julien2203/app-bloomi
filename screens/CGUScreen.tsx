@@ -8,428 +8,415 @@ export default function CGUScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.pageTitle}>Conditions Générales d&apos;Utilisation</Text>
-          <Text style={styles.date}>En vigueur à compter du 13 avril 2026</Text>
+          <Text style={styles.pageTitle}>Terms of Use</Text>
+          <Text style={styles.date}>Effective as of April 13, 2026</Text>
         </View>
 
         <Text style={styles.paragraph}>
-          Bienvenue sur Bloomi ! Nous avons conçu cette plateforme avec une idée simple : rendre la seconde main locale
-          facile, sécurisée et vraiment humaine pour toutes et tous en Suisse.
+          Welcome to Bloomi. We built this platform around a simple idea: to make local second-hand fashion easy,
+          secure, and genuinely human for everyone in Switzerland.
         </Text>
         <Text style={styles.paragraph}>
-          Ces Conditions Générales d&apos;Utilisation (ci-après « les CGU ») décrivent les règles du jeu entre vous et
-          Bloomi. Elles s&apos;appliquent dès que vous créez un compte, que vous naviguez sur la plateforme ou que vous
-          réalisez une transaction. Nous avons fait de notre mieux pour les rédiger clairement, sans jargon inutile.
+          These Terms of Use (the &quot;Terms&quot;) set out the rules that apply between you and Bloomi. They apply as
+          soon as you create an account, browse the platform, or complete a transaction. We have done our best to
+          draft them clearly, without unnecessary jargon.
         </Text>
         <Text style={styles.paragraph}>
-          En utilisant Bloomi, vous acceptez l&apos;ensemble de ces CGU. Une question ? Écrivez-nous à contact@bloomi.ch,
-          on est là.
-        </Text>
-
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>1. Qui est Bloomi ?</Text>
-          <View style={styles.separator} />
-        </View>
-        <Text style={styles.paragraph}>
-          Bloomi est une plateforme suisse de mise en relation entre acheteurs et vendeurs de mode de seconde main.
-          Elle est exploitée par Bloomi Sàrl, société à responsabilité limitée de droit suisse, dont voici les
-          coordonnées :
-        </Text>
-        <Text style={styles.bullet}>• Raison sociale : Bloomi Sàrl</Text>
-        <Text style={styles.bullet}>• Numéro IDE : CHE-356.866.102</Text>
-        <Text style={styles.bullet}>• Siège social : Bloomi Sàrl, 1091 Grandvaux, Suisse</Text>
-        <Text style={styles.bullet}>• Contact : contact@bloomi.ch</Text>
-        <Text style={styles.paragraph}>
-          Bloomi agit uniquement comme intermédiaire technique : nous connectons des acheteurs et des vendeurs, mais
-          nous ne sommes pas partie aux contrats de vente conclus entre eux. Nous ne stockons pas les articles, nous ne
-          les vérifions pas physiquement, et nous ne garantissons pas la qualité de chaque article publié.
+          By using Bloomi, you accept these Terms in full. If you have any questions, please write to us at
+          contact@bloomi.ch; we are here to help.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>2. Qui peut utiliser Bloomi ?</Text>
+          <Text style={styles.articleTitle}>1. Who is Bloomi?</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>2.1 Conditions d&apos;accès</Text>
         <Text style={styles.paragraph}>
-          Bloomi est ouvert à toute personne physique disposant de la capacité juridique au sens du droit suisse. Si
-          vous êtes mineur·e, vous devez obtenir le consentement préalable de votre représentant légal avant de créer un
-          compte.
+          Bloomi is a Swiss platform that connects buyers and sellers of second-hand fashion. It is operated by
+          Bloomi Sàrl, a limited liability company governed by Swiss law. Our details are as follows:
         </Text>
-        <Text style={styles.h2}>2.2 Particuliers et boutiques professionnelles</Text>
+        <Text style={styles.bullet}>• Legal name: Bloomi Sàrl</Text>
+        <Text style={styles.bullet}>• UID (IDE) number: CHE-356.866.102</Text>
+        <Text style={styles.bullet}>• Registered office: Bloomi Sàrl, 1091 Grandvaux, Switzerland</Text>
+        <Text style={styles.bullet}>• Contact: contact@bloomi.ch</Text>
         <Text style={styles.paragraph}>
-          Bloomi accueille deux types de vendeurs, et les règles ne sont pas tout à fait les mêmes selon votre profil :
+          Bloomi acts solely as a technical intermediary: we connect buyers and sellers, but we are not a party to the
+          sale contracts concluded between them. We do not store the items, we do not physically inspect them, and we
+          do not guarantee the quality of each listing.
+        </Text>
+
+        <View style={styles.articleHeader}>
+          <Text style={styles.articleTitle}>2. Who may use Bloomi?</Text>
+          <View style={styles.separator} />
+        </View>
+        <Text style={styles.h2}>2.1 Eligibility</Text>
+        <Text style={styles.paragraph}>
+          Bloomi is open to any natural person with legal capacity under Swiss law. If you are a minor, you must obtain
+          the prior consent of your legal representative before creating an account.
+        </Text>
+        <Text style={styles.h2}>2.2 Private individuals and professional shops</Text>
+        <Text style={styles.paragraph}>
+          Bloomi welcomes two types of sellers, and the rules are not exactly the same depending on your profile:
         </Text>
         <Text style={styles.bullet}>
-          • Particuliers (vente C2C) : les présentes CGU s&apos;appliquent intégralement. Bloomi gère notamment la
-          politique de retour entre particuliers décrite à l&apos;article 5.
+          • Private individuals (C2C sales): these Terms apply in full. Bloomi applies in particular the peer-to-peer
+          return policy described in Section 5.
         </Text>
         <Text style={styles.bullet}>
-          • Boutiques professionnelles (vente B2C) : chaque boutique applique ses propres conditions générales de
-          vente. Bloomi n&apos;intervient ni dans les retours ni dans les litiges liés à ces transactions.
+          • Professional shops (B2C sales): each shop applies its own general terms and conditions of sale. Bloomi
+          does not handle returns or disputes relating to those transactions.
         </Text>
-        <Text style={styles.h2}>2.3 Votre compte Bloomi</Text>
-        <Text style={styles.paragraph}>Pour utiliser la plateforme, vous créez un compte personnel avec :</Text>
-        <Text style={styles.bullet}>• votre prénom et nom,</Text>
-        <Text style={styles.bullet}>• votre date de naissance,</Text>
-        <Text style={styles.bullet}>• un numéro de téléphone valide,</Text>
-        <Text style={styles.bullet}>• une adresse e-mail,</Text>
-        <Text style={styles.bullet}>• un mot de passe sécurisé.</Text>
+        <Text style={styles.h2}>2.3 Your Bloomi account</Text>
+        <Text style={styles.paragraph}>To use the platform, you create a personal account with:</Text>
+        <Text style={styles.bullet}>• your first and last name,</Text>
+        <Text style={styles.bullet}>• your date of birth,</Text>
+        <Text style={styles.bullet}>• a valid telephone number,</Text>
+        <Text style={styles.bullet}>• an email address,</Text>
+        <Text style={styles.bullet}>• a secure password.</Text>
         <Text style={styles.paragraph}>
-          Vos informations doivent être exactes et à jour. Un seul compte par personne. Vos identifiants vous
-          appartiennent : gardez-les confidentiels et ne les partagez avec personne.
+          Your information must be accurate and kept up to date. Only one account per person. Your login credentials
+          are yours: keep them confidential and do not share them with anyone.
         </Text>
         <Text style={styles.paragraph}>
-          Pour les boutiques professionnelles, la création d&apos;un compte pro nécessite la fourniture d&apos;un justificatif
-          d&apos;entreprise valable en Suisse (extrait du registre du commerce ou document équivalent). Bloomi se réserve
-          le droit de refuser ou de suspendre tout compte pro dont les justificatifs seraient incomplets ou invalides.
+          For professional shops, creating a business account requires providing valid proof of business in Switzerland
+          (extract from the commercial register or equivalent document). Bloomi reserves the right to refuse or
+          suspend any business account whose supporting documents are incomplete or invalid.
         </Text>
-        <Text style={styles.h2}>2.4 Ce qu&apos;on vous demande avant votre première vente</Text>
+        <Text style={styles.h2}>2.4 What we require before your first sale</Text>
         <Text style={styles.paragraph}>
-          Pour recevoir vos gains, notre prestataire de paiement Stripe vous demandera de vérifier votre identité. Ce
-          processus inclut notamment :
+          To receive your payouts, our payment service provider Stripe will ask you to verify your identity. This
+          process includes in particular:
         </Text>
-        <Text style={styles.bullet}>• la fourniture de vos coordonnées bancaires (IBAN ou autre),</Text>
-        <Text style={styles.bullet}>• la transmission d&apos;un document d&apos;identité officiel,</Text>
-        <Text style={styles.bullet}>• des contrôles réglementaires (AML, listes de sanctions).</Text>
+        <Text style={styles.bullet}>• providing your bank details (IBAN or other),</Text>
+        <Text style={styles.bullet}>• submitting an official identity document,</Text>
+        <Text style={styles.bullet}>• regulatory checks (AML, sanctions lists).</Text>
         <Text style={styles.paragraph}>
-          Ces vérifications sont réalisées directement par Stripe. Bloomi n&apos;y a pas accès et ne peut pas être tenu
-          responsable d&apos;un blocage ou d&apos;un refus de leur part.
+          These checks are carried out directly by Stripe. Bloomi does not have access to them and cannot be held
+          liable for any block or refusal on Stripe&apos;s part.
         </Text>
-        <Text style={styles.h2}>2.5 On se réserve le droit de suspendre un compte</Text>
+        <Text style={styles.h2}>2.5 Right to suspend an account</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            SI NOUS DÉTECTONS UN COMPORTEMENT FRAUDULEUX, UNE VIOLATION DE CES CGU, UN USAGE ABUSIF DE LA PLATEFORME
-            OU TOUTE ACTIVITÉ CONTRAIRE À LA LOI, NOUS POUVONS RESTREINDRE OU FERMER UN COMPTE, AVEC OU SANS PRÉAVIS.
+            IF WE DETECT FRAUDULENT CONDUCT, A BREACH OF THESE TERMS, ABUSE OF THE PLATFORM, OR ANY ACTIVITY CONTRARY
+            TO APPLICABLE LAW, WE MAY RESTRICT OR CLOSE AN ACCOUNT, WITH OR WITHOUT PRIOR NOTICE.
           </Text>
         </View>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>3. Ce qu&apos;on vend</Text>
+          <Text style={styles.articleTitle}>3. What may be sold</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>3.1 Les articles bienvenus</Text>
-        <Text style={styles.paragraph}>Bloomi est dédié à la mode de seconde main. Sont les bienvenus :</Text>
-        <Text style={styles.bullet}>• Vêtements (neufs, d&apos;occasion ou jamais portés),</Text>
-        <Text style={styles.bullet}>• Chaussures,</Text>
-        <Text style={styles.bullet}>• Sacs, ceintures et accessoires de maroquinerie,</Text>
-        <Text style={styles.bullet}>• Bijoux fantaisie et montres,</Text>
-        <Text style={styles.bullet}>• Lunettes et autres accessoires de mode,</Text>
-        <Text style={styles.bullet}>• Jouets pour enfants,</Text>
-        <Text style={styles.bullet}>• Livres enfants.</Text>
-        <Text style={styles.h2}>3.2 Les articles interdits</Text>
-        <Text style={styles.paragraph}>Certains articles n&apos;ont pas leur place sur Bloomi. Sont interdits :</Text>
+        <Text style={styles.h2}>3.1 Permitted items</Text>
+        <Text style={styles.paragraph}>Bloomi is dedicated to second-hand fashion. The following are permitted:</Text>
+        <Text style={styles.bullet}>• Clothing (new, pre-owned, or never worn),</Text>
+        <Text style={styles.bullet}>• Footwear,</Text>
+        <Text style={styles.bullet}>• Bags, belts, and leather goods accessories,</Text>
+        <Text style={styles.bullet}>• Costume jewellery and watches,</Text>
+        <Text style={styles.bullet}>• Eyewear and other fashion accessories,</Text>
+        <Text style={styles.bullet}>• Children&apos;s toys,</Text>
+        <Text style={styles.bullet}>• Children&apos;s books.</Text>
+        <Text style={styles.h2}>3.2 Prohibited items</Text>
+        <Text style={styles.paragraph}>Certain items are not permitted on Bloomi. The following are prohibited:</Text>
         <Text style={styles.bullet}>
-          • tout article illégal au regard du droit suisse (armes, drogues, espèces protégées, etc.),
+          • any item that is unlawful under Swiss law (weapons, drugs, protected species, etc.),
         </Text>
-        <Text style={styles.bullet}>• tout article dont la description serait mensongère ou trompeuse.</Text>
+        <Text style={styles.bullet}>• any item whose description is false or misleading.</Text>
         <Text style={styles.paragraph}>
-          Nous nous réservons le droit de retirer tout article non conforme, sans préavis et sans indemnité.
+          We reserve the right to remove any non-compliant listing, without prior notice and without compensation.
         </Text>
-        <Text style={styles.h2}>3.3 Vos annonces, votre responsabilité</Text>
-        <Text style={styles.paragraph}>Quand vous publiez une annonce sur Bloomi, vous vous engagez à :</Text>
-        <Text style={styles.bullet}>• décrire l&apos;article honnêtement et fidèlement (photos, état, taille, etc.),</Text>
-        <Text style={styles.bullet}>• utiliser de vraies photos de l&apos;article, pas de visuels générés par IA,</Text>
+        <Text style={styles.h2}>3.3 Your listings, your responsibility</Text>
+        <Text style={styles.paragraph}>When you publish a listing on Bloomi, you agree to:</Text>
+        <Text style={styles.bullet}>• describe the item honestly and accurately (photos, condition, size, etc.),</Text>
+        <Text style={styles.bullet}>• use genuine photos of the item, not AI-generated images,</Text>
         <Text style={styles.bullet}>
-          • ne pas publier de contenus blessants, discriminatoires ou illicites.
+          • not publish content that is harmful, discriminatory, or unlawful.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>4. Comment se passe une vente ?</Text>
+          <Text style={styles.articleTitle}>4. How does a sale work?</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>4.1 Le contrat est entre vous</Text>
+        <Text style={styles.h2}>4.1 The contract is between you</Text>
         <Text style={styles.paragraph}>
-          Lorsqu&apos;un acheteur paie un article, un contrat de vente est conclu directement entre lui et le vendeur.
-          Bloomi n&apos;est pas partie à ce contrat. Notre rôle est de fournir l&apos;infrastructure technique qui rend la
+          When a buyer pays for an item, a sale contract is concluded directly between the buyer and the seller. Bloomi
+          is not a party to that contract. Our role is to provide the technical infrastructure that makes the
           transaction possible.
         </Text>
-        <Text style={styles.h2}>4.2 Les règles selon le type de vendeur</Text>
+        <Text style={styles.h2}>4.2 Rules by seller type</Text>
         <Text style={styles.bullet}>
-          • Vente entre particuliers : les CGU Bloomi s&apos;appliquent intégralement, y compris la politique de retour de
-          l&apos;article 5.
-        </Text>
-        <Text style={styles.bullet}>
-          • Vente par une boutique pro : les CGV de la boutique s&apos;appliquent. Bloomi n&apos;intervient pas dans les
-          retours ni les litiges.
-        </Text>
-        <Text style={styles.h2}>4.3 Les paiements, c&apos;est Stripe qui gère</Text>
-        <Text style={styles.paragraph}>
-          Tous les paiements sur Bloomi sont traités par Stripe, Inc., notre prestataire de paiement sécurisé. Bloomi
-          encaisse les fonds via Stripe pour votre compte et vous les reverse une fois la transaction validée. Nous ne
-          conservons pas vos fonds sur nos propres comptes.
-        </Text>
-        <Text style={styles.paragraph}>
-          Stripe peut bloquer temporairement des fonds dans le cadre de ses contrôles réglementaires. Bloomi n&apos;a aucune
-          prise sur ces décisions et ne peut en être tenu responsable.
-        </Text>
-        <Text style={styles.h2}>4.4 Le déroulement d&apos;une transaction</Text>
-        <Text style={styles.paragraph}>Vous vendez : vous avez 4 jours pour expédier</Text>
-        <Text style={styles.paragraph}>
-          Dès que l&apos;acheteur a payé, vous recevez une notification. Vous disposez alors de 4 jours ouvrables maximum
-          pour expédier le colis. Passé ce délai sans expédition, la commande est annulée et l&apos;acheteur est remboursé.
-        </Text>
-        <Text style={styles.paragraph}>La vente est confirmée</Text>
-        <Text style={styles.paragraph}>
-          La transaction est validée dès que l&apos;acheteur confirme la réception de son colis. S&apos;il ne donne pas signe de
-          vie dans les 48 heures suivant la livraison, la transaction est automatiquement validée. Les fonds vous sont
-          alors reversés via Stripe.
-        </Text>
-        <Text style={styles.paragraph}>Si quelque chose se passe mal</Text>
-        <Text style={styles.bullet}>
-          • Vous n&apos;expédiez pas dans les délais : l&apos;acheteur est remboursé (prix + livraison, hors frais de protection
-          acheteur) et votre compte peut être sanctionné.
+          • Sales between private individuals: Bloomi&apos;s Terms apply in full, including the return policy in Section
+          5.
         </Text>
         <Text style={styles.bullet}>
-          • Vous annulez parce que l&apos;article n&apos;est plus disponible : l&apos;acheteur est intégralement remboursé.
+          • Sales by a professional shop: the shop&apos;s general terms and conditions of sale apply. Bloomi does not
+          handle returns or disputes.
+        </Text>
+        <Text style={styles.h2}>4.3 Payments are processed by Stripe</Text>
+        <Text style={styles.paragraph}>
+          All payments on Bloomi are processed by Stripe, Inc., our secure payment service provider. Bloomi collects
+          funds via Stripe on your behalf and pays them out to you once the transaction is confirmed. We do not hold
+          your funds in our own accounts.
+        </Text>
+        <Text style={styles.paragraph}>
+          Stripe may temporarily hold funds as part of its regulatory checks. Bloomi has no control over those
+          decisions and cannot be held liable for them.
+        </Text>
+        <Text style={styles.h2}>4.4 Transaction process</Text>
+        <Text style={styles.paragraph}>When you sell: you have 4 business days to ship</Text>
+        <Text style={styles.paragraph}>
+          As soon as the buyer has paid, you receive a notification. You then have a maximum of 4 business days to
+          ship the parcel. If that period elapses without shipment, the order is cancelled and the buyer is refunded.
+        </Text>
+        <Text style={styles.paragraph}>Sale confirmed</Text>
+        <Text style={styles.paragraph}>
+          The transaction is confirmed when the buyer confirms receipt of the parcel. If the buyer does not respond
+          within 48 hours after delivery, the transaction is automatically confirmed. Funds are then paid out to you
+          via Stripe.
+        </Text>
+        <Text style={styles.paragraph}>If something goes wrong</Text>
+        <Text style={styles.bullet}>
+          • You do not ship within the deadline: the buyer is refunded (item price plus shipping, excluding buyer
+          protection fees) and your account may be subject to sanctions.
+        </Text>
+        <Text style={styles.bullet}>
+          • You cancel because the item is no longer available: the buyer receives a full refund.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>5. Les retours</Text>
+          <Text style={styles.articleTitle}>5. Returns</Text>
           <View style={styles.separator} />
         </View>
         <Text style={styles.paragraph}>
-          Important : Cette section ne s&apos;applique qu&apos;aux transactions entre particuliers. Pour les achats auprès d&apos;une
-          boutique professionnelle, ce sont les conditions de retour de la boutique qui s&apos;appliquent. Bloomi
-          n&apos;intervient pas dans ces cas-là.
+          Important: This section applies only to transactions between private individuals. For purchases from a
+          professional shop, the shop&apos;s return conditions apply. Bloomi does not intervene in those cases.
         </Text>
-        <Text style={styles.h2}>5.1 Vous avez 24 heures pour signaler un problème</Text>
+        <Text style={styles.h2}>5.1 You have 24 hours to report an issue</Text>
         <Text style={styles.paragraph}>
-          En tant qu&apos;acheteur, si l&apos;article reçu ne correspond pas à l&apos;annonce, vous disposez de 24 heures à compter
-          de la validation de la réception pour ouvrir une demande de retour. Passé ce délai, la transaction est
-          définitivement clôturée.
+          As a buyer, if the item received does not match the listing, you have 24 hours from confirmation of receipt
+          to open a return request. After that period, the transaction is closed definitively.
         </Text>
-        <Text style={styles.h2}>5.2 Comment ça se passe</Text>
-        <Text style={styles.bullet}>• Le retour se fait uniquement via La Poste Suisse.</Text>
-        <Text style={styles.bullet}>• Les frais de retour sont à votre charge en tant qu&apos;acheteur.</Text>
+        <Text style={styles.h2}>5.2 How returns work</Text>
+        <Text style={styles.bullet}>• Returns must be made exclusively via Swiss Post.</Text>
+        <Text style={styles.bullet}>• Return shipping costs are borne by you as the buyer.</Text>
         <Text style={styles.bullet}>
-          • Le remboursement n&apos;inclut pas les frais de livraison initiale ni les frais de protection acheteur.
+          • The refund does not include the original outbound shipping charges or buyer protection fees.
         </Text>
         <Text style={styles.paragraph}>
-          Le remboursement est déclenché une fois que le vendeur a confirmé la réception du colis retour.
+          The refund is triggered once the seller has confirmed receipt of the return parcel.
         </Text>
-        <Text style={styles.h2}>5.3 Situations particulières</Text>
+        <Text style={styles.h2}>5.3 Special situations</Text>
         <Text style={styles.bullet}>
-          • Vous ne renvoyez pas le colis dans les temps : la transaction est définitivement validée, aucun remboursement
-          possible.
-        </Text>
-        <Text style={styles.bullet}>
-          • Vous utilisez un autre transporteur que La Poste : le vendeur peut refuser le retour, aucun remboursement
-          possible.
+          • You do not send the parcel back in time: the transaction is confirmed definitively; no refund is possible.
         </Text>
         <Text style={styles.bullet}>
-          • Le colis retour est perdu par La Poste : Bloomi n&apos;est pas responsable des pertes postales. L&apos;acheteur est
-          remboursé du montant de l&apos;article, le vendeur est dédommagé selon la décision de La Poste.
+          • You use a carrier other than Swiss Post: the seller may refuse the return; no refund is possible.
         </Text>
-        <Text style={styles.h2}>5.4 Notre rôle dans les litiges entre particuliers</Text>
+        <Text style={styles.bullet}>
+          • The return parcel is lost by Swiss Post: Bloomi is not liable for postal losses. The buyer is refunded the
+          item amount; the seller is compensated in accordance with Swiss Post&apos;s decision.
+        </Text>
+        <Text style={styles.h2}>5.4 Our role in disputes between private individuals</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            BLOOMI NE FAIT PAS DE MÉDIATION ENTRE PARTICULIERS. EN TANT QU&apos;INTERMÉDIAIRE TECHNIQUE, NOUS NE POUVONS PAS
-            VÉRIFIER L&apos;AUTHENTICITÉ DES RÉCLAMATIONS. C&apos;EST PRÉCISÉMENT POUR ÇA QUE NOUS AVONS MIS EN PLACE UN DROIT DE
-            RETOUR CLAIR ET SYSTÉMATIQUE : SI VOUS N&apos;ÊTES PAS SATISFAIT·E, VOUS RETOURNEZ L&apos;ARTICLE ET VOUS ÊTES
-            REMBOURSÉ·E.
+            BLOOMI DOES NOT MEDIATE BETWEEN PRIVATE INDIVIDUALS. AS A TECHNICAL INTERMEDIARY, WE CANNOT VERIFY THE
+            AUTHENTICITY OF CLAIMS. THAT IS PRECISELY WHY WE HAVE PUT IN PLACE A CLEAR, SYSTEMATIC RIGHT OF RETURN: IF
+            YOU ARE NOT SATISFIED, YOU RETURN THE ITEM AND YOU ARE REFUNDED.
           </Text>
         </View>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>6. Livraison</Text>
+          <Text style={styles.articleTitle}>6. Delivery</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>6.1 Les modes de livraison disponibles</Text>
+        <Text style={styles.h2}>6.1 Available delivery methods</Text>
         <Text style={styles.paragraph}>
-          En tant que vendeur, vous choisissez au moment de la mise en ligne comment vous souhaitez expédier votre
-          article :
+          As a seller, you choose at listing how you wish to ship your item:
         </Text>
-        <Text style={styles.bullet}>• La Poste Suisse (avec numéro de suivi),</Text>
-        <Text style={styles.bullet}>• Remise en main propre.</Text>
-        <Text style={styles.h2}>6.2 La remise en main propre</Text>
+        <Text style={styles.bullet}>• Swiss Post (with tracking number),</Text>
+        <Text style={styles.bullet}>• Hand delivery in person.</Text>
+        <Text style={styles.h2}>6.2 Hand delivery in person</Text>
         <Text style={styles.paragraph}>
-          Si vous proposez ce mode de livraison, une fois la vente et le paiement confirmés, acheteur et vendeur
-          peuvent échanger leur numéro de téléphone et leur adresse via la messagerie Bloomi pour organiser la remise.
-          L&apos;organisation du rendez-vous et l&apos;échange de l&apos;article se font ensuite directement entre les deux parties.
+          If you offer this delivery method, once the sale and payment are confirmed, the buyer and seller may
+          exchange their telephone number and address via Bloomi messaging to arrange handover. Scheduling the meeting
+          and exchanging the item then take place directly between the parties.
         </Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            BLOOMI N&apos;INTERVIENT PAS DANS CE TYPE D&apos;ARRANGEMENT ET NE PEUT ETRE TENU RESPONSABLE DE CE QUI S&apos;Y PASSE.
+            BLOOMI IS NOT INVOLVED IN THIS TYPE OF ARRANGEMENT AND CANNOT BE HELD LIABLE FOR ANYTHING THAT OCCURS IN
+            THAT CONTEXT.
           </Text>
         </View>
-        <Text style={styles.h2}>6.3 Les frais de livraison</Text>
+        <Text style={styles.h2}>6.3 Shipping charges</Text>
         <Text style={styles.paragraph}>
-          Les frais de livraison sont fixés par Bloomi et affichés clairement au moment de la commande. Ils sont à la
-          charge de l&apos;acheteur, sauf mention contraire.
+          Shipping charges are set by Bloomi and displayed clearly at checkout. They are borne by the buyer unless
+          otherwise stated.
         </Text>
-        <Text style={styles.h2}>6.4 C&apos;est le vendeur qui est responsable de l&apos;envoi</Text>
+        <Text style={styles.h2}>6.4 The seller is responsible for shipment</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            EN TANT QUE VENDEUR, VOUS ÊTES RESPONSABLE DE L&apos;EMBALLAGE, DE L&apos;ADRESSAGE ET DU DÉPÔT DU COLIS DANS LES
-            DÉLAIS. BLOOMI N&apos;EST PAS RESPONSABLE DES PROBLÈMES LIÉS À UN COLIS MAL EMBALLÉ, MAL ADRESSÉ OU DÉPOSÉ HORS
-            DÉLAIS.
+            AS A SELLER, YOU ARE RESPONSIBLE FOR PACKAGING, ADDRESSING, AND DEPOSITING THE PARCEL WITHIN THE DEADLINES.
+            BLOOMI IS NOT LIABLE FOR ISSUES ARISING FROM A POORLY PACKAGED PARCEL, INCORRECT ADDRESSING, OR LATE
+            DEPOSIT.
           </Text>
         </View>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>7. Frais et commissions</Text>
+          <Text style={styles.articleTitle}>7. Fees and commissions</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>7.1 La commission Bloomi</Text>
+        <Text style={styles.h2}>7.1 Bloomi commission</Text>
         <Text style={styles.paragraph}>
-          Bloomi prélève une commission sur chaque vente réalisée via la plateforme. Le barème exact est disponible à
-          tout moment dans notre espace d&apos;aide. Nous nous réservons le droit de le faire évoluer. Toute modification
-          ne s&apos;applique qu&apos;aux ventes passées après la mise en ligne du nouveau barème.
+          Bloomi charges a commission on each sale completed through the platform. The exact scale is available at all
+          times in our help section. We reserve the right to change it. Any change applies only to sales completed
+          after the updated scale is published.
         </Text>
-        <Text style={styles.h2}>7.2 Les frais de protection acheteur</Text>
+        <Text style={styles.h2}>7.2 Buyer protection fees</Text>
         <Text style={styles.paragraph}>
-          Ces frais, affichés clairement avant le paiement, permettent de :
+          These fees, which are displayed clearly before payment, are used to:
         </Text>
-        <Text style={styles.bullet}>• sécuriser temporairement les fonds jusqu&apos;à la réception confirmée,</Text>
-        <Text style={styles.bullet}>• rembourser l&apos;acheteur si le vendeur n&apos;expédie pas,</Text>
+        <Text style={styles.bullet}>• hold funds securely until confirmed receipt,</Text>
+        <Text style={styles.bullet}>• refund the buyer if the seller does not ship,</Text>
         <Text style={styles.bullet}>
-          • dédommager le vendeur si le colis est perdu par le transporteur.
+          • compensate the seller if the parcel is lost by the carrier.
         </Text>
-        <Text style={styles.paragraph}>Ces frais ne sont pas remboursés en cas de retour.</Text>
-        <Text style={styles.h2}>7.3 Comment payer sur Bloomi</Text>
+        <Text style={styles.paragraph}>These fees are not refunded in the event of a return.</Text>
+        <Text style={styles.h2}>7.3 How to pay on Bloomi</Text>
         <Text style={styles.paragraph}>
-          Les moyens de paiement disponibles sont ceux proposés par Stripe au moment de votre commande. Bloomi peut en
-          ajouter ou en retirer à tout moment.
+          The payment methods available are those offered by Stripe at the time of your order. Bloomi may add or remove
+          methods at any time.
         </Text>
-        <Text style={styles.h2}>7.4 Quand est-ce que vous recevez votre argent ?</Text>
+        <Text style={styles.h2}>7.4 When do you receive your funds?</Text>
         <Text style={styles.paragraph}>
-          Une fois la transaction validée, votre solde est disponible dans votre espace personnel. Vous pouvez demander
-          un virement à tout moment. Le délai de traitement est généralement de 4 à 12 jours selon Stripe. Bloomi ne
-          peut pas garantir ce délai avec précision. Les fonds disponibles peuvent aussi être utilisés directement pour
-          acheter sur Bloomi.
+          Once the transaction is confirmed, your balance is available in your personal area. You may request a payout
+          at any time. Processing time is generally 4 to 12 days depending on Stripe. Bloomi cannot guarantee that
+          timeframe precisely. Available funds may also be used directly to make purchases on Bloomi.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>8. Ce que Bloomi ne peut pas garantir</Text>
+          <Text style={styles.articleTitle}>8. What Bloomi cannot guarantee</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>8.1 Notre rôle reste technique</Text>
+        <Text style={styles.h2}>8.1 Our role remains technical</Text>
         <Text style={styles.paragraph}>
-          Bloomi n&apos;est pas une boutique, une banque, ni un service de garde de fonds. Nous mettons en relation des
-          acheteurs et des vendeurs. Nous ne garantissons pas la qualité des articles publiés, ni la bonne exécution
-          des contrats conclus entre utilisateurs.
+          Bloomi is not a shop, a bank, or a custodian of funds. We connect buyers and sellers. We do not guarantee the
+          quality of listed items or proper performance of contracts between users.
         </Text>
-        <Text style={styles.h2}>8.2 Ce dont Bloomi n&apos;est pas responsable</Text>
+        <Text style={styles.h2}>8.2 What Bloomi is not liable for</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            SOUS RÉSERVE DE CE QUE LA LOI IMPOSE, BLOOMI NE PEUT PAS ÊTRE TENU RESPONSABLE DE :
+            TO THE EXTENT PERMITTED BY MANDATORY LAW, BLOOMI CANNOT BE HELD LIABLE FOR:
           </Text>
-          <Text style={styles.clauseBullet}>• LA DESCRIPTION INEXACTE D&apos;UN ARTICLE PAR UN VENDEUR,</Text>
-          <Text style={styles.clauseBullet}>• LES RETARDS OU PROBLÈMES DE LIVRAISON,</Text>
-          <Text style={styles.clauseBullet}>• LES DOMMAGES CAUSÉS PAR UN ARTICLE ACHETÉ,</Text>
-          <Text style={styles.clauseBullet}>• LES LITIGES ENTRE UTILISATEURS,</Text>
+          <Text style={styles.clauseBullet}>• INACCURATE DESCRIPTION OF AN ITEM BY A SELLER,</Text>
+          <Text style={styles.clauseBullet}>• DELIVERY DELAYS OR DELIVERY ISSUES,</Text>
+          <Text style={styles.clauseBullet}>• DAMAGE CAUSED BY A PURCHASED ITEM,</Text>
+          <Text style={styles.clauseBullet}>• DISPUTES BETWEEN USERS,</Text>
           <Text style={styles.clauseBullet}>
-            • TOUTE PERTE FINANCIÈRE OU DE DONNÉES LIÉE À L&apos;UTILISATION DE LA PLATEFORME.
+            • ANY FINANCIAL LOSS OR DATA LOSS RELATED TO USE OF THE PLATFORM.
           </Text>
         </View>
-        <Text style={styles.h2}>8.3 Cas de force majeure</Text>
+        <Text style={styles.h2}>8.3 Force majeure</Text>
         <Text style={styles.paragraph}>
-          Bloomi n&apos;est pas responsable des interruptions de service causées par des événements hors de notre contrôle :
-          pannes internet, catastrophes naturelles, décisions administratives, grèves ou autres situations de force
-          majeure au sens du droit suisse.
+          Bloomi is not liable for service interruptions caused by events beyond our control: internet outages,
+          natural disasters, administrative decisions, strikes, or other circumstances constituting force majeure under
+          Swiss law.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>9. Vos contenus et nos droits</Text>
+          <Text style={styles.articleTitle}>9. Your content and our rights</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>9.1 La marque et la plateforme Bloomi nous appartiennent</Text>
+        <Text style={styles.h2}>9.1 The Bloomi brand and platform belong to us</Text>
         <Text style={styles.paragraph}>
-          Le nom Bloomi, notre logo, notre design, notre code et tous les éléments de la plateforme sont la propriété
-          exclusive de Bloomi Sàrl, protégés par le droit suisse et international. Toute reproduction non autorisée est
-          interdite.
+          The Bloomi name, our logo, our design, our code, and all elements of the platform are the exclusive property
+          of Bloomi Sàrl, protected under Swiss and international law. Any unauthorised reproduction is prohibited.
         </Text>
-        <Text style={styles.h2}>9.2 Ce que vous publiez sur Bloomi</Text>
+        <Text style={styles.h2}>9.2 What you publish on Bloomi</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            EN PUBLIANT DES PHOTOS OU DES DESCRIPTIONS SUR BLOOMI, VOUS CONFIRMEZ EN ÊTRE L&apos;AUTEUR OU AVOIR LES DROITS
-            NÉCESSAIRES. VOUS ACCORDEZ À BLOOMI UNE LICENCE GRATUITE ET NON EXCLUSIVE POUR AFFICHER, HÉBERGER ET
-            UTILISER CES CONTENUS DANS LE CADRE DU FONCTIONNEMENT ET DE LA PROMOTION DE LA PLATEFORME.
+            BY PUBLISHING PHOTOS OR DESCRIPTIONS ON BLOOMI, YOU CONFIRM THAT YOU ARE THE AUTHOR OR THAT YOU HOLD THE
+            NECESSARY RIGHTS. YOU GRANT BLOOMI A FREE, NON-EXCLUSIVE LICENCE TO DISPLAY, HOST, AND USE THAT CONTENT FOR
+            THE OPERATION AND PROMOTION OF THE PLATFORM.
           </Text>
         </View>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>10. Données personnelles</Text>
+          <Text style={styles.articleTitle}>10. Personal data</Text>
           <View style={styles.separator} />
         </View>
         <Text style={styles.paragraph}>
-          Chez Bloomi, la confiance passe aussi par le respect de votre vie privée. Nous traitons vos données
-          conformément à la loi fédérale suisse sur la protection des données (LPD) et à notre Politique de
-          confidentialité, disponible sur la plateforme.
+          At Bloomi, trust also means respecting your privacy. We process your data in accordance with the Swiss
+          Federal Act on Data Protection (FADP) and our Privacy Policy, available on the platform.
         </Text>
         <Text style={styles.paragraph}>
-          Nous collectons uniquement ce dont nous avons besoin pour faire fonctionner Bloomi : vos informations de
-          compte, vos transactions, et pour les vendeurs, les données transmises à Stripe pour la vérification
-          d&apos;identité.
+          We collect only what we need to operate Bloomi: your account information, your transactions, and for
+          sellers, the data transmitted to Stripe for identity verification.
         </Text>
         <Text style={styles.paragraph}>
-          Vous pouvez à tout moment accéder à vos données, les corriger ou en demander la suppression en nous écrivant à
-          contact@bloomi.ch.
+          You may at any time access, correct, or request deletion of your data by writing to us at contact@bloomi.ch.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>11. Votre compte et sa fermeture</Text>
+          <Text style={styles.articleTitle}>11. Your account and closure</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>11.1 Quand vous souhaitez partir</Text>
+        <Text style={styles.h2}>11.1 When you wish to leave</Text>
         <Text style={styles.paragraph}>
-          Vous pouvez supprimer votre compte Bloomi à tout moment depuis l&apos;application ou le site. La suppression est
-          définitive : vous perdez l&apos;accès à votre historique de transactions. Pensez à retirer votre solde avant de
-          partir.
+          You may delete your Bloomi account at any time from the app or the website. Deletion is permanent: you lose
+          access to your transaction history. Please withdraw your balance before you leave.
         </Text>
-        <Text style={styles.h2}>11.2 Quand Bloomi doit intervenir</Text>
+        <Text style={styles.h2}>11.2 When Bloomi must take action</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            NOUS POUVONS SUSPENDRE OU FERMER UN COMPTE EN CAS DE FRAUDE, DE VIOLATION DE CES CGU, D&apos;USAGE ABUSIF DE LA
-            PLATEFORME OU DE NON-RESPECT DE LA LOI APPLICABLE.
+            WE MAY SUSPEND OR CLOSE AN ACCOUNT IN THE EVENT OF FRAUD, BREACH OF THESE TERMS, ABUSE OF THE PLATFORM, OR
+            NON-COMPLIANCE WITH APPLICABLE LAW.
           </Text>
         </View>
         <Text style={styles.paragraph}>
-          La fermeture d&apos;un compte ne signifie pas la perte de vos fonds détenus chez Stripe. Vous restez responsable
-          de retirer votre solde selon les conditions de Stripe.
+          Closing an account does not mean you forfeit funds held with Stripe. You remain responsible for withdrawing
+          your balance in accordance with Stripe&apos;s conditions.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>12. Évolution des CGU</Text>
+          <Text style={styles.articleTitle}>12. Changes to the Terms</Text>
           <View style={styles.separator} />
         </View>
         <Text style={styles.paragraph}>
-          Bloomi est une plateforme vivante, nos CGU peuvent évoluer. En cas de modification substantielle, nous vous
-          en informerons par notification dans l&apos;app ou par e-mail avant leur entrée en vigueur.
+          Bloomi is a living platform; these Terms may change. In the event of a material change, we will notify you via
+          an in-app notice or by email before the changes take effect.
         </Text>
         <Text style={styles.paragraph}>
-          Les modifications ne s&apos;appliquent pas aux transactions déjà en cours au moment de leur publication.
+          Changes do not apply to transactions already in progress at the time they are published.
         </Text>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>13. Droit applicable</Text>
+          <Text style={styles.articleTitle}>13. Governing law</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.h2}>13.1 Le droit suisse s&apos;applique</Text>
+        <Text style={styles.h2}>13.1 Swiss law applies</Text>
         <Text style={styles.paragraph}>
-          Ces CGU et toute relation entre Bloomi et ses utilisateurs sont régies exclusivement par le droit suisse.
+          These Terms and any relationship between Bloomi and its users are governed exclusively by Swiss law.
         </Text>
-        <Text style={styles.h2}>13.2 D&apos;abord, on cherche une solution ensemble</Text>
+        <Text style={styles.h2}>13.2 First, we seek a solution together</Text>
         <View style={styles.clauseBox}>
           <Text style={styles.clauseText}>
-            EN CAS DE LITIGE, NOUS PRIVILÉGIONS TOUJOURS LA DISCUSSION. ÉCRIVEZ-NOUS À CONTACT@BLOOMI.CH ET NOUS FERONS
-            NOTRE POSSIBLE POUR TROUVER UNE SOLUTION AMIABLE. SI AUCUN ACCORD N&apos;EST TROUVÉ DANS UN DÉLAI RAISONNABLE,
-            LES TRIBUNAUX DU CANTON DE VAUD SERONT COMPÉTENTS, SOUS RÉSERVE DES DISPOSITIONS IMPÉRATIVES EN FAVEUR DES
-            CONSOMMATEURS.
+            IN THE EVENT OF A DISPUTE, WE ALWAYS PREFER TO TALK IT THROUGH. WRITE TO US AT CONTACT@BLOOMI.CH AND WE WILL
+            DO OUR BEST TO FIND AN AMICABLE SOLUTION. IF NO AGREEMENT IS REACHED WITHIN A REASONABLE PERIOD, THE COURTS
+            OF THE CANTON OF VAUD SHALL HAVE JURISDICTION, SUBJECT TO MANDATORY PROVISIONS IN FAVOUR OF CONSUMERS.
           </Text>
         </View>
 
         <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>14. Nous contacter</Text>
+          <Text style={styles.articleTitle}>14. Contact us</Text>
           <View style={styles.separator} />
         </View>
-        <Text style={styles.paragraph}>Une question sur ces CGU ? Un doute sur une transaction ? On est là.</Text>
-        <Text style={styles.bullet}>• E-mail : contact@bloomi.ch</Text>
-        <Text style={styles.bullet}>• Site web : www.bloomi.ch</Text>
-        <Text style={styles.bullet}>• Adresse : Bloomi Sàrl, 1091 Grandvaux, Suisse</Text>
-        <Text style={styles.paragraph}>Merci de faire partie de la communauté Bloomi 🌱</Text>
+        <Text style={styles.paragraph}>
+          A question about these Terms? Uncertainty about a transaction? We are here to help.
+        </Text>
+        <Text style={styles.bullet}>• Email: contact@bloomi.ch</Text>
+        <Text style={styles.bullet}>• Website: www.bloomi.ch</Text>
+        <Text style={styles.bullet}>• Address: Bloomi Sàrl, 1091 Grandvaux, Switzerland</Text>
+        <Text style={styles.paragraph}>Thank you for being part of the Bloomi community 🌱</Text>
 
-        <Text style={styles.footer}>© 2026 Bloomi Sàrl — Tous droits réservés</Text>
+        <Text style={styles.footer}>© 2026 Bloomi Sàrl — All rights reserved</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -519,4 +506,3 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.gapLg
   }
 });
-

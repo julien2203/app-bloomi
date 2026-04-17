@@ -89,16 +89,16 @@ export function UniversalResultsScreen(props: {
     if (typeof title === 'string' && title.trim()) return title;
     switch (section) {
       case 'sponsored':
-        return 'Sponsorisés';
+        return 'Sponsored';
       case 'trending':
-        return 'Tendances';
+        return 'Trending';
       case 'influencer':
-        return 'Influenceurs';
+        return 'Influencers';
       case 'all':
-        return 'Tous les articles';
+        return 'All items';
       case 'search':
       default:
-        return 'Recherche';
+        return 'Search';
     }
   }, [section, title]);
 
@@ -601,9 +601,9 @@ export function UniversalResultsScreen(props: {
 
   const resultLabel = useMemo(() => {
     if (resultCount == null) return '';
-    if (resultCount >= 500) return '500+ résultats';
-    if (resultCount === 1) return '1 résultat';
-    return `${resultCount} résultats`;
+    if (resultCount >= 500) return '500+ results';
+    if (resultCount === 1) return '1 result';
+    return `${resultCount} results`;
   }, [resultCount]);
 
   const confirmNearby = useCallback(async () => {
@@ -857,6 +857,7 @@ export function UniversalResultsScreen(props: {
       <View style={styles.cardWrapper}>
         <ProductCard
           listingId={item.data.id}
+          sellerId={item.data.seller_id}
           title={item.data.title}
           price={item.data.price}
           currency="CHF"
@@ -917,6 +918,8 @@ export function UniversalResultsScreen(props: {
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
+              allowFontScaling={false}
+              maxFontSizeMultiplier={1}
             />
             {query.length > 0 && (
               <TouchableOpacity
@@ -1002,7 +1005,7 @@ export function UniversalResultsScreen(props: {
                   disabled={nearbyConfirming}
                   style={[styles.modalBtn, nearbyConfirming && styles.modalBtnDisabled]}
                 >
-                  <Text style={styles.modalBtnText}>Réinitialiser</Text>
+                  <Text style={styles.modalBtnText}>Reset</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -1013,7 +1016,7 @@ export function UniversalResultsScreen(props: {
                   {nearbyConfirming ? (
                     <ActivityIndicator size="small" color={theme.colors.appleBlack} />
                   ) : (
-                    <Text style={styles.modalBtnTextPrimary}>Valider</Text>
+                    <Text style={styles.modalBtnTextPrimary}>Apply</Text>
                   )}
                 </TouchableOpacity>
               </View>

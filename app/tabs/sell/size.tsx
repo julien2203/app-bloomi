@@ -232,7 +232,7 @@ export default function SellSizeScreen() {
           ]}
         >
           <Button
-            title="Confirmer"
+            title="Confirm"
             onPress={handleConfirm}
             variant="primary"
             disabled={!selectedId}

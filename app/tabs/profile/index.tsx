@@ -70,7 +70,7 @@ export default function ProfileScreen() {
         setProfile(null);
       }
     } catch {
-      setError('Impossible de charger le profil.');
+      setError('Unable to load profile.');
       setProfile(null);
     } finally {
       setLoading(false);
@@ -106,7 +106,7 @@ export default function ProfileScreen() {
         setError(null);
       }
     } catch {
-      setError('Impossible de mettre à jour le mode vacance.');
+      setError('Unable to update vacation mode.');
       setVacationMode((prev) => !prev);
     } finally {
       setUpdatingVacation(false);
@@ -174,6 +174,18 @@ export default function ProfileScreen() {
         icon="likeHeartOutline"
         onPress={() => router.push('/tabs/profile/favorites')}
       />
+      {user?.id ? (
+        <ProfileItem
+          label="View my closet"
+          icon="bookmarkOutline"
+          onPress={() =>
+            router.push({
+              pathname: '/tabs/public-profile' as const,
+              params: { user_id: user.id }
+            } as any)
+          }
+        />
+      ) : null}
       <ProfileItem
         label="Wallet"
         icon="walletOutline"
@@ -190,7 +202,7 @@ export default function ProfileScreen() {
         onPress={() => router.push('/tabs/profile/notifications')}
       />
       <ProfileItem
-        label="Activer mon compte vendeur"
+        label="Activate my seller account"
         icon="walletOutline"
         onPress={() => router.push('/tabs/profile/activate-seller-account' as any)}
       />
@@ -215,13 +227,6 @@ export default function ProfileScreen() {
         onPress={() => router.push('/tabs/profile/feedback')}
       />
 
-      {/* Onglet test pour accéder à la gestion de ses annonces */}
-      <ProfileItem
-        label="Test – Manage my listings"
-        icon="billListOutline"
-        onPress={() => router.push('/tabs/profile/my-listings')}
-      />
-
       {/* Mode vacance dans la même liste */}
       <View style={styles.row}>
         <View style={styles.rowLeft}>
@@ -240,7 +245,7 @@ export default function ProfileScreen() {
 
       {/* Déconnexion */}
       <ProfileItem
-        label="Se déconnecter"
+        label="Sign out"
         icon="exitOutline"
         onPress={() => {
           if (!isLoading) {

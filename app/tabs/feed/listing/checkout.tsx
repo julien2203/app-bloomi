@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -29,9 +29,17 @@ type CheckoutParams = {
   amount: string;
   title: string;
   cover_photo?: string;
+  offer_message_id?: string;
 };
 
 type DeliveryMode = 'pickup' | 'shipping';
+
+type SavedProfileAddress = {
+  street: string;
+  postal_code: string;
+  city: string;
+  country: string;
+};
 
 const COUNTRY_OPTIONS = [
   { code: 'CH', label: 'Switzerland (CH)' },
@@ -41,6 +49,13 @@ const COUNTRY_OPTIONS = [
 ] as const;
 
 type CountryCode = (typeof COUNTRY_OPTIONS)[number]['code'];
+
+function isSavedAddressComplete(a: SavedProfileAddress | null): a is SavedProfileAddress {
+  if (!a) return false;
+  return Boolean(
+    a.street.trim() && a.postal_code.trim() && a.city.trim() && String(a.country ?? '').trim()
+  );
+}
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -59,6 +74,7 @@ export default function CheckoutScreen() {
 
   const title = params.title ?? 'Item';
   const coverPhoto = params.cover_photo ?? null;
+  const offerMessageId = typeof params.offer_message_id === 'string' ? params.offer_message_id.trim() : '';
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('pickup');
   const [street, setStreet] = useState('');
@@ -66,6 +82,13 @@ export default function CheckoutScreen() {
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState<CountryCode>('CH');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+
+  const [savedProfileAddress, setSavedProfileAddress] = useState<SavedProfileAddress | null>(null);
+  /** Shipping address: saved profile or manual entry */
+  const [shippingAddressMode, setShippingAddressMode] = useState<'profile' | 'custom'>('custom');
+  const prevDeliveryModeRef = useRef<DeliveryMode>(deliveryMode);
+  /** Prevents overwriting “Different address” when the profile loads or updates */
+  const userChoseCustomShippingRef = useRef(false);
 
   const [paying, setPaying] = useState(false);
 
@@ -79,43 +102,114 @@ export default function CheckoutScreen() {
   );
   const formattedTotal = useMemo(() => `${total.toFixed(2)} CHF`, [total]);
 
-  const shippingAddressPayload = useMemo(() => {
-    if (deliveryMode !== 'shipping') return null;
-    return {
-      street,
-      rue: street,
-      city,
-      postal_code: postalCode,
-      country
-    };
-  }, [deliveryMode, street, city, postalCode, country]);
-
   const countryLabel = useMemo(() => {
     return COUNTRY_OPTIONS.find((c) => c.code === country)?.label ?? 'Switzerland (CH)';
   }, [country]);
+
+  const applySavedAddressToForm = useCallback((a: SavedProfileAddress) => {
+    setStreet(a.street.trim());
+    setPostalCode(a.postal_code.trim());
+    setCity(a.city.trim());
+    const c = String(a.country ?? 'CH').toUpperCase();
+    setCountry(COUNTRY_OPTIONS.some((o) => o.code === c) ? (c as CountryCode) : 'CH');
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSavedProfileAddress(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('street, postal_code, city, country')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setSavedProfileAddress(null);
+        return;
+      }
+      const row = data as Record<string, unknown>;
+      const next: SavedProfileAddress = {
+        street: String(row.street ?? ''),
+        postal_code: String(row.postal_code ?? ''),
+        city: String(row.city ?? ''),
+        country: String(row.country ?? 'CH')
+      };
+      setSavedProfileAddress(isSavedAddressComplete(next) ? next : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const prev = prevDeliveryModeRef.current;
+    prevDeliveryModeRef.current = deliveryMode;
+
+    if (deliveryMode === 'pickup') {
+      userChoseCustomShippingRef.current = false;
+      return;
+    }
+
+    if (deliveryMode !== 'shipping') return;
+
+    const justEnteredShipping = prev !== 'shipping';
+    if (!justEnteredShipping) return;
+
+    userChoseCustomShippingRef.current = false;
+    const complete = savedProfileAddress && isSavedAddressComplete(savedProfileAddress);
+    if (complete) {
+      setShippingAddressMode('profile');
+      applySavedAddressToForm(savedProfileAddress);
+    } else {
+      setShippingAddressMode('custom');
+    }
+  }, [deliveryMode, savedProfileAddress, applySavedAddressToForm]);
+
+  useEffect(() => {
+    if (deliveryMode !== 'shipping') return;
+    if (!savedProfileAddress || !isSavedAddressComplete(savedProfileAddress)) return;
+    if (userChoseCustomShippingRef.current) return;
+    if (shippingAddressMode !== 'custom') return;
+    const formEmpty = !street.trim() && !city.trim() && !postalCode.trim();
+    if (!formEmpty) return;
+    setShippingAddressMode('profile');
+    applySavedAddressToForm(savedProfileAddress);
+  }, [
+    deliveryMode,
+    savedProfileAddress,
+    applySavedAddressToForm,
+    shippingAddressMode,
+    street,
+    city,
+    postalCode
+  ]);
 
   const handlePay = async () => {
     if (paying) return;
 
     if (!user?.id) {
-      Alert.alert('Erreur', 'Vous devez être connecté pour payer');
+      Alert.alert('Error', 'You must be signed in to pay');
       router.push('/auth/login');
       return;
     }
 
     if (!listingId || !sellerId) {
-      Alert.alert('Erreur', 'Paramètres de commande manquants');
+      Alert.alert('Error', 'Order parameters are missing');
       return;
     }
 
     if (amountNum <= 0) {
-      Alert.alert('Erreur', 'Montant invalide');
+      Alert.alert('Error', 'Invalid amount');
       return;
     }
 
     if (deliveryMode === 'shipping') {
       if (!street.trim() || !city.trim() || !postalCode.trim() || !country.trim()) {
-        Alert.alert('Adresse incomplète', 'Veuillez remplir rue, ville, code postal et pays');
+        Alert.alert('Incomplete address', 'Please fill in street, city, postal code, and country');
         return;
       }
     }
@@ -125,7 +219,7 @@ export default function CheckoutScreen() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        Alert.alert('Erreur', 'Session expirée, veuillez vous reconnecter');
+        Alert.alert('Error', 'Session expired. Please sign in again');
         return;
       }
 
@@ -141,7 +235,13 @@ export default function CheckoutScreen() {
           seller_id: sellerId,
           amount: amountNum,
           delivery_mode: deliveryMode,
-          shipping_address: shippingAddressPayload
+          shipping_address:
+            deliveryMode === 'shipping' ? street.trim() : null,
+          shipping_city: deliveryMode === 'shipping' ? city.trim() : null,
+          shipping_postal_code:
+            deliveryMode === 'shipping' ? postalCode.trim() : null,
+          shipping_country: deliveryMode === 'shipping' ? country : null,
+          ...(offerMessageId ? { offer_message_id: offerMessageId } : {})
         })
       });
 
@@ -155,7 +255,7 @@ export default function CheckoutScreen() {
       }
       const clientSecret = json.client_secret;
       if (!clientSecret) {
-        throw new Error('client_secret manquant');
+        throw new Error('Missing client_secret');
       }
 
       const initRes = await initPaymentSheet({
@@ -178,7 +278,7 @@ export default function CheckoutScreen() {
 
       const paymentIntentId = clientSecret.split('_secret')[0];
       if (!paymentIntentId) {
-        throw new Error('paymentIntentId invalide');
+        throw new Error('Invalid paymentIntentId');
       }
 
       const finalizeRes = await fetch(`${SUPABASE_URL}/functions/v1/finalize-order`, {
@@ -200,14 +300,14 @@ export default function CheckoutScreen() {
       }
 
       const orderId = finalizeJson.order_id;
-      if (!orderId) throw new Error('order_id manquant');
+      if (!orderId) throw new Error('Missing order_id');
 
       router.replace({
         pathname: '/tabs/feed/listing/order-confirmation',
         params: { order_id: orderId }
       });
     } catch (e) {
-      Alert.alert('Paiement impossible', e instanceof Error ? e.message : 'Erreur inconnue');
+      Alert.alert('Payment failed', e instanceof Error ? e.message : 'Unknown error');
     } finally {
       setPaying(false);
     }
@@ -249,7 +349,7 @@ export default function CheckoutScreen() {
             <View style={styles.moneyBlock}>
               <View style={styles.moneyRow}>
                 <Text variant="body" color="textSecondary">
-                  Prix
+                  Price
                 </Text>
                 <Text variant="body" color="textPrimary">
                   {formattedPrice}
@@ -276,7 +376,7 @@ export default function CheckoutScreen() {
 
           <View style={styles.section}>
             <Text variant="captionSm" color="textSecondary" style={styles.sectionTitle}>
-              Mode de livraison
+              Delivery method
             </Text>
 
             <View style={styles.toggleRow}>
@@ -290,7 +390,7 @@ export default function CheckoutScreen() {
                   color={deliveryMode === 'pickup' ? 'appleBlack' : 'textSecondary'}
                   style={styles.toggleText}
                 >
-                  Remise en main propre
+                  Local pickup
                 </Text>
               </TouchableOpacity>
 
@@ -304,7 +404,7 @@ export default function CheckoutScreen() {
                   color={deliveryMode === 'shipping' ? 'appleBlack' : 'textSecondary'}
                   style={styles.toggleText}
                 >
-                  Livraison
+                  Shipping
                 </Text>
               </TouchableOpacity>
             </View>
@@ -313,38 +413,144 @@ export default function CheckoutScreen() {
           {deliveryMode === 'shipping' && (
             <View style={styles.section}>
               <Text variant="captionSm" color="textSecondary" style={styles.sectionTitle}>
-                Adresse de livraison
+                Shipping address
               </Text>
 
-              <TextInput
-                style={styles.input}
-                placeholder="Rue"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={street}
-                onChangeText={setStreet}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Ville"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={city}
-                onChangeText={setCity}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Code postal"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={postalCode}
-                onChangeText={setPostalCode}
-                keyboardType="numbers-and-punctuation"
-              />
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[styles.input, styles.countrySelect]}
-                onPress={() => setShowCountryPicker(true)}
-              >
-                <Text style={styles.countrySelectText}>{countryLabel}</Text>
-              </TouchableOpacity>
+              {savedProfileAddress && isSavedAddressComplete(savedProfileAddress) ? (
+                <>
+                  <View style={styles.shippingModeRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.shippingModeCard,
+                        shippingAddressMode === 'profile' && styles.shippingModeCardActive
+                      ]}
+                      onPress={() => {
+                        userChoseCustomShippingRef.current = false;
+                        setShippingAddressMode('profile');
+                        applySavedAddressToForm(savedProfileAddress);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        variant="body"
+                        color={shippingAddressMode === 'profile' ? 'appleBlack' : 'textSecondary'}
+                        style={styles.shippingModeTitle}
+                      >
+                        Saved address
+                      </Text>
+                      <Text variant="captionSm" color="textSecondary" style={styles.shippingModeHint}>
+                        From your Bloomi profile
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.shippingModeCard,
+                        shippingAddressMode === 'custom' && styles.shippingModeCardActive
+                      ]}
+                      onPress={() => {
+                        userChoseCustomShippingRef.current = true;
+                        setShippingAddressMode('custom');
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        variant="body"
+                        color={shippingAddressMode === 'custom' ? 'appleBlack' : 'textSecondary'}
+                        style={styles.shippingModeTitle}
+                      >
+                        Different address
+                      </Text>
+                      <Text variant="captionSm" color="textSecondary" style={styles.shippingModeHint}>
+                        Enter manually
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {shippingAddressMode === 'profile' ? (
+                    <View style={styles.savedAddressBox}>
+                      <Text variant="body" color="textPrimary" style={styles.savedAddressLine}>
+                        {savedProfileAddress.street.trim()}
+                      </Text>
+                      <Text variant="body" color="textSecondary">
+                        {savedProfileAddress.postal_code.trim()} {savedProfileAddress.city.trim()}
+                      </Text>
+                      <Text variant="captionSm" color="textSecondary" style={styles.savedAddressCountry}>
+                        {COUNTRY_OPTIONS.find(
+                          (c) => c.code === String(savedProfileAddress.country).toUpperCase()
+                        )?.label ?? savedProfileAddress.country}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Street"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={street}
+                        onChangeText={setStreet}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="City"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={city}
+                        onChangeText={setCity}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Postal code"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={postalCode}
+                        onChangeText={setPostalCode}
+                        keyboardType="numbers-and-punctuation"
+                      />
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={[styles.input, styles.countrySelect]}
+                        onPress={() => setShowCountryPicker(true)}
+                      >
+                        <Text style={styles.countrySelectText}>{countryLabel}</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text variant="captionSm" color="textSecondary" style={styles.noSavedHint}>
+                    No complete address on your profile. Enter the shipping address below, or add one in
+                    Profile → Settings → My address.
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Street"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={street}
+                    onChangeText={setStreet}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="City"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={city}
+                    onChangeText={setCity}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Postal code"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={postalCode}
+                    onChangeText={setPostalCode}
+                    keyboardType="numbers-and-punctuation"
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.input, styles.countrySelect]}
+                    onPress={() => setShowCountryPicker(true)}
+                  >
+                    <Text style={styles.countrySelectText}>{countryLabel}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
         </ScrollView>
@@ -395,7 +601,7 @@ export default function CheckoutScreen() {
 
         <View style={[styles.ctaContainer, { paddingBottom: insets.bottom + 80 }]}>
           <Button
-            title={paying ? 'Paiement...' : 'Payer'}
+            title={paying ? 'Processing…' : 'Pay'}
             onPress={handlePay}
             variant="primary"
             disabled={paying}
@@ -563,6 +769,50 @@ const styles = StyleSheet.create({
   countryModalFooter: {
     paddingTop: 12,
     paddingHorizontal: 16
+  },
+  shippingModeRow: {
+    flexDirection: 'row',
+    columnGap: theme.spacing.gapSm,
+    marginBottom: theme.spacing.gapMd
+  },
+  shippingModeCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.card,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    backgroundColor: theme.colors.background
+  },
+  shippingModeCardActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary
+  },
+  shippingModeTitle: {
+    textAlign: 'center',
+    fontWeight: '600',
+    marginBottom: 4
+  },
+  shippingModeHint: {
+    textAlign: 'center'
+  },
+  savedAddressBox: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.input,
+    padding: theme.spacing.gapMd,
+    backgroundColor: theme.colors.muted,
+    marginBottom: theme.spacing.gapSm
+  },
+  savedAddressLine: {
+    marginBottom: 4
+  },
+  savedAddressCountry: {
+    marginTop: 6
+  },
+  noSavedHint: {
+    marginBottom: theme.spacing.gapMd,
+    lineHeight: 18
   },
   ctaContainer: {
     paddingHorizontal: theme.spacing.screenPaddingX,

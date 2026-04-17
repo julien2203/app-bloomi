@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
+import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
 import { theme } from '../../../lib/theme';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Text } from '../../../components/ui/Text';
@@ -39,13 +41,13 @@ function formatRelative(dateString: string): string {
   const w = Math.floor(d / 7);
   const mo = Math.floor(d / 30);
   const y = Math.floor(d / 365);
-  if (m < 1) return "à l'instant";
-  if (h < 1) return `il y a ${m} min`;
-  if (d < 1) return `il y a ${h} h`;
-  if (w < 1) return `il y a ${d} j`;
-  if (mo < 1) return `il y a ${w} sem`;
-  if (y < 1) return `il y a ${mo} mois`;
-  return `il y a ${y} an${y > 1 ? 's' : ''}`;
+  if (m < 1) return 'Just now';
+  if (h < 1) return `${m}m ago`;
+  if (d < 1) return `${h}h ago`;
+  if (w < 1) return `${d}d ago`;
+  if (mo < 1) return `${w}w ago`;
+  if (y < 1) return `${mo}mo ago`;
+  return `${y}y ago`;
 }
 
 function pickIconName(data: any): import('../../../lib/assets').IconName {
@@ -68,12 +70,24 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
+  const markingReadIdsRef = useRef<Set<string>>(new Set());
+  /** Après « tout marquer comme lu » : ne pas recharger depuis Supabase au focus (évite d’écraser l’état local). */
+  const hasMarkedAllReadRef = useRef(false);
 
   const unreadCount = useMemo(() => rows.filter((r) => !r.read_at).length, [rows]);
 
-  const loadNotifications = useCallback(async () => {
+  useEffect(() => {
+    hasMarkedAllReadRef.current = false;
+  }, [userId]);
+
+  const loadNotifications = useCallback(async (opts?: { fromUserRefresh?: boolean }) => {
+    if (opts?.fromUserRefresh) {
+      hasMarkedAllReadRef.current = false;
+    }
+    markingReadIdsRef.current.clear();
     if (!userId) {
       setRows([]);
+      useNotificationsBadgeStore.getState().setUnreadCount(0);
       setLoading(false);
       return;
     }
@@ -87,22 +101,38 @@ export default function NotificationsScreen() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setRows((data || []) as NotificationRow[]);
+      const list = (data || []) as NotificationRow[];
+      setRows(list);
+      useNotificationsBadgeStore
+        .getState()
+        .setUnreadCount(list.filter((r) => !r.read_at).length);
     } catch {
       setRows([]);
+      useNotificationsBadgeStore.getState().setUnreadCount(0);
     } finally {
       setLoading(false);
     }
   }, [userId]);
 
-  useEffect(() => {
-    void loadNotifications();
-  }, [loadNotifications]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) {
+        setRows([]);
+        useNotificationsBadgeStore.getState().setUnreadCount(0);
+        setLoading(false);
+        return;
+      }
+      if (hasMarkedAllReadRef.current) {
+        return;
+      }
+      void loadNotifications();
+    }, [userId, loadNotifications])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadNotifications();
+      await loadNotifications({ fromUserRefresh: true });
     } finally {
       setRefreshing(false);
     }
@@ -130,20 +160,36 @@ export default function NotificationsScreen() {
   );
 
   const markAsReadAndNavigate = useCallback(
-    async (n: NotificationRow) => {
-      // Best-effort: marquer comme lu sans bloquer la navigation
-      if (userId && !n.read_at) {
+    (n: NotificationRow) => {
+      const nowIso = new Date().toISOString();
+      if (userId && !n.read_at && !markingReadIdsRef.current.has(n.id)) {
+        markingReadIdsRef.current.add(n.id);
+        useNotificationsBadgeStore.getState().decrementUnread(1);
         setRows((prev) =>
-          prev.map((r) => (r.id === n.id ? { ...r, read_at: new Date().toISOString() } : r))
+          prev.map((r) => (r.id === n.id ? { ...r, read_at: nowIso } : r))
         );
-        void supabase
-          .from('notifications')
-          .update({ read_at: new Date().toISOString() })
-          .eq('id', n.id)
-          .eq('user_id', userId);
+        void (async () => {
+          try {
+            const { error } = await supabase
+              .from('notifications')
+              .update({ read_at: nowIso })
+              .eq('id', n.id)
+              .eq('user_id', userId);
+            if (error) throw error;
+          } catch {
+            setRows((prev) =>
+              prev.map((r) => (r.id === n.id ? { ...r, read_at: null } : r))
+            );
+            useNotificationsBadgeStore.getState().incrementUnread(1);
+          } finally {
+            markingReadIdsRef.current.delete(n.id);
+          }
+        })();
       }
 
-      navigateFromData(n.data);
+      queueMicrotask(() => {
+        navigateFromData(n.data);
+      });
     },
     [navigateFromData, userId]
   );
@@ -153,20 +199,26 @@ export default function NotificationsScreen() {
     if (markingAll) return;
     if (unreadCount === 0) return;
 
-    setMarkingAll(true);
     const nowIso = new Date().toISOString();
+    setRows((prev) => prev.map((r) => (!r.read_at ? { ...r, read_at: nowIso } : r)));
+    useNotificationsBadgeStore.getState().setUnreadCount(0);
+
+    setMarkingAll(true);
     try {
-      setRows((prev) => prev.map((r) => (!r.read_at ? { ...r, read_at: nowIso } : r)));
       const { error } = await supabase
         .from('notifications')
         .update({ read_at: nowIso })
         .eq('user_id', userId)
         .is('read_at', null);
       if (error) throw error;
+      hasMarkedAllReadRef.current = true;
+    } catch {
+      hasMarkedAllReadRef.current = false;
+      await loadNotifications();
     } finally {
       setMarkingAll(false);
     }
-  }, [markingAll, unreadCount, userId]);
+  }, [loadNotifications, markingAll, unreadCount, userId]);
 
   const renderItem = useCallback(
     ({ item }: { item: NotificationRow }) => {
@@ -174,7 +226,7 @@ export default function NotificationsScreen() {
       const icon = pickIconName(item.data);
       return (
         <Pressable
-          onPress={() => void markAsReadAndNavigate(item)}
+          onPress={() => markAsReadAndNavigate(item)}
           style={[styles.row, isUnread && styles.rowUnread]}
         >
           <View style={styles.rowLeft}>
@@ -210,7 +262,7 @@ export default function NotificationsScreen() {
         </Text>
         <View style={styles.headerRight}>
           <Button
-            title="Tout marquer comme lu"
+            title="Mark all as read"
             onPress={() => void markAllAsRead()}
             variant="link"
             disabled={markingAll || unreadCount === 0}
@@ -235,12 +287,13 @@ export default function NotificationsScreen() {
       ) : rows.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Text variant="body" color="textSecondary">
-            Aucune notification pour le moment
+            No notifications yet
           </Text>
         </View>
       ) : (
         <FlatList
           data={rows}
+          extraData={unreadCount}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

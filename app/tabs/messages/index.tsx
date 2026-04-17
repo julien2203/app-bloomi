@@ -59,7 +59,7 @@ export default function MessagesScreen() {
       const { data } = await getInboxThreads();
       setThreads(data);
     } catch {
-      setError('Impossible de charger vos conversations.');
+      setError('Unable to load your conversations.');
       setThreads([]);
     } finally {
       if (!opts?.silent) setLoading(false);
@@ -181,7 +181,7 @@ export default function MessagesScreen() {
           </Text>
           <TouchableOpacity onPress={loadThreads} activeOpacity={0.7}>
             <Text variant="captionSm" color="primary">
-              Réessayer
+              Retry
             </Text>
           </TouchableOpacity>
         </View>

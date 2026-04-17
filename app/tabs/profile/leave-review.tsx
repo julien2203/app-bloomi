@@ -18,6 +18,7 @@ import { TextField } from '../../../components/ui/TextField';
 import { theme } from '../../../lib/theme';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
+import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
 
 type LeaveReviewParams = {
   order_id?: string;
@@ -37,7 +38,7 @@ export default function LeaveReviewScreen() {
     [params.reviewed_id]
   );
   const reviewedName = useMemo(
-    () => String(params.reviewed_name ?? 'Utilisateur'),
+    () => String(params.reviewed_name ?? 'User'),
     [params.reviewed_name]
   );
   const reviewedAvatar = useMemo(
@@ -65,7 +66,7 @@ export default function LeaveReviewScreen() {
       return;
     }
     if (rating < 1 || rating > 5) {
-      Alert.alert('Note requise', 'Choisis une note entre 1 et 5 étoiles.');
+      Alert.alert('Rating required', 'Choose a rating between 1 and 5 stars.');
       return;
     }
     if (submitting) return;
@@ -84,15 +85,24 @@ export default function LeaveReviewScreen() {
       if (error) {
         const msg =
           (error as any)?.code === '23505'
-            ? 'Tu as déjà laissé un avis pour cette commande.'
+            ? 'You have already left a review for this order.'
             : error.message;
         throw new Error(msg);
+      }
+
+      if (reviewedId && reviewedId !== user.id) {
+        void sendPushNotificationWithUserJwt({
+          user_id: reviewedId,
+          title: "⭐ Quelqu'un t'a laissé un avis !",
+          body: "Découvre ce qu'on pense de toi sur Bloomi.",
+          data: { order_id: orderId, reviewer_id: user.id }
+        });
       }
 
       router.replace('/tabs/profile/orders');
     } catch (e) {
       const message =
-        e instanceof Error && e.message ? e.message : "Impossible d'envoyer l'avis.";
+        e instanceof Error && e.message ? e.message : 'Unable to submit review.';
       Alert.alert('Error', message);
     } finally {
       setSubmitting(false);
@@ -107,7 +117,7 @@ export default function LeaveReviewScreen() {
         <View style={styles.headerTopRow}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="h2" style={styles.title}>
-            Laisser un avis
+            Leave a review
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -126,7 +136,7 @@ export default function LeaveReviewScreen() {
             )}
             <View style={styles.userText}>
               <Text variant="captionSm" color="textSecondary">
-                Tu notes
+                You are rating
               </Text>
               <Text variant="h3" style={styles.name} numberOfLines={1}>
                 {reviewedName}
@@ -156,8 +166,8 @@ export default function LeaveReviewScreen() {
           </View>
 
           <TextField
-            label="Commentaire (optionnel)"
-            placeholder="Laisse un commentaire..."
+            label="Comment (optional)"
+            placeholder="Write a comment..."
             value={comment}
             onChangeText={setComment}
             multiline
@@ -167,13 +177,13 @@ export default function LeaveReviewScreen() {
 
           <View style={styles.actionsWrap}>
             <Button
-              title={submitting ? 'Envoi…' : "Envoyer l'avis"}
+              title={submitting ? 'Sending…' : 'Submit review'}
               onPress={onSubmit}
               disabled={!canSubmit || submitting}
               loading={submitting}
               variant="primary"
             />
-            <Button title="Passer" onPress={onSkip} variant="secondary" />
+            <Button title="Skip" onPress={onSkip} variant="secondary" />
           </View>
         </View>
       </KeyboardAvoidingView>

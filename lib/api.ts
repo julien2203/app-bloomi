@@ -25,6 +25,7 @@ import type {
   PaginatedResponse
 } from './types';
 import type { FeedFilters } from './store/feedFilters';
+import { sendPushNotificationWithUserJwt } from './pushNotifications';
 
 // ============================================
 // TYPES POUR LE FEED
@@ -699,8 +700,121 @@ export async function updateListing(
   return { data: data as Listing, error: null };
 }
 
+/** Ancien libellé (rétrocompatibilité des écrans qui proposent « Désactiver »). */
+export const LISTING_DELETE_BLOCKED_BY_ORDERS_MESSAGE =
+  'Impossible de supprimer cette annonce car elle est liée à des commandes. Vous pouvez la désactiver à la place.';
+
+/** Commande encore active (pending / shipped) : pas de suppression physique. */
+export const LISTING_DELETE_BLOCKED_ACTIVE_ORDERS_MESSAGE =
+  'Impossible de supprimer : une commande est en cours pour cette annonce.';
+
+export function isListingDeleteBlockedByOrders(error: string | null): boolean {
+  return (
+    error === LISTING_DELETE_BLOCKED_ACTIVE_ORDERS_MESSAGE ||
+    error === LISTING_DELETE_BLOCKED_BY_ORDERS_MESSAGE
+  );
+}
+
 /**
- * Supprime une annonce appartenant à l'utilisateur connecté
+ * Annonces en brouillon du vendeur connecté (closet profil), format aligné sur le feed.
+ */
+export async function getSellerDraftListingsForCloset(sellerId: string): Promise<ApiResponse<FeedListing[]>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user || user.id !== sellerId) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('listings')
+    .select(
+      `
+      id,
+      seller_id,
+      title,
+      description,
+      price,
+      status,
+      category,
+      condition,
+      brand,
+      size,
+      delivery_mode,
+      city,
+      country_code,
+      created_at,
+      published_at,
+      updated_at,
+      photos:listing_photos(url, order_index)
+    `
+    )
+    .eq('seller_id', sellerId)
+    .eq('status', 'draft')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  const rows = (data || []) as any[];
+  const out: FeedListing[] = rows.map((listing: any) => {
+    const photos = (listing.photos || []) as Array<{ url: string; order_index: number }>;
+    const sorted = [...photos].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    const rawCover = sorted[0]?.url ?? null;
+    let coverUrl: string | null = null;
+    if (rawCover) {
+      if (typeof rawCover === 'string' && (rawCover.startsWith('http://') || rawCover.startsWith('https://'))) {
+        coverUrl = rawCover;
+      } else {
+        coverUrl = supabase.storage.from('listings').getPublicUrl(rawCover).data.publicUrl;
+      }
+    }
+
+    return {
+      id: String(listing.id),
+      seller_id: String(listing.seller_id),
+      title: String(listing.title ?? ''),
+      description: listing.description ?? null,
+      price: typeof listing.price === 'number' ? listing.price : Number(listing.price) || 0,
+      status: String(listing.status ?? 'draft'),
+      category: listing.category ?? null,
+      condition: listing.condition ?? null,
+      brand: listing.brand ?? null,
+      size: listing.size ?? null,
+      delivery_mode: String(listing.delivery_mode ?? 'both'),
+      city: listing.city ?? null,
+      country_code: listing.country_code ?? null,
+      created_at: String(listing.created_at ?? ''),
+      published_at: listing.published_at ?? null,
+      updated_at: String(listing.updated_at ?? listing.created_at ?? ''),
+      cover_photo_url: coverUrl,
+      cover_photo_order: sorted[0]?.order_index ?? null,
+      seller_display_name: null,
+      seller_avatar_url: null,
+      listing_city: listing.city != null ? String(listing.city) : '',
+      listing_country: listing.country_code != null ? String(listing.country_code) : ''
+    };
+  });
+
+  return { data: out, error: null };
+}
+
+/**
+ * Met l'annonce en brouillon : disparaît du feed (published) tout en restant en base.
+ */
+export async function deactivateListingToDraft(id: string): Promise<ApiResponse<void>> {
+  const res = await updateListing(id, { status: 'draft' });
+  if (res.error) {
+    return { data: null, error: res.error };
+  }
+  return { data: null, error: null };
+}
+
+/**
+ * Supprime une annonce appartenant à l'utilisateur connecté.
+ * Ne supprime pas listing_photos avant le listing : le CASCADE côté listing_id supprime les photos
+ * avec la ligne listing, ce qui évite un listing sans images si le DELETE échoue.
  */
 export async function deleteListing(id: string): Promise<ApiResponse<void>> {
   const {
@@ -711,17 +825,62 @@ export async function deleteListing(id: string): Promise<ApiResponse<void>> {
     return { data: null, error: 'Utilisateur non connecté' };
   }
 
-  const { error } = await supabase
+  const { data: row, error: verifyErr } = await supabase
+    .from('listings')
+    .select('id')
+    .eq('id', id)
+    .eq('seller_id', user.id)
+    .maybeSingle();
+
+  if (verifyErr) {
+    return { data: null, error: verifyErr.message };
+  }
+  if (!row) {
+    return { data: null, error: 'Annonce introuvable ou accès refusé' };
+  }
+
+  const { count: activeOrderCount, error: ordersErr } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('listing_id', id)
+    .in('status', ['pending', 'shipped']);
+
+  if (ordersErr) {
+    return { data: null, error: ordersErr.message };
+  }
+  if (typeof activeOrderCount === 'number' && activeOrderCount > 0) {
+    return { data: null, error: LISTING_DELETE_BLOCKED_ACTIVE_ORDERS_MESSAGE };
+  }
+
+  const { error: deleteErr } = await supabase
     .from('listings')
     .delete()
     .eq('id', id)
     .eq('seller_id', user.id);
 
-  if (error) {
-    return { data: null, error: error.message };
+  if (!deleteErr) {
+    return { data: null, error: null };
   }
 
-  return { data: null, error: null };
+  const msg = deleteErr.message ?? '';
+  const looksLikeFk =
+    /foreign key|violates foreign key|23503|restrict/i.test(msg) ||
+    (deleteErr as { code?: string }).code === '23503';
+
+  if (looksLikeFk) {
+    const { error: softErr } = await supabase
+      .from('listings')
+      .update({ status: 'deleted', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('seller_id', user.id);
+
+    if (!softErr) {
+      return { data: null, error: null };
+    }
+    return { data: null, error: softErr.message ?? msg };
+  }
+
+  return { data: null, error: msg };
 }
 
 // ============================================
@@ -760,6 +919,20 @@ export async function likeListing(listingId: string): Promise<ApiResponse<{ id: 
     return { data: null, error: 'Utilisateur non connecté' };
   }
 
+  const { data: listingRow, error: listingErr } = await supabase
+    .from('listings')
+    .select('seller_id')
+    .eq('id', listingId)
+    .maybeSingle();
+
+  if (listingErr) {
+    return { data: null, error: listingErr.message };
+  }
+  const sellerId = listingRow ? String((listingRow as { seller_id?: string }).seller_id ?? '').trim() : '';
+  if (sellerId && sellerId === user.id) {
+    return { data: null, error: 'You cannot like your own listing' };
+  }
+
   const { data, error } = await supabase
     .from('likes')
     .insert({
@@ -771,6 +944,15 @@ export async function likeListing(listingId: string): Promise<ApiResponse<{ id: 
 
   if (error) {
     return { data: null, error: error.message };
+  }
+
+  if (sellerId) {
+    void sendPushNotificationWithUserJwt({
+      user_id: sellerId,
+      title: '❤️ Ton article a été liké !',
+      body: "Quelqu'un s'intéresse à ton article. C'est le moment de baisser le prix !",
+      data: { listing_id: listingId }
+    });
   }
 
   return { data: { id: (data as any).id as string }, error: null };

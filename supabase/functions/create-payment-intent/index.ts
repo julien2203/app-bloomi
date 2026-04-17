@@ -36,30 +36,6 @@ function normalizeAuthHeader(req: Request): string | null {
   return h;
 }
 
-async function sendNotification(params: {
-  supabaseUrl: string;
-  supabaseServiceRoleKey: string;
-  user_id: string;
-  title: string;
-  body: string;
-  data?: unknown;
-}) {
-  const url = `${params.supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`;
-  await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.supabaseServiceRoleKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      user_id: params.user_id,
-      title: params.title,
-      body: params.body,
-      data: params.data ?? undefined,
-    }),
-  });
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -91,7 +67,16 @@ Deno.serve(async (req) => {
     amount,
     delivery_mode,
     shipping_address,
+    shipping_city: body_shipping_city,
+    shipping_postal_code: body_shipping_postal_code,
+    shipping_country: body_shipping_country,
+    offer_message_id: body_offer_message_id,
   } = (body ?? {}) as Record<string, unknown>;
+
+  const offerMessageId =
+    typeof body_offer_message_id === "string" && body_offer_message_id.trim() !== ""
+      ? body_offer_message_id.trim()
+      : null;
 
   if (!listing_id || !buyer_id || !seller_id || amount == null || !delivery_mode) {
     return jsonResponse(
@@ -140,23 +125,36 @@ Deno.serve(async (req) => {
 
   const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
-  const shipping =
-    shipping_address == null
-      ? null
-      : typeof shipping_address === "string"
-        ? shipping_address
-        : JSON.stringify(shipping_address);
-
-  // Les tables MVP stockent éventuellement des champs séparés (city/postal/country).
+  // Champs livraison pour orders (body plat + rétrocompat objet shipping_address).
+  let shipping_line: string | null = null;
   let shipping_city: string | null = null;
   let shipping_postal_code: string | null = null;
   let shipping_country: string | null = null;
-  if (shipping_address && typeof shipping_address === "object" && !Array.isArray(shipping_address)) {
+
+  if (typeof shipping_address === "string" && shipping_address.trim()) {
+    shipping_line = shipping_address.trim();
+  } else if (shipping_address && typeof shipping_address === "object" && !Array.isArray(shipping_address)) {
     const sa = shipping_address as Record<string, unknown>;
+    shipping_line = String(sa.street ?? sa.rue ?? sa.line1 ?? "").trim() || null;
     shipping_city = (sa.city ?? sa.shipping_city ?? null) as string | null;
     shipping_postal_code = (sa.postal_code ?? sa.postal ?? sa.zip ?? sa.shipping_postal_code ?? null) as string | null;
     shipping_country = (sa.country ?? sa.shipping_country ?? null) as string | null;
   }
+
+  if (typeof body_shipping_city === "string" && body_shipping_city.trim()) {
+    shipping_city = body_shipping_city.trim();
+  }
+  if (typeof body_shipping_postal_code === "string" && body_shipping_postal_code.trim()) {
+    shipping_postal_code = body_shipping_postal_code.trim();
+  }
+  if (typeof body_shipping_country === "string" && body_shipping_country.trim()) {
+    shipping_country = body_shipping_country.trim().toUpperCase();
+  }
+
+  const metaShippingAddress = shipping_line ?? "";
+  const metaShippingCity = shipping_city ?? "";
+  const metaShippingPostal = shipping_postal_code ?? "";
+  const metaShippingCountry = shipping_country ?? "";
 
   try {
     // Vérifie que le listing est achetable (published)
@@ -178,6 +176,68 @@ Deno.serve(async (req) => {
         { error: "Annonce indisponible", details: `listing.status=${listingStatus || "unknown"}` },
         { status: 409 },
       );
+    }
+
+    if (offerMessageId) {
+      const { data: offerMsg, error: offerMsgErr } = await supabaseAdmin
+        .from("messages")
+        .select("id, thread_id, listing_id, offer_amount, offer_status, type")
+        .eq("id", offerMessageId)
+        .maybeSingle();
+
+      if (offerMsgErr || !offerMsg) {
+        return jsonResponse(
+          { error: "Offre invalide ou introuvable", details: offerMsgErr?.message ?? "no row" },
+          { status: 400 },
+        );
+      }
+
+      const om = offerMsg as Record<string, unknown>;
+      if (String(om.type ?? "") !== "offer") {
+        return jsonResponse({ error: "Le message indiqué n'est pas une offre" }, { status: 400 });
+      }
+      if (String(om.offer_status ?? "").toLowerCase() !== "accepted") {
+        return jsonResponse({ error: "Offre non acceptée" }, { status: 400 });
+      }
+
+      const rawAmt = om.offer_amount;
+      const offerAmtNum =
+        typeof rawAmt === "number" ? rawAmt : typeof rawAmt === "string" ? Number(rawAmt) : NaN;
+      if (!Number.isFinite(offerAmtNum) || Math.round(offerAmtNum * 100) !== amountCents) {
+        return jsonResponse(
+          { error: "Le montant ne correspond pas à l'offre acceptée" },
+          { status: 400 },
+        );
+      }
+
+      const { data: th, error: thErr } = await supabaseAdmin
+        .from("threads")
+        .select("id, listing_id, buyer_id, seller_id")
+        .eq("id", String(om.thread_id ?? ""))
+        .maybeSingle();
+
+      if (thErr || !th) {
+        return jsonResponse(
+          { error: "Thread de l'offre introuvable", details: thErr?.message ?? "no row" },
+          { status: 400 },
+        );
+      }
+
+      const t = th as Record<string, unknown>;
+      if (String(t.listing_id ?? "") !== String(listing_id)) {
+        return jsonResponse({ error: "listing_id incohérent avec l'offre" }, { status: 400 });
+      }
+      if (String(t.buyer_id ?? "") !== String(buyer_id)) {
+        return jsonResponse({ error: "buyer_id incohérent avec l'offre" }, { status: 400 });
+      }
+      if (String(t.seller_id ?? "") !== String(seller_id)) {
+        return jsonResponse({ error: "seller_id incohérent avec l'offre" }, { status: 400 });
+      }
+
+      const msgListingId = om.listing_id;
+      if (msgListingId != null && String(msgListingId) !== "" && String(msgListingId) !== String(listing_id)) {
+        return jsonResponse({ error: "listing_id du message d'offre incorrect" }, { status: 400 });
+      }
     }
 
     const listingTitle = String((listingRow as any)?.title ?? "");
@@ -209,22 +269,17 @@ Deno.serve(async (req) => {
         seller_id: String(seller_id),
         commission_cents: String(commissionCents),
         delivery_mode: dm,
+        ...(offerMessageId ? { offer_message_id: offerMessageId } : {}),
+        ...(dm === "shipping"
+          ? {
+            shipping_address: metaShippingAddress.slice(0, 500),
+            shipping_city: metaShippingCity.slice(0, 500),
+            shipping_postal_code: metaShippingPostal.slice(0, 500),
+            shipping_country: metaShippingCountry.slice(0, 500),
+          }
+          : {}),
       },
     });
-
-    // Best-effort: notifier le vendeur (ne doit pas casser le flow principal)
-    try {
-      await sendNotification({
-        supabaseUrl,
-        supabaseServiceRoleKey,
-        user_id: String(seller_id),
-        title: "🎉 Ton article est vendu !",
-        body: "Quelqu'un vient d'acheter ton article. Pense à l'expédier !",
-        data: { listing_id: String(listing_id), buyer_id: String(buyer_id) },
-      });
-    } catch (e) {
-      console.warn("Erreur envoi notification vendeur:", e);
-    }
 
     return jsonResponse({
       client_secret: paymentIntent.client_secret,

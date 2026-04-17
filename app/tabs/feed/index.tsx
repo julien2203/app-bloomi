@@ -27,6 +27,7 @@ import { ProductCard } from '../../../components/ProductCard';
 import { useFeedFiltersStore } from '../../../lib/store/feedFilters';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
+import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
 import { Feather } from '@expo/vector-icons';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
@@ -42,7 +43,7 @@ export default function HomeScreen() {
   const [sponsoredListings, setSponsoredListings] = useState<FeedListing[]>([]);
   const [trendingListings, setTrendingListings] = useState<FeedListing[]>([]);
   const [influencerListings, setInfluencerListings] = useState<FeedListing[]>([]);
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  const unreadNotificationsCount = useNotificationsBadgeStore((s) => s.unreadCount);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -206,7 +207,7 @@ export default function HomeScreen() {
         setCounts(counts);
       }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Erreur inconnue'));
+      setError(err instanceof Error ? err : new Error('Unknown error'));
       setListings([]);
     } finally {
       setLoading(false);
@@ -215,8 +216,9 @@ export default function HomeScreen() {
   }, [filters, user, setLikedIds, setCounts, clearLikes]);
 
   const loadUnreadNotificationsCount = useCallback(async () => {
+    const setUnread = useNotificationsBadgeStore.getState().setUnreadCount;
     if (!user?.id) {
-      setUnreadNotificationsCount(0);
+      setUnread(0);
       return;
     }
     try {
@@ -226,9 +228,9 @@ export default function HomeScreen() {
         .eq('user_id', user.id)
         .is('read_at', null);
       if (cErr) throw cErr;
-      setUnreadNotificationsCount(count ?? 0);
+      setUnread(count ?? 0);
     } catch {
-      setUnreadNotificationsCount(0);
+      setUnread(0);
     }
   }, [user?.id]);
 
@@ -314,7 +316,7 @@ export default function HomeScreen() {
       <Screen scroll noHorizontalPadding>
         <View style={styles.centerContent}>
           <Text variant="h2" style={styles.errorTitle}>
-            Erreur de chargement
+            Loading error
           </Text>
           <Text variant="body" color="textSecondary" style={styles.errorMessage}>
             {error.message}
@@ -346,13 +348,15 @@ export default function HomeScreen() {
                 style={styles.searchIcon}
               />
               <TextInput
-                placeholder="Rechercher un article"
+                placeholder="Search for an item"
                 placeholderTextColor={theme.colors.textSecondary}
                 style={styles.searchInput}
                 value={searchText}
                 onChangeText={setSearchText}
                 returnKeyType="search"
                 onSubmitEditing={submitSearch}
+                allowFontScaling={false}
+                maxFontSizeMultiplier={1}
               />
             </View>
 
@@ -403,11 +407,11 @@ export default function HomeScreen() {
           {sponsoredListings.length > 0 ? (
             <View style={styles.section}>
               <SectionHeader
-                title="Sponsorisés"
+                title="Sponsored"
                 onPressSeeAll={() => {
                   router.push({
                     pathname: '/tabs/results' as any,
-                    params: { section: 'sponsored', title: 'Sponsorisés' }
+                    params: { section: 'sponsored', title: 'Sponsored' }
                   });
                 }}
               />
@@ -421,6 +425,7 @@ export default function HomeScreen() {
                 renderItem={({ item }) => (
                   <ProductCard
                     listingId={item.id}
+                    sellerId={item.seller_id}
                     title={item.title}
                     price={item.price}
                     currency="CHF"
@@ -441,11 +446,11 @@ export default function HomeScreen() {
         {trendingListings.length > 0 ? (
           <View style={styles.section}>
             <SectionHeader
-              title="Tendances"
+              title="Trending"
               onPressSeeAll={() => {
                 router.push({
                   pathname: '/tabs/results' as any,
-                  params: { section: 'trending', title: 'Tendances' }
+                  params: { section: 'trending', title: 'Trending' }
                 });
               }}
             />
@@ -459,6 +464,7 @@ export default function HomeScreen() {
               renderItem={({ item }) => (
                 <ProductCard
                   listingId={item.id}
+                  sellerId={item.seller_id}
                   title={item.title}
                   price={item.price}
                   currency="CHF"
@@ -479,11 +485,11 @@ export default function HomeScreen() {
         {influencerListings.length > 0 ? (
           <View style={styles.section}>
             <SectionHeader
-              title="Influenceurs"
+              title="Influencers"
               onPressSeeAll={() => {
                 router.push({
                   pathname: '/tabs/results' as any,
-                  params: { section: 'influencer', title: 'Influenceurs' }
+                  params: { section: 'influencer', title: 'Influencers' }
                 });
               }}
             />
@@ -497,6 +503,7 @@ export default function HomeScreen() {
               renderItem={({ item }) => (
                 <ProductCard
                   listingId={item.id}
+                  sellerId={item.seller_id}
                   title={item.title}
                   price={item.price}
                   currency="CHF"
@@ -516,11 +523,11 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <SectionHeader
-            title="Tous les articles"
+            title="All items"
             onPressSeeAll={() => {
               router.push({
                 pathname: '/tabs/results' as any,
-                params: { section: 'all', title: 'Tous les articles' }
+                params: { section: 'all', title: 'All items' }
               });
             }}
           />
@@ -557,7 +564,6 @@ export default function HomeScreen() {
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 6,
                           marginBottom: 6
                         }}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -577,17 +583,12 @@ export default function HomeScreen() {
                             }}
                           />
                         )}
-                        <Text
-                          variant="captionSm"
-                          style={{ fontSize: 12, fontWeight: '500' }}
-                        >
-                          {item.seller_display_name ?? 'Seller'}
-                        </Text>
                       </TouchableOpacity>
 
                       {/* Card produit réutilisée */}
                       <ProductCard
                         listingId={item.id}
+                        sellerId={item.seller_id}
                         title={item.title}
                         price={item.price}
                         currency="CHF"
@@ -660,21 +661,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'red',
     justifyContent: 'center',
-    paddingHorizontal: 4
+    alignItems: 'center',
+    position: 'absolute',
+    top: -4,
+    right: -4
   },
   badgeText: {
+    textAlign: 'center',
+    lineHeight: 18,
     fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF'
+    fontWeight: 'bold',
+    color: 'white'
   },
   scroll: {
     flex: 1

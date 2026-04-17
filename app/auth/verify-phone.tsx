@@ -50,13 +50,13 @@ export default function VerifyPhoneScreen() {
 
   const handleSendCode = async () => {
     if (!ALLOWED_PREFIXES.includes(prefix)) {
-      setError('Bloomi est disponible uniquement en Suisse, France, Allemagne et Italie.');
+      setError('Bloomi is only available in Switzerland, France, Germany, and Italy.');
       return;
     }
 
     const digits = phoneLocal.replace(/\D/g, '');
     if (!digits) {
-      setError('Merci de saisir un numéro de téléphone valide.');
+      setError('Please enter a valid phone number.');
       return;
     }
 
@@ -80,7 +80,7 @@ export default function VerifyPhoneScreen() {
       setOtpDigits(Array(6).fill(''));
       setSecondsLeft(60);
     } catch {
-      setError('Une erreur est survenue lors de l’envoi du code. Merci de réessayer.');
+      setError('Something went wrong sending the code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -88,13 +88,13 @@ export default function VerifyPhoneScreen() {
 
   const handleVerifyCode = async () => {
     if (!formattedPhone) {
-      setError('Numéro de téléphone manquant. Merci de revenir à l’étape précédente.');
+      setError('Phone number missing. Please go back to the previous step.');
       return;
     }
 
     const token = otpDigits.join('');
     if (token.length !== 6) {
-      setError('Merci de saisir les 6 chiffres du code.');
+      setError('Please enter all 6 digits of the code.');
       return;
     }
 
@@ -111,9 +111,9 @@ export default function VerifyPhoneScreen() {
       if (verifyError) {
         const msg = verifyError.message.toLowerCase();
         if (msg.includes('expired')) {
-          setError('Le code a expiré. Merci de demander un nouveau code.');
+          setError('The code has expired. Please request a new one.');
         } else if (msg.includes('invalid')) {
-          setError('Le code est incorrect. Merci de réessayer.');
+          setError('The code is incorrect. Please try again.');
         } else {
           setError(verifyError.message);
         }
@@ -122,7 +122,7 @@ export default function VerifyPhoneScreen() {
 
       router.replace('/tabs/feed');
     } catch {
-      setError('Une erreur est survenue lors de la vérification. Merci de réessayer.');
+      setError('Something went wrong verifying the code. Please try again.');
     } finally {
       setVerifying(false);
     }
@@ -146,7 +146,7 @@ export default function VerifyPhoneScreen() {
 
       setSecondsLeft(60);
     } catch {
-      setError('Une erreur est survenue lors de l’envoi du code. Merci de réessayer.');
+      setError('Something went wrong sending the code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -182,9 +182,9 @@ export default function VerifyPhoneScreen() {
 
   const renderStep1 = () => (
     <>
-      <Text style={styles.title}>Vérifier votre téléphone</Text>
+      <Text style={styles.title}>Verify your phone</Text>
       <Text style={styles.subtitle}>
-        Entrez votre numéro pour recevoir un code de vérification par SMS.
+        Enter your number to receive a verification code by SMS.
       </Text>
 
       <View style={styles.phoneRow}>
@@ -207,7 +207,7 @@ export default function VerifyPhoneScreen() {
         </View>
 
         <View style={styles.phoneInputContainer}>
-          <Text style={styles.phoneLabel}>Téléphone</Text>
+          <Text style={styles.phoneLabel}>Phone</Text>
           <View style={styles.phoneInputRow}>
             <Text style={styles.phonePrefixInline}>{prefix}</Text>
             <TextInput
@@ -227,7 +227,7 @@ export default function VerifyPhoneScreen() {
 
       <View style={styles.primaryButtonContainer}>
         <Button
-          title="Recevoir le code"
+          title="Send code"
           onPress={handleSendCode}
           loading={loading}
           variant="primary"
@@ -238,10 +238,9 @@ export default function VerifyPhoneScreen() {
 
   const renderStep2 = () => (
     <>
-      <Text style={styles.title}>Entrez le code</Text>
+      <Text style={styles.title}>Enter the code</Text>
       <Text style={styles.subtitle}>
-        Nous avons envoyé un code à 6 chiffres par SMS. Saisissez-le ci-dessous pour confirmer
-        votre numéro.
+        We sent a 6-digit code by SMS. Enter it below to confirm your number.
       </Text>
 
       <View style={styles.otpRow}>
@@ -264,7 +263,7 @@ export default function VerifyPhoneScreen() {
 
       <View style={styles.primaryButtonContainer}>
         <Button
-          title="Valider"
+          title="Verify"
           onPress={handleVerifyCode}
           loading={verifying}
           variant="primary"
@@ -283,7 +282,7 @@ export default function VerifyPhoneScreen() {
               (!canResend || loading) && styles.resendTextDisabled
             ]}
           >
-            Renvoyer le code
+            Resend code
             {secondsLeft > 0 ? ` (${secondsLeft}s)` : ''}
           </Text>
         </TouchableOpacity>
@@ -311,7 +310,7 @@ export default function VerifyPhoneScreen() {
         attempts += 1;
         if (attempts >= maxAttempts) {
           setSessionError(
-            "Nous n'arrivons pas à récupérer votre session. Merci de vous reconnecter."
+            'We could not restore your session. Please sign in again.'
           );
           setSessionReady(false);
           return;
@@ -323,7 +322,7 @@ export default function VerifyPhoneScreen() {
         attempts += 1;
         if (attempts >= maxAttempts) {
           setSessionError(
-            "Nous n'arrivons pas à récupérer votre session. Merci de vous reconnecter."
+            'We could not restore your session. Please sign in again.'
           );
           setSessionReady(false);
           return;
@@ -375,7 +374,7 @@ export default function VerifyPhoneScreen() {
                 <Text style={styles.errorText}>{sessionError}</Text>
                 <View style={styles.primaryButtonContainer}>
                   <Button
-                    title="Retour à la connexion"
+                    title="Back to sign in"
                     onPress={() => router.replace('/auth/login')}
                     variant="primary"
                   />

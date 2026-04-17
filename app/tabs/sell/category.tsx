@@ -59,7 +59,7 @@ export default function SellCategoryScreen() {
           ]}
         >
           <Button
-            title="Confirmer"
+            title="Confirm"
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

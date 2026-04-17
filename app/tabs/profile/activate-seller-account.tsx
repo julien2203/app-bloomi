@@ -174,20 +174,20 @@ export default function ActivateSellerAccountScreen() {
               <AppIcon name="checkCircleBold" size={28} color={theme.colors.appleBlack} />
             </View>
             <Text variant="h2" style={styles.successTitle}>
-              Compte vendeur activé
+              Seller account activated
             </Text>
             <Text variant="body" color="textSecondary" style={styles.successSubtitle}>
-              Vous pouvez vendre sur Bloomi et recevoir des paiements
+              You can sell on Bloomi and receive payouts
             </Text>
 
             <View style={styles.successActions}>
               <Button
-                title="Accéder à mon Wallet"
+                title="Open my Wallet"
                 onPress={() => router.replace('/tabs/profile/wallet')}
                 variant="primary"
               />
               <Button
-                title="Retour au profil"
+                title="Back to profile"
                 onPress={() => router.replace('/tabs/profile')}
                 variant="secondary"
               />

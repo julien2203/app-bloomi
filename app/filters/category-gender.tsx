@@ -64,11 +64,22 @@ export default function CategoryGenderScreen() {
         // Ordre spécifique pour Woman, comme dans le doc Word :
         // Clothing, Shoes, Bags, Accessories, Sport, Other
         if (dbGender === 'femme') {
-          const WOMAN_ORDER = ['Clothing', 'Shoes', 'Bags', 'Accessories', 'Sport', 'Other'];
+          const WOMAN_ORDER = ['Clothing', 'Shoes', 'Bags', 'Accessories', 'Sport'];
+          const normalizedOtherNames = new Set(['other', 'others']);
 
           mapped.sort((a, b) => {
-            const ia = WOMAN_ORDER.indexOf(a.name);
-            const ib = WOMAN_ORDER.indexOf(b.name);
+            const aName = a.name.trim();
+            const bName = b.name.trim();
+            const aNorm = aName.toLowerCase();
+            const bNorm = bName.toLowerCase();
+            const aIsOther = normalizedOtherNames.has(aNorm);
+            const bIsOther = normalizedOtherNames.has(bNorm);
+
+            if (aIsOther && !bIsOther) return 1;
+            if (!aIsOther && bIsOther) return -1;
+
+            const ia = WOMAN_ORDER.indexOf(aName);
+            const ib = WOMAN_ORDER.indexOf(bName);
 
             const aPos = ia === -1 ? WOMAN_ORDER.length + 1 : ia;
             const bPos = ib === -1 ? WOMAN_ORDER.length + 1 : ib;

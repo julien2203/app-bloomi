@@ -7,15 +7,15 @@ export default function NotFoundScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Page introuvable</Text>
+      <Text style={styles.title}>Page not found</Text>
       <Text style={styles.message}>
-        La page que vous recherchez n'existe pas ou a été déplacée.
+        The page you are looking for does not exist or has been moved.
       </Text>
       <TouchableOpacity
         style={styles.button}
         onPress={() => router.replace('/')}
       >
-        <Text style={styles.buttonText}>Retour à l'accueil</Text>
+        <Text style={styles.buttonText}>Back to home</Text>
       </TouchableOpacity>
     </View>
   );

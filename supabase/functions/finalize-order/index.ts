@@ -1,6 +1,10 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  findOrCreateThreadForOrderChat,
+  insertThreadSystemMessage,
+} from "../_shared/orderChatSystemMessage.ts";
 
 type DeliveryMode = "pickup" | "shipping" | "both";
 
@@ -19,6 +23,34 @@ function normalizeAuthHeader(req: Request): string | null {
   if (!h) return null;
   if (!h.toLowerCase().startsWith("bearer ")) return null;
   return h;
+}
+
+async function sendNotificationSilent(params: {
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+  user_id: string;
+  title: string;
+  body: string;
+  data?: unknown;
+}) {
+  try {
+    const url = `${params.supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`;
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.supabaseServiceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: params.user_id,
+        title: params.title,
+        body: params.body,
+        data: params.data ?? undefined,
+      }),
+    });
+  } catch {
+    // silent — do not block order finalization
+  }
 }
 
 function toCents(amount: unknown): number {
@@ -179,6 +211,11 @@ Deno.serve(async (req) => {
     // Pour garder la compatibilité, on laisse ces champs optionnels ici.
     const dm = (pi.metadata?.delivery_mode ?? "both").toString() as DeliveryMode;
 
+    const metaShipAddr = String(pi.metadata?.shipping_address ?? "").trim() || null;
+    const metaShipCity = String(pi.metadata?.shipping_city ?? "").trim() || null;
+    const metaShipPostal = String(pi.metadata?.shipping_postal_code ?? "").trim() || null;
+    const metaShipCountry = String(pi.metadata?.shipping_country ?? "").trim().toUpperCase() || null;
+
     // Insère la commande (pending) avec l'ID Stripe.
     const { data: created, error: orderInsertError } = await supabase
       .from("orders")
@@ -193,6 +230,10 @@ Deno.serve(async (req) => {
         listing_price: listingPrice ?? null,
         listing_cover_photo_url: coverPhotoUrl,
         seller_amount: sellerAmountChf,
+        shipping_address: metaShipAddr,
+        shipping_city: metaShipCity,
+        shipping_postal_code: metaShipPostal,
+        shipping_country: metaShipCountry,
       })
       .select("id")
       .single();
@@ -238,6 +279,41 @@ Deno.serve(async (req) => {
         { error: "Commande créée mais annonce déjà réservée/vendue" },
         { status: 409 },
       );
+    }
+
+    // Best-effort: notify seller after order is created (payment authorized + listing reserved)
+    try {
+      await sendNotificationSilent({
+        supabaseUrl,
+        supabaseServiceRoleKey,
+        user_id: String(piSellerId),
+        title: "📦 Pense à expédier ton colis 📬",
+        body: "Tu as une nouvelle vente ! Prépare ton colis.",
+        data: {
+          order_id: createdOrderId,
+          listing_id: String(piListingId),
+          buyer_id: String(piBuyerId),
+        },
+      });
+    } catch {
+      // silent
+    }
+
+    try {
+      const threadId = await findOrCreateThreadForOrderChat(supabaseAdmin, {
+        listingId: String(piListingId),
+        buyerId: String(piBuyerId),
+        sellerId: String(piSellerId),
+      });
+      if (threadId) {
+        await insertThreadSystemMessage(
+          supabaseAdmin,
+          threadId,
+          "🛍️ Commande créée — Le paiement est sécurisé. Le vendeur va préparer ton colis.",
+        );
+      }
+    } catch {
+      // silent — ne pas bloquer la finalisation
     }
 
     return jsonResponse({ order_id: createdOrderId });

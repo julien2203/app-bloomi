@@ -172,7 +172,10 @@ export default function EditProfileScreen() {
       } catch (e) {
         setToast({
           type: 'error',
-          message: e instanceof Error && e.message ? `Impossible de charger votre profil: ${e.message}` : 'Impossible de charger votre profil.'
+          message:
+            e instanceof Error && e.message
+              ? `Unable to load your profile: ${e.message}`
+              : 'Unable to load your profile.'
         });
       } finally {
         setLoading(false);
@@ -205,8 +208,8 @@ export default function EditProfileScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        'Permission requise',
-        'Nous avons besoin de l’accès à vos photos pour changer votre avatar.'
+        'Permission required',
+        'We need access to your photos to change your avatar.'
       );
       return false;
     }
@@ -267,7 +270,7 @@ export default function EditProfileScreen() {
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
       if (!urlData?.publicUrl) {
-        throw new Error("Impossible de récupérer l'URL publique de l'avatar.");
+        throw new Error('Unable to get the public URL for the avatar.');
       }
 
       setAvatarUrl(urlData.publicUrl);
@@ -283,7 +286,7 @@ export default function EditProfileScreen() {
         message:
           error instanceof Error
             ? error.message
-            : "Impossible de mettre à jour la photo de profil."
+            : 'Unable to update profile photo.'
       });
     } finally {
       setUploadingAvatar(false);
@@ -315,7 +318,7 @@ export default function EditProfileScreen() {
       } catch {
         setToast({
           type: 'error',
-          message: "Impossible de désactiver la localisation."
+          message: 'Unable to turn off location.'
         });
       } finally {
         setUpdatingLocationVisible(false);
@@ -329,7 +332,7 @@ export default function EditProfileScreen() {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
         setGpsPermissionDenied(true);
-        setToast({ type: 'error', message: 'Permission GPS refusée.' });
+        setToast({ type: 'error', message: 'Location permission denied.' });
         setLocationVisible(false);
         return;
       }
@@ -370,7 +373,7 @@ export default function EditProfileScreen() {
     } catch {
       setToast({
         type: 'error',
-        message: 'Impossible de récupérer votre position.'
+        message: 'Unable to get your location.'
       });
       setLocationVisible(false);
     } finally {
@@ -419,7 +422,7 @@ export default function EditProfileScreen() {
 
       setToast({
         type: 'success',
-        message: 'Profil mis à jour.'
+        message: 'Profile updated.'
       });
 
       navigation.goBack();
@@ -444,7 +447,7 @@ export default function EditProfileScreen() {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Choisir un canton</Text>
+            <Text style={styles.modalTitle}>Choose a canton</Text>
             <TouchableOpacity
               onPress={() => setLocationModalVisible(false)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

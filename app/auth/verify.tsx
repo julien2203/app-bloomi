@@ -25,7 +25,7 @@ export default function VerifyScreen() {
 
   const handleVerify = async () => {
     if (!phone || typeof phone !== 'string') {
-      setError('Numéro de téléphone introuvable. Merci de recommencer la connexion.');
+      setError('Phone number not found. Please start sign-in again.');
       return;
     }
 
@@ -37,7 +37,7 @@ export default function VerifyScreen() {
       if (isDevTestCode(code)) {
         const result = await verifyDevTestCode(phone);
         if (!result.success) {
-          setError(result.error || 'Erreur lors de l\'authentification de test');
+          setError(result.error || 'Test authentication error');
           setIsSubmitting(false);
           return;
         }
@@ -60,14 +60,14 @@ export default function VerifyScreen() {
       }
 
       if (!data.session) {
-        setError('Impossible de finaliser la connexion. Merci de réessayer.');
+        setError('Unable to complete sign-in. Please try again.');
         setIsSubmitting(false);
         return;
       }
 
       router.replace('/tabs/feed');
     } catch (e) {
-      setError('Une erreur est survenue lors de la vérification du code.');
+      setError('Something went wrong verifying the code.');
       setIsSubmitting(false);
     }
   };
@@ -91,11 +91,11 @@ export default function VerifyScreen() {
             <HeaderBackButton onPress={() => router.back()} />
           </View>
           <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 8 }}>
-            Entrez le code SMS
+            Enter the SMS code
           </Text>
           <Text style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>
-            Nous avons envoyé un code de vérification à{' '}
-            <Text style={{ fontWeight: '600' }}>{phone ?? 'votre numéro'}</Text>.
+            We sent a verification code to{' '}
+            <Text style={{ fontWeight: '600' }}>{phone ?? 'your number'}</Text>.
           </Text>
 
           {DEV_OTP_MODE && (
@@ -110,10 +110,10 @@ export default function VerifyScreen() {
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e', marginBottom: 4 }}>
-                🧪 Mode développement activé
+                🧪 Development mode enabled
               </Text>
               <Text style={{ fontSize: 12, color: '#78350f' }}>
-                Pour tester sans SMS, utilisez le code :{' '}
+                To test without SMS, use code:{' '}
                 <Text style={{ fontWeight: '700', fontFamily: 'monospace' }}>
                   {DEV_TEST_CODE}
                 </Text>
@@ -130,7 +130,7 @@ export default function VerifyScreen() {
                   marginBottom: 4
                 }}
               >
-                Code à 6 chiffres
+                6-digit code
               </Text>
               <TextInput
                 value={code}
@@ -186,7 +186,7 @@ export default function VerifyScreen() {
                 fontSize: 15
               }}
             >
-              Valider
+              Verify
             </Text>
           </TouchableOpacity>
 
@@ -197,8 +197,7 @@ export default function VerifyScreen() {
                 color: '#9ca3af'
               }}
             >
-              Nous envoyons un SMS de vérification. Assurez-vous de pouvoir recevoir des
-              SMS sur ce numéro.
+              We send a verification SMS. Make sure this number can receive text messages.
             </Text>
           </View>
         </View>

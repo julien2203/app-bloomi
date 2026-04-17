@@ -37,13 +37,13 @@ export default function SellerTypeScreen() {
 
   const validateProFields = () => {
     if (!companyName.trim() || !ideNumber.trim() || !companyAddress.trim()) {
-      setError('Merci de remplir tous les champs obligatoires.');
+      setError('Please fill in all required fields.');
       return false;
     }
     // Validation simple du format IDE (CHE-XXX.XXX.XXX)
     const ideRegex = /^CHE-\d{3}\.\d{3}\.\d{3}$/;
     if (!ideRegex.test(ideNumber.trim())) {
-      setError('Le numéro IDE doit être au format CHE-XXX.XXX.XXX.');
+      setError('The UID number must be in the format CHE-XXX.XXX.XXX.');
       return false;
     }
     return true;
@@ -65,7 +65,7 @@ export default function SellerTypeScreen() {
 
       const { data, error: userError } = await supabase.auth.getUser();
       if (userError || !data.user) {
-        setError("Impossible de récupérer votre compte. Merci de réessayer.");
+        setError('Unable to load your account. Please try again.');
         return;
       }
 
@@ -226,7 +226,7 @@ export default function SellerTypeScreen() {
               {/* Influenceur / créateur */}
               <View style={styles.influencerBlock}>
                 <Text style={styles.influencerTitle}>
-                  Es-tu influenceur ou créateur de contenu ?
+                  Are you an influencer or content creator?
                 </Text>
                 <View style={styles.pillsColumn}>
                   <TouchableOpacity
@@ -237,7 +237,7 @@ export default function SellerTypeScreen() {
                     ]}
                     onPress={() => setIsInfluencer(true)}
                   >
-                    <Text style={styles.pillText}>Oui, je suis influenceur</Text>
+                    <Text style={styles.pillText}>Yes, I am an influencer</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.8}
@@ -247,12 +247,12 @@ export default function SellerTypeScreen() {
                     ]}
                     onPress={() => setIsInfluencer(false)}
                   >
-                    <Text style={styles.pillText}>Non</Text>
+                    <Text style={styles.pillText}>No</Text>
                   </TouchableOpacity>
                 </View>
                 {isInfluencer === true ? (
                   <Text style={styles.influencerHint}>
-                    Votre demande sera examinée par notre équipe
+                    Your request will be reviewed by our team
                   </Text>
                 ) : null}
               </View>
@@ -264,7 +264,7 @@ export default function SellerTypeScreen() {
               ) : null}
 
               <Button
-                title="Continuer"
+                title="Continue"
                 onPress={handleContinue}
                 variant="primary-green"
                 disabled={!canContinue || loading}

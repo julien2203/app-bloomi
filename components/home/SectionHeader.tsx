@@ -17,7 +17,7 @@ export function SectionHeader({ title, onPressSeeAll }: SectionHeaderProps) {
       {onPressSeeAll && (
         <TouchableOpacity onPress={onPressSeeAll} activeOpacity={0.7}>
           <Text variant="caption" color="textSecondary">
-            Voir tout
+            See all
           </Text>
         </TouchableOpacity>
       )}

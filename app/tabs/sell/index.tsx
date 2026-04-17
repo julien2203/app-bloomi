@@ -195,8 +195,8 @@ export default function SellScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        'Permission requise',
-        'Nous avons besoin de l\'accès à vos photos pour créer une annonce.'
+        'Permission required',
+        'We need access to your photos to create a listing.'
       );
       return false;
     }
@@ -234,7 +234,7 @@ export default function SellScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission requise', "Autorisez l'accès à la caméra dans vos réglages");
+      Alert.alert('Permission required', 'Allow camera access in your device settings.');
       return;
     }
 
@@ -259,7 +259,7 @@ export default function SellScreen() {
 
     const latestTitle = titleRef.current;
     if (!latestTitle.trim()) {
-      newErrors.title = 'Le titre est requis';
+      newErrors.title = 'Title is required';
     }
 
     const priceFromStore =
@@ -268,11 +268,11 @@ export default function SellScreen() {
         : undefined;
     const priceNum = priceFromStore ?? parseFloat(price);
     if (!priceNum || Number.isNaN(priceNum) || priceNum <= 0) {
-      newErrors.price = 'Un prix valide est requis';
+      newErrors.price = 'A valid price is required';
     }
 
     if (photos.length === 0) {
-      newErrors.photos = 'Au moins une photo est requise';
+      newErrors.photos = 'At least one photo is required';
     }
 
     setErrors(newErrors);
@@ -283,9 +283,9 @@ export default function SellScreen() {
         newErrors.title ||
         newErrors.price ||
         newErrors.photos ||
-        'Veuillez corriger les champs en rouge';
+        'Please fix the fields marked in red';
 
-      Alert.alert('Formulaire incomplet', firstError);
+      Alert.alert('Incomplete form', firstError);
     }
 
     return !hasErrors;
@@ -303,7 +303,7 @@ export default function SellScreen() {
 
   const handlePublish = async () => {
     if (!user) {
-      Alert.alert('Erreur', 'Vous devez être connecté pour créer une annonce');
+      Alert.alert('Error', 'You must be signed in to create a listing');
       return;
     }
 
@@ -344,12 +344,12 @@ export default function SellScreen() {
 
       if (!stripeCompleted) {
         Alert.alert(
-          'Activer votre compte vendeur',
-          "Avant de publier une annonce, vous devez activer votre compte vendeur pour pouvoir recevoir des paiements.",
+          'Activate your seller account',
+          'Before publishing a listing, activate your seller account so you can receive payouts.',
           [
-            { text: 'Plus tard', style: 'cancel' },
+            { text: 'Not now', style: 'cancel' },
             {
-              text: 'Activer mon compte',
+              text: 'Activate my account',
               onPress: () => router.push('/tabs/profile/activate-seller-account')
             }
           ]
@@ -391,7 +391,7 @@ export default function SellScreen() {
       const listingResult = await createListing(listingData);
 
       if (listingResult.error || !listingResult.data) {
-        throw new Error(listingResult.error || 'Erreur lors de la création de l\'annonce');
+        throw new Error(listingResult.error || 'Error while creating the listing');
       }
 
       const listing = listingResult.data;
@@ -424,8 +424,8 @@ export default function SellScreen() {
       setShowPublishSheet(true);
     } catch (error) {
       Alert.alert(
-        'Erreur',
-        error instanceof Error ? error.message : 'Une erreur est survenue lors de la publication'
+        'Error',
+        error instanceof Error ? error.message : 'Something went wrong while publishing'
       );
     } finally {
       setLoading(false);
@@ -717,7 +717,7 @@ export default function SellScreen() {
           ]}
         >
           <Button
-            title={loading ? 'Publication...' : "Publier l'annonce"}
+            title={loading ? 'Publishing...' : 'Publish listing'}
             onPress={handlePublish}
             variant="primary"
             disabled={loading}
@@ -801,7 +801,7 @@ export default function SellScreen() {
           />
           <View style={styles.sheetContainer}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Mise en ligne du produit</Text>
+            <Text style={styles.sheetTitle}>Product going live</Text>
 
             <TouchableOpacity
               style={[
@@ -815,11 +815,11 @@ export default function SellScreen() {
                 <View style={styles.sheetIconCircle}>
                   <AppIcon name="userOutline" size={18} color={theme.colors.textPrimary} />
                 </View>
-                <Text style={styles.sheetCardTitle}>Mise en avant du produit</Text>
+                <Text style={styles.sheetCardTitle}>Boost this listing</Text>
                 <Text style={styles.sheetPrice}>5.99CHF</Text>
               </View>
               <Text style={styles.sheetCardSubtitle}>
-                Payer pour mettre en avant cet article lors de sa publication.
+                Pay to feature this item when it goes live.
               </Text>
             </TouchableOpacity>
 
@@ -835,39 +835,39 @@ export default function SellScreen() {
                 <View style={styles.sheetIconCircle}>
                   <AppIcon name="userOutline" size={18} color={theme.colors.textPrimary} />
                 </View>
-                <Text style={styles.sheetCardTitle}>Mise en avant du dressing</Text>
+                <Text style={styles.sheetCardTitle}>Boost your closet</Text>
                 <Text style={styles.sheetPrice}>12.99CHF</Text>
               </View>
               <Text style={styles.sheetCardSubtitle}>
-                Payer pour mettre en avant l&apos;intégralité des produits de votre dressing.
+                Pay to feature all listings in your closet.
               </Text>
             </TouchableOpacity>
 
             <Text style={styles.sheetNote}>
-              Ces mises en avant s&apos;appliqueront pendant une durée de 15 jours.
+              Boosts apply for 15 days.
             </Text>
 
             <Button
               title={
                 boostPaying
-                  ? 'Paiement...'
+                  ? 'Processing payment...'
                   : selectedSponsorType === 'listing'
-                  ? 'Payer 5.99 CHF'
+                  ? 'Pay 5.99 CHF'
                   : selectedSponsorType === 'dressing'
-                  ? 'Payer 12.99 CHF'
-                  : 'Choisir une option'
+                  ? 'Pay 12.99 CHF'
+                  : 'Choose an option'
               }
               onPress={async () => {
                 if (boostPaying) return;
                 if (!user?.id) {
-                  Alert.alert('Erreur', 'Vous devez être connecté pour payer');
+                  Alert.alert('Error', 'You must be signed in to pay');
                   setShowPublishSheet(false);
                   router.push('/auth/login');
                   return;
                 }
                 if (!selectedSponsorType) return;
                 if (!lastPublishedListingId) {
-                  Alert.alert('Erreur', "Annonce introuvable pour la mise en avant.");
+                  Alert.alert('Error', 'Listing not found for boost.');
                   return;
                 }
 
@@ -876,7 +876,7 @@ export default function SellScreen() {
                   const { data: sessionData } = await supabase.auth.getSession();
                   const accessToken = sessionData.session?.access_token;
                   if (!accessToken) {
-                    throw new Error('Session expirée. Veuillez vous reconnecter.');
+                    throw new Error('Session expired. Please sign in again.');
                   }
 
                   const createRes = await fetch(`${SUPABASE_URL}/functions/v1/boost-listing`, {
@@ -908,7 +908,7 @@ export default function SellScreen() {
                   }
 
                   const clientSecret = createJson.client_secret;
-                  if (!clientSecret) throw new Error('client_secret manquant');
+                  if (!clientSecret) throw new Error('Missing client_secret');
 
                   const initRes = await initPaymentSheet({
                     merchantDisplayName: 'Bloomi',
@@ -923,7 +923,7 @@ export default function SellScreen() {
                   if (presentRes.error) throw new Error(presentRes.error.message);
 
                   const paymentIntentId = clientSecret.split('_secret')[0];
-                  if (!paymentIntentId) throw new Error('payment_intent_id invalide');
+                  if (!paymentIntentId) throw new Error('Invalid payment_intent_id');
 
                   const confirmRes = await fetch(`${SUPABASE_URL}/functions/v1/boost-listing`, {
                     method: 'POST',
@@ -985,8 +985,8 @@ export default function SellScreen() {
                   router.replace('/tabs/feed');
                 } catch (e) {
                   Alert.alert(
-                    'Paiement impossible',
-                    e instanceof Error ? e.message : 'Erreur inconnue'
+                    'Payment failed',
+                    e instanceof Error ? e.message : 'Unknown error'
                   );
                 } finally {
                   setBoostPaying(false);
@@ -999,7 +999,7 @@ export default function SellScreen() {
             />
 
             <Button
-              title="Passer cette étape"
+              title="Skip this step"
               onPress={async () => {
                 if (!user?.id || !lastPublishedListingId) {
                   setShowPublishSheet(false);
@@ -1037,8 +1037,8 @@ export default function SellScreen() {
                   setField('draftPhotos', [] as any);
                 } catch (e) {
                   Alert.alert(
-                    'Erreur',
-                    e instanceof Error ? e.message : 'Impossible de publier pour le moment.'
+                    'Error',
+                    e instanceof Error ? e.message : 'Unable to publish right now.'
                   );
                   return;
                 }

@@ -139,7 +139,7 @@ export default function SellCategoryDetailScreen() {
           ]}
         >
           <Button
-            title="Confirmer"
+            title="Confirm"
             onPress={handleConfirm}
             variant="primary"
             disabled={!selectedId}

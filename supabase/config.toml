@@ -95,3 +95,26 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/register-push-token/deno.json"
 entrypoint = "./functions/register-push-token/index.ts"
+
+[functions.get-post-token]
+enabled = true
+verify_jwt = false
+import_map = "./functions/get-post-token/deno.json"
+entrypoint = "./functions/get-post-token/index.ts"
+
+[functions.insert-order-shipped-chat-message]
+enabled = true
+verify_jwt = false
+import_map = "./functions/insert-order-shipped-chat-message/deno.json"
+entrypoint = "./functions/insert-order-shipped-chat-message/index.ts"
+
+[functions.generate-shipping-label]
+enabled = true
+verify_jwt = false
+import_map = "./functions/generate-shipping-label/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/generate-shipping-label/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/generate-shipping-label/*.html" ]

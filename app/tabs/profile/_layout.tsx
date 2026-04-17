@@ -9,24 +9,24 @@ export default function ProfileStackLayout() {
         headerBackTitleVisible: false
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Profil' }} />
-      <Stack.Screen name="my-listings" options={{ title: 'Mes annonces' }} />
+      <Stack.Screen name="index" options={{ title: 'Profile' }} />
       <Stack.Screen
         name="edit-listing/[id]"
-        options={{ title: 'Modifier l’annonce', headerShown: false }}
+        options={{ title: 'Edit listing', headerShown: false }}
       />
       <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="my-address" options={{ title: 'My address' }} />
       <Stack.Screen name="favorites" options={{ title: 'Favorite items' }} />
       <Stack.Screen name="personalization" options={{ title: 'Personalization' }} />
       <Stack.Screen name="wallet" options={{ title: 'Wallet' }} />
       <Stack.Screen name="orders" options={{ title: 'My orders' }} />
       <Stack.Screen
         name="leave-review"
-        options={{ title: 'Laisser un avis', headerShown: false }}
+        options={{ title: 'Leave a review', headerShown: false }}
       />
       <Stack.Screen
         name="activate-seller-account"
-        options={{ title: 'Activer mon compte vendeur', headerShown: false }}
+        options={{ title: 'Activate seller account', headerShown: false }}
       />
       <Stack.Screen
         name="notifications"
