@@ -23,10 +23,10 @@
         }
       ]
     ],
-    "icon": "./assets/brand/android-chrome-512x512.png",
+    "icon": "./assets/brand/icone-app.png",
     "splash": {
       "backgroundColor": "#ffffff",
-      "image": "./assets/brand/android-chrome-512x512.png",
+      "image": "./assets/brand/icone-app.png",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": [
