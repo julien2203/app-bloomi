@@ -25,10 +25,10 @@
       "expo-font",
       "expo-web-browser"
     ],
-    "icon": "./assets/brand/icone-app.png",
+    "icon": "./assets/icon-fullsize.png",
     "splash": {
       "backgroundColor": "#ffffff",
-      "image": "./assets/brand/icone-app.png",
+      "image": "./assets/icon-fullsize.png",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": [
