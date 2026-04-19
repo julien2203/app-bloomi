@@ -7,7 +7,10 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { useFeedFiltersStore, type FeedSort } from '../../lib/store/feedFilters';
+import type { FeedSort } from '../../lib/store/feedFilters';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 
 export default function FiltersIndexScreen() {
   const router = useRouter();
@@ -20,12 +23,13 @@ export default function FiltersIndexScreen() {
     resultsQuery?: string;
     resultsTitle?: string;
   }>();
-  const { filters } = useFeedFiltersStore();
+  const { filters } = useFiltersScreenStore();
+  const stackBase = useFiltersStackBase();
 
   const headerTitle = params.title || 'Filters';
 
   const sortLabel = useMemo(() => {
-    const current: FeedSort = (filters.sort as FeedSort | undefined) ?? 'newest';
+    const current: FeedSort = (filters.sortBy as FeedSort | undefined) ?? 'recent';
     switch (current) {
       case 'price_asc':
         return 'Price low to high';
@@ -33,11 +37,11 @@ export default function FiltersIndexScreen() {
         return 'Price high to low';
       case 'relevance':
         return 'Relevance';
-      case 'newest':
+      case 'recent':
       default:
         return 'Newest First';
     }
-  }, [filters.sort]);
+  }, [filters.sortBy]);
 
   const formatMultiValue = (values?: string[] | null) => {
     if (!values || values.length === 0) return undefined;
@@ -46,11 +50,11 @@ export default function FiltersIndexScreen() {
     return `${joined.slice(0, 21)}…`;
   };
 
-  const categoryValue = filters.category ?? undefined;
-  const sizeValue = formatMultiValue(filters.sizes);
-  const brandValue = formatMultiValue(filters.brands);
-  const conditionValue = formatMultiValue(filters.conditions);
-  const colorValue = formatMultiValue(filters.colors);
+  const categoryValue = filters.categoryId ?? undefined;
+  const sizeValue = formatMultiValue(filters.sizeIds);
+  const brandValue = formatMultiValue(filters.brandIds);
+  const conditionValue = formatMultiValue(filters.conditionIds);
+  const colorValue = formatMultiValue(filters.colorIds);
 
   const priceValue = useMemo(() => {
     if (filters.priceMin == null && filters.priceMax == null) return undefined;
@@ -68,9 +72,9 @@ export default function FiltersIndexScreen() {
     return undefined;
   }, [filters.priceMin, filters.priceMax]);
 
-  const goTo = (pathname: string) => {
+  const goToFilterScreen = (segment: string) => {
     router.push({
-      pathname: pathname as any,
+      pathname: filtersScreenPath(stackBase, segment) as any,
       params: {
         ...(params.returnTo ? { returnTo: params.returnTo } : {}),
         ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
@@ -81,7 +85,7 @@ export default function FiltersIndexScreen() {
   };
 
   const handleShowResult = () => {
-    router.back();
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   return (
@@ -96,7 +100,7 @@ export default function FiltersIndexScreen() {
         </View>
 
         <View style={styles.content}>
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/sort')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('sort')}>
             <Text variant="body" style={styles.rowLabel}>
               Sort by
             </Text>
@@ -110,7 +114,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/category')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('category')}>
             <Text variant="body" style={styles.rowLabel}>
               Category
             </Text>
@@ -135,7 +139,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/size')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('size')}>
             <Text variant="body" style={styles.rowLabel}>
               Size
             </Text>
@@ -161,7 +165,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/brand-gender')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('brand-gender')}>
             <Text variant="body" style={styles.rowLabel}>
               Brand
             </Text>
@@ -187,7 +191,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/condition')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('condition')}>
             <Text variant="body" style={styles.rowLabel}>
               Condition
             </Text>
@@ -216,7 +220,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/color')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('color')}>
             <Text variant="body" style={styles.rowLabel}>
               Color
             </Text>
@@ -242,7 +246,7 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goTo('/tabs/filters/price')}>
+          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('price')}>
             <Text variant="body" style={styles.rowLabel}>
               Price
             </Text>

@@ -4,9 +4,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
+import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 import { getRootCategoriesByGender } from '../../lib/api/filters';
+import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 
 type GenderKey = 'Woman' | 'Men' | 'Kids' | 'Baby';
 
@@ -26,6 +29,7 @@ const UI_TO_DB_GENDER: Record<GenderKey, string> = {
 
 export default function CategoryGenderScreen() {
   const router = useRouter();
+  const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     gender?: string;
@@ -100,9 +104,16 @@ export default function CategoryGenderScreen() {
     void load();
   }, [dbGender]);
 
+  const handleShowResult = () => {
+    navigateAfterFilterCommit(
+      router,
+      typeof params.returnTo === 'string' ? params.returnTo : undefined
+    );
+  };
+
   const openDetail = (category: RootCategory) => {
     router.push({
-      pathname: '/tabs/filters/category-detail',
+      pathname: filtersScreenPath(stackBase, 'category-detail') as any,
       params: {
         parentId: String(category.id),
         title: category.name,
@@ -153,7 +164,15 @@ export default function CategoryGenderScreen() {
             styles.footer,
             { paddingBottom: insets.bottom + 24 }
           ]}
-        />
+        >
+          <Button
+            title="Show results"
+            onPress={handleShowResult}
+            variant="primary"
+            style={styles.showResultButton}
+            textStyle={styles.showResultText}
+          />
+        </View>
       </View>
     </Screen>
   );

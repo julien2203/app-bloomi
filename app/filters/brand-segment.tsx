@@ -7,6 +7,8 @@ import { Text } from '../../components/ui/Text';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 
 type Segment = {
   label: string;
@@ -16,6 +18,7 @@ type Segment = {
 
 export default function BrandSegmentScreen() {
   const router = useRouter();
+  const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams<{
@@ -107,7 +110,7 @@ export default function BrandSegmentScreen() {
 
   const openSegment = (segment: Segment) => {
     router.push({
-      pathname: '/tabs/filters/brand',
+      pathname: filtersScreenPath(stackBase, 'brand') as any,
       params: {
         gender: segment.gender,
         type: segment.type ?? undefined,
@@ -121,7 +124,7 @@ export default function BrandSegmentScreen() {
   };
 
   const handleShowResult = () => {
-    router.back();
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   return (

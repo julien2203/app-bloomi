@@ -18,9 +18,10 @@ import { Screen } from '../../components/ui/Screen';
 import { Text as UiText } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
-import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getPriceBounds } from '../../lib/api';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 const LIME = '#CCFF00';
 const SEPARATOR_GRAY = '#E5E5E5';
@@ -48,12 +49,12 @@ export default function PriceFilterScreen() {
     resultsTitle?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
   const [min, setMin] = useState<string>(
-    filters.priceMin !== undefined ? String(filters.priceMin) : ''
+    filters.priceMin != null ? String(filters.priceMin) : ''
   );
   const [max, setMax] = useState<string>(
-    filters.priceMax !== undefined ? String(filters.priceMax) : ''
+    filters.priceMax != null ? String(filters.priceMax) : ''
   );
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [minPlaceholder, setMinPlaceholder] = useState<string>('0.00');
@@ -80,29 +81,11 @@ export default function PriceFilterScreen() {
     const parsedMin = min.trim().length > 0 ? Number(min) : undefined;
     const parsedMax = max.trim().length > 0 ? Number(max) : undefined;
 
-    const priceMin = Number.isFinite(parsedMin || NaN) ? parsedMin : undefined;
-    const priceMax = Number.isFinite(parsedMax || NaN) ? parsedMax : undefined;
-
-    setFilters({
-      priceMin,
-      priceMax,
-      priceRange:
-        priceMin !== undefined || priceMax !== undefined
-          ? { min: priceMin, max: priceMax }
-          : undefined
-    });
-    if (params.returnTo === 'results') {
-      router.replace({
-        pathname: '/tabs/results' as any,
-        params: {
-          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
-          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
-          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
-        }
-      });
-      return;
-    }
-    router.back();
+    const priceMin = Number.isFinite(parsedMin || NaN) ? (parsedMin as number) : null;
+    const priceMax = Number.isFinite(parsedMax || NaN) ? (parsedMax as number) : null;
+    setFilter('priceMin', priceMin);
+    setFilter('priceMax', priceMax);
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   useEffect(() => {
@@ -147,7 +130,7 @@ export default function PriceFilterScreen() {
 
     void loadBounds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.category, filters.conditions]);
+  }, [filters.categoryId, filters.conditionIds, filters.brandIds, filters.sizeIds, filters.colorIds]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
@@ -159,7 +142,7 @@ export default function PriceFilterScreen() {
         <View style={styles.container}>
           <View style={styles.header}>
             <View style={styles.headerSide}>
-              <HeaderBackButton onPress={handleShowResult} />
+              <HeaderBackButton onPress={() => router.back()} />
             </View>
             <Text style={styles.headerTitle}>Price</Text>
             <View style={[styles.headerSide, styles.headerSideRight]}>
@@ -270,7 +253,9 @@ export default function PriceFilterScreen() {
               styles.footer,
               {
                 paddingBottom:
-                  (keyboardHeight > 0 ? keyboardHeight + 8 : 24) + insets.bottom
+                  (keyboardHeight > 0 ? keyboardHeight + 8 : 24) +
+                  insets.bottom +
+                  FLOATING_TAB_BAR_BOTTOM_RESERVE
               }
             ]}
           >

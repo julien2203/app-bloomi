@@ -6,10 +6,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  View,
-  Image,
-  TouchableOpacity,
-  TextInput
+  View
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
@@ -28,9 +25,7 @@ import { useFeedFiltersStore } from '../../../lib/store/feedFilters';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
 import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
-import { Feather } from '@expo/vector-icons';
-import { AppIcon } from '../../../components/ui/AppIcon';
-import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
+import { FeedHeader } from '../../../components/feed/FeedHeader';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -50,6 +45,7 @@ export default function HomeScreen() {
   const [searchText, setSearchText] = useState('');
 
   const notificationsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const notificationsBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const screenWidth = Dimensions.get('window').width;
   const gridPaddingX = 16;
@@ -234,6 +230,16 @@ export default function HomeScreen() {
     }
   }, [user?.id]);
 
+  const scheduleUnreadBadgeReload = useCallback(() => {
+    if (notificationsBadgeDebounceRef.current) {
+      clearTimeout(notificationsBadgeDebounceRef.current);
+    }
+    notificationsBadgeDebounceRef.current = setTimeout(() => {
+      notificationsBadgeDebounceRef.current = null;
+      void loadUnreadNotificationsCount();
+    }, 450);
+  }, [loadUnreadNotificationsCount]);
+
   useEffect(() => {
     void loadUnreadNotificationsCount();
   }, [loadUnreadNotificationsCount]);
@@ -254,8 +260,7 @@ export default function HomeScreen() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         () => {
-          // simple & robuste: recalculer le count
-          void loadUnreadNotificationsCount();
+          scheduleUnreadBadgeReload();
         }
       )
       .subscribe();
@@ -265,11 +270,17 @@ export default function HomeScreen() {
     return () => {
       void supabase.removeChannel(ch);
       notificationsChannelRef.current = null;
+      if (notificationsBadgeDebounceRef.current) {
+        clearTimeout(notificationsBadgeDebounceRef.current);
+        notificationsBadgeDebounceRef.current = null;
+      }
     };
-  }, [loadUnreadNotificationsCount, user?.id]);
+  }, [scheduleUnreadBadgeReload, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
+      void loadUnreadNotificationsCount();
+
       if (listings.length === 0) {
         setLoading(true);
       } else {
@@ -279,7 +290,7 @@ export default function HomeScreen() {
       void fetchFeed();
 
       return () => {};
-    }, [fetchFeed, listings.length])
+    }, [fetchFeed, listings.length, loadUnreadNotificationsCount])
   );
 
   const handleRefresh = () => {
@@ -338,59 +349,12 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <Screen scroll={false} noHorizontalPadding>
         {/* Sticky search bar (not scrolling) */}
-        <View style={styles.stickyHeader}>
-          <View style={styles.searchBar}>
-            <View style={styles.searchInputWrap}>
-              <Feather
-                name="search"
-                size={20}
-                color={theme.colors.textSecondary}
-                style={styles.searchIcon}
-              />
-              <TextInput
-                placeholder="Search for an item"
-                placeholderTextColor={theme.colors.textSecondary}
-                style={styles.searchInput}
-                value={searchText}
-                onChangeText={setSearchText}
-                returnKeyType="search"
-                onSubmitEditing={submitSearch}
-                allowFontScaling={false}
-                maxFontSizeMultiplier={1}
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={() => router.push('/tabs/profile/orders')}
-              activeOpacity={0.7}
-              style={styles.headerIconHit}
-              hitSlop={HIT_SLOP_EXTRA}
-              accessibilityRole="button"
-              accessibilityLabel="Panier"
-            >
-              <AppIcon name="cartLargeOutline" size={22} color={theme.colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/tabs/profile/notifications' as any)}
-              activeOpacity={0.7}
-              style={styles.headerIconHit}
-              hitSlop={HIT_SLOP_EXTRA}
-              accessibilityRole="button"
-              accessibilityLabel="Notifications"
-            >
-              <View style={styles.bellWrap}>
-                <AppIcon name="notificationsBellOutline" size={22} color={theme.colors.primary} />
-                {unreadNotificationsCount > 0 ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {unreadNotificationsCount > 99 ? '99+' : String(unreadNotificationsCount)}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <FeedHeader
+          searchText={searchText}
+          onSearchTextChange={setSearchText}
+          onSubmitSearch={submitSearch}
+          unreadNotificationsCount={unreadNotificationsCount}
+        />
 
         {/* Scroll only below */}
         <ScrollView
@@ -426,6 +390,9 @@ export default function HomeScreen() {
                   <ProductCard
                     listingId={item.id}
                     sellerId={item.seller_id}
+                    sellerName={item.seller_display_name}
+                    sellerAvatarUrl={item.seller_avatar_url}
+                    sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                     title={item.title}
                     price={item.price}
                     currency="CHF"
@@ -465,6 +432,9 @@ export default function HomeScreen() {
                 <ProductCard
                   listingId={item.id}
                   sellerId={item.seller_id}
+                  sellerName={item.seller_display_name}
+                  sellerAvatarUrl={item.seller_avatar_url}
+                  sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                   title={item.title}
                   price={item.price}
                   currency="CHF"
@@ -504,6 +474,9 @@ export default function HomeScreen() {
                 <ProductCard
                   listingId={item.id}
                   sellerId={item.seller_id}
+                  sellerName={item.seller_display_name}
+                  sellerAvatarUrl={item.seller_avatar_url}
+                  sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                   title={item.title}
                   price={item.price}
                   currency="CHF"
@@ -552,43 +525,13 @@ export default function HomeScreen() {
                 >
                   {pair.map((item) => (
                     <View key={item.id} style={{ flex: 1 }}>
-                      {/* Header vendeur */}
-                      <TouchableOpacity
-                        onPress={() =>
-                          router.push({
-                            pathname: '/tabs/public-profile' as any,
-                            params: { user_id: item.seller_id }
-                          })
-                        }
-                        activeOpacity={0.85}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          marginBottom: 6
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        {item.seller_avatar_url ? (
-                          <Image
-                            source={{ uri: item.seller_avatar_url }}
-                            style={{ width: 24, height: 24, borderRadius: 12 }}
-                          />
-                        ) : (
-                          <View
-                            style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              backgroundColor: theme.colors.muted
-                            }}
-                          />
-                        )}
-                      </TouchableOpacity>
-
                       {/* Card produit réutilisée */}
                       <ProductCard
                         listingId={item.id}
                         sellerId={item.seller_id}
+                        sellerName={item.seller_display_name}
+                        sellerAvatarUrl={item.seller_avatar_url}
+                        sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                         title={item.title}
                         price={item.price}
                         currency="CHF"
@@ -618,65 +561,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.colors.background
-  },
-  stickyHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-    backgroundColor: theme.colors.background
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 48
-  },
-  searchInputWrap: {
-    flex: 1,
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    backgroundColor: theme.colors.googleWhite,
-    borderRadius: theme.radius.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.separator
-  },
-  searchIcon: {
-    marginRight: theme.spacing.gapSm
-  },
-  searchInput: {
-    flex: 1,
-    ...theme.typography.body,
-    color: theme.colors.textPrimary
-  },
-  headerIconHit: {
-    ...HEADER_ICON_TOUCH_CONTAINER,
-    marginLeft: 4
-  },
-  bellWrap: {
-    position: 'relative',
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  badge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'red',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: -4,
-    right: -4
-  },
-  badgeText: {
-    textAlign: 'center',
-    lineHeight: 18,
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: 'white'
   },
   scroll: {
     flex: 1

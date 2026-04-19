@@ -37,6 +37,7 @@ import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { OwnerListingBottomSheet } from '../../../components/listing/OwnerListingBottomSheet';
 import { ProductCard } from '../../../components/ProductCard';
+import { InfluencerBadge } from '../../../components/InfluencerBadge';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
 import { supabase } from '../../../lib/supabase';
@@ -784,17 +785,23 @@ export default function ListingDetailScreen() {
             </Text>
 
             <View style={styles.metaRow}>
-              <Text variant="captionSm" color="textSecondary" numberOfLines={1} ellipsizeMode="tail">
-                {[
-                  listing.brand ?? null,
-                  listing.size ?? '—',
-                  conditionLabel ?? 'N/A',
-                  listing.city ?? 'Unknown'
-                ]
-                  .filter((x) => !!x && String(x).trim().length > 0)
-                  .join(' · ')}
-              </Text>
+              <View style={styles.metaChip}>
+                <Text variant="captionSm" color="textSecondary" numberOfLines={1} ellipsizeMode="tail">
+                  {listing.brand ?? '—'}
+                </Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text variant="captionSm" color="textSecondary" numberOfLines={1} ellipsizeMode="tail">
+                  {listing.size ?? '—'}
+                </Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text variant="captionSm" color="textSecondary" numberOfLines={1} ellipsizeMode="tail">
+                  {conditionLabel ?? 'N/A'}
+                </Text>
+              </View>
             </View>
+            <View style={styles.fullBleedSeparator} />
 
             <Text variant="h2" style={styles.mainPrice}>
               {formattedPrice}
@@ -827,6 +834,7 @@ export default function ListingDetailScreen() {
               {listing.description ?? 'No description provided.'}
             </Text>
           </View>
+          <View style={styles.separator} />
 
           {/* Seller block */}
           <View style={styles.sellerBlock}>
@@ -854,9 +862,14 @@ export default function ListingDetailScreen() {
                 </View>
               )}
               <View style={styles.sellerText}>
-                <Text variant="body" style={styles.sellerName}>
-                  {listing.seller_display_name ?? 'Seller'}
-                </Text>
+                <View style={styles.sellerNameRow}>
+                  <Text variant="body" style={styles.sellerName}>
+                    {listing.seller_display_name ?? 'Seller'}
+                  </Text>
+                  {listing.seller_is_influencer ? (
+                    <InfluencerBadge size={20} style={styles.sellerInfluencerBadge} />
+                  ) : null}
+                </View>
                 <Text variant="captionSm" color="textSecondary">
                   {sellerItemsLabel}
                 </Text>
@@ -991,6 +1004,7 @@ export default function ListingDetailScreen() {
                       key={l.id}
                       listingId={l.id}
                       sellerId={l.seller_id}
+                      sellerIsInfluencer={Boolean(l.seller_is_influencer)}
                       title={l.title}
                       price={Number(l.price) || 0}
                       brand={(l as any).brand ?? undefined}
@@ -1058,7 +1072,7 @@ export default function ListingDetailScreen() {
                 style={
                   isListingReservedOrUnavailable
                     ? styles.bottomButtonDisabled
-                    : styles.bottomButtonNoBorder
+                    : styles.bottomButtonBuyNow
                 }
                 disabled={isListingReservedOrUnavailable}
               />
@@ -1311,7 +1325,10 @@ const styles = StyleSheet.create({
   },
   sellerInfo: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    marginRight: theme.spacing.gapSm
   },
   sellerAvatar: {
     width: 44,
@@ -1327,10 +1344,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   sellerText: {
-    marginLeft: theme.spacing.gapSm
+    marginLeft: theme.spacing.gapSm,
+    flexShrink: 1,
+    minWidth: 0
+  },
+  sellerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0
   },
   sellerName: {
-    fontFamily: theme.fontFamily.semiBold
+    fontFamily: theme.fontFamily.semiBold,
+    flexShrink: 1
+  },
+  sellerInfluencerBadge: {
+    flexShrink: 0
   },
   sellerButton: {
     flex: 0,
@@ -1355,11 +1384,23 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.gapSm
   },
   metaRow: {
-    marginBottom: theme.spacing.gapSm
+    marginBottom: theme.spacing.gapSm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  metaChip: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: theme.colors.backgroundWhite
   },
   mainPrice: {
     ...theme.typography.h2,
     fontFamily: theme.fontFamily.bold,
+    color: '#555555',
     marginBottom: theme.spacing.gapSm
   },
   protectionRow: {
@@ -1369,7 +1410,7 @@ const styles = StyleSheet.create({
   },
   protectionPrice: {
     ...theme.typography.captionSm,
-    color: theme.colors.danger,
+    color: '#555555',
     marginRight: theme.spacing.gapSm
   },
   protectionIcon: {
@@ -1478,6 +1519,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     marginVertical: theme.spacing.gapMd
   },
+  fullBleedSeparator: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: theme.spacing.gapMd,
+    marginHorizontal: -theme.spacing.screenPaddingX
+  },
   detailsList: {
     marginTop: 0
   },
@@ -1523,6 +1570,11 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     borderColor: 'transparent'
+  },
+  bottomButtonBuyNow: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#C3EA4F'
   },
   bottomButtonOwnerFull: {
     flex: 1,

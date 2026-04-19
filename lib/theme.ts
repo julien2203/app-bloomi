@@ -4,12 +4,12 @@
  * Basé sur les specs Figma (iPhone 375px)
  */
 
-// Familles de polices Inter
+// Familles de polices Quicksand
 const fontFamily = {
-  regular: 'Inter-Regular',
-  medium: 'Inter-Medium',
-  semiBold: 'Inter-SemiBold',
-  bold: 'Inter-Bold'
+  regular: 'Quicksand_400Regular',
+  medium: 'Quicksand_500Medium',
+  semiBold: 'Quicksand_600SemiBold',
+  bold: 'Quicksand_700Bold'
 } as const;
 
 // Couleurs principales
@@ -32,7 +32,7 @@ const colors = {
   heroCtaBorder: '#14141A'
 } as const;
 
-// Typographie Inter
+// Typographie Quicksand
 const typography = {
   h1: {
     fontSize: 28,

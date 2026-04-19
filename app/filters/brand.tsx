@@ -15,9 +15,15 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
-import { getBrands } from '../../lib/api/filters';
+import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
+import {
+  getBrands,
+  getBrandNameCountsInCategory,
+  getCategoryFilterContext,
+  genderDisplayLabelFr
+} from '../../lib/api/filters';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type BrandRow = {
   id: number;
@@ -25,10 +31,16 @@ type BrandRow = {
   count: number;
 };
 
+type BrandSection = {
+  key: string;
+  title: string | null;
+  rows: BrandRow[];
+};
+
 export default function BrandFilterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
 
   const params = useLocalSearchParams<{
     gender?: string;
@@ -44,15 +56,16 @@ export default function BrandFilterScreen() {
   const typeParam = typeof params.type === 'string' ? params.type : undefined;
   const headerTitle = typeof params.title === 'string' ? params.title : 'Brand';
 
-  const [brands, setBrands] = useState<BrandRow[]>([]);
-  const [selectedBrandIds, setSelectedBrandIds] = useState<number[]>(filters.brandIds ?? []);
+  const [brandSections, setBrandSections] = useState<BrandSection[]>([]);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>(filters.brandIds ?? []);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const toggleBrand = (id: number) => {
+    const nextId = String(id);
     setSelectedBrandIds((prev) =>
-      prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]
+      prev.includes(nextId) ? prev.filter((b) => b !== nextId) : [...prev, nextId]
     );
   };
 
@@ -61,26 +74,8 @@ export default function BrandFilterScreen() {
   };
 
   const handleShowResult = () => {
-    const selectedNames = brands
-      .filter((b) => selectedBrandIds.includes(b.id))
-      .map((b) => b.name);
-
-    setFilters({
-      brandIds: selectedBrandIds.length > 0 ? selectedBrandIds : undefined,
-      brands: selectedNames.length > 0 ? selectedNames : undefined
-    });
-    if (params.returnTo === 'results') {
-      router.replace({
-        pathname: '/tabs/results' as any,
-        params: {
-          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
-          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
-          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
-        }
-      });
-      return;
-    }
-    router.back();
+    setFilter('brandIds', selectedBrandIds);
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const loadBrands = async () => {
@@ -88,9 +83,35 @@ export default function BrandFilterScreen() {
       setLoading(true);
       setError(null);
 
-      const data = await getBrands(genderParam, typeParam);
+      const categoryId = filters.categoryId;
 
-      const mapped: BrandRow[] = (data as any[]).map((row) => {
+      if (!categoryId) {
+        const data = await getBrands(genderParam, typeParam);
+        const mapped: BrandRow[] = (data as any[]).map((row) => {
+          const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
+          const count = rawCount < 0 ? 0 : rawCount;
+          return {
+            id: row.id as number,
+            name: row.name as string,
+            count
+          };
+        });
+        mapped.sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          return a.name.localeCompare(b.name);
+        });
+        setBrandSections([{ key: 'all', title: null, rows: mapped }]);
+        return;
+      }
+
+      const ctx = await getCategoryFilterContext(categoryId);
+      const g = ctx?.gender ?? genderParam ?? undefined;
+      const t = ctx?.type ?? typeParam ?? undefined;
+
+      const catCounts = await getBrandNameCountsInCategory(String(categoryId));
+      const data = await getBrands(g, t, { categoryIdForCounts: String(categoryId) });
+
+      let mapped: BrandRow[] = (data as any[]).map((row) => {
         const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
         const count = rawCount < 0 ? 0 : rawCount;
         return {
@@ -100,15 +121,58 @@ export default function BrandFilterScreen() {
         };
       });
 
-      mapped.sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return a.name.localeCompare(b.name);
+      if (!t && catCounts.size > 0) {
+        const inCategory = new Set(catCounts.keys());
+        mapped = mapped.filter((b) => inCategory.has(b.name));
+      }
+      const namesOrdered = [...catCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name]) => name);
+      const byName = new Map(mapped.map((b) => [b.name, b]));
+
+      const popularRows: BrandRow[] = [];
+      for (const name of namesOrdered) {
+        const b = byName.get(name);
+        const c = catCounts.get(name) ?? 0;
+        if (b && c > 0) {
+          popularRows.push({ ...b, count: c });
+        }
+      }
+
+      const popularIds = new Set(popularRows.map((r) => r.id));
+      const restRows = mapped
+        .filter((b) => !popularIds.has(b.id))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const genderLabel = genderDisplayLabelFr((ctx?.gender ?? genderParam) ?? null);
+      const sections: BrandSection[] = [];
+
+      if (popularRows.length > 0) {
+        sections.push({
+          key: 'popular',
+          title: `Popular for ${genderLabel}`,
+          rows: popularRows
+        });
+      }
+
+      const allRows =
+        popularRows.length > 0
+          ? restRows
+          : [...mapped].sort((a, b) => {
+              if (b.count !== a.count) return b.count - a.count;
+              return a.name.localeCompare(b.name);
+            });
+
+      sections.push({
+        key: 'all',
+        title: popularRows.length > 0 ? 'All brands' : null,
+        rows: allRows
       });
 
-      setBrands(mapped);
+      setBrandSections(sections);
     } catch {
       setError('Unable to load brands. Please try again.');
-      setBrands([]);
+      setBrandSections([]);
     } finally {
       setLoading(false);
     }
@@ -116,24 +180,33 @@ export default function BrandFilterScreen() {
 
   useEffect(() => {
     void loadBrands();
-  }, [filters.categoryFilter, filters.sizeIds, filters.colorIds, filters.conditions, filters.priceRange]);
+  }, [
+    genderParam,
+    typeParam,
+    filters.categoryId,
+    filters.sizeIds,
+    filters.colorIds,
+    filters.conditionIds,
+    filters.priceMin,
+    filters.priceMax
+  ]);
 
-  const filteredBrands = useMemo(() => {
+  const filteredSections = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let result = brands;
-    if (q.length > 0) {
-      result = brands.filter((b) => b.name.toLowerCase().includes(q));
-    }
-    return result;
-  }, [brands, search]);
+    return brandSections.map((sec) => ({
+      ...sec,
+      rows:
+        q.length === 0 ? sec.rows : sec.rows.filter((b) => b.name.toLowerCase().includes(q))
+    }));
+  }, [brandSections, search]);
 
-  const hasNoResults = !loading && filteredBrands.length === 0;
+  const hasNoResults = !loading && filteredSections.every((s) => s.rows.length === 0);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={handleShowResult} />
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             {headerTitle}
           </Text>
@@ -202,51 +275,54 @@ export default function BrandFilterScreen() {
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
-              {filteredBrands.map((brand) => {
-                const checked = selectedBrandIds.includes(brand.id);
-                const disabled = brand.count === 0;
-                return (
-                  <TouchableOpacity
-                    key={brand.id}
-                    style={[styles.row, disabled && styles.rowDisabled]}
-                    activeOpacity={disabled ? 1 : 0.7}
-                    disabled={disabled}
-                    onPress={() => toggleBrand(brand.id)}
-                  >
-                    <View style={styles.rowTextContainer}>
-                      <Text
-                        variant="body"
-                        style={[
-                          styles.rowLabel,
-                          disabled && styles.rowLabelDisabled
-                        ]}
+              {filteredSections.map((section) => (
+                <View key={section.key} style={styles.brandSection}>
+                  {section.title ? (
+                    <Text variant="captionSm" style={styles.brandSectionTitle}>
+                      {section.title}
+                    </Text>
+                  ) : null}
+                  {section.rows.map((brand) => {
+                    const checked = selectedBrandIds.includes(String(brand.id));
+                    const disabled = brand.count === 0;
+                    return (
+                      <TouchableOpacity
+                        key={`${section.key}-${brand.id}`}
+                        style={[styles.row, disabled && styles.rowDisabled]}
+                        activeOpacity={disabled ? 1 : 0.7}
+                        disabled={disabled}
+                        onPress={() => toggleBrand(brand.id)}
                       >
-                        {brand.name}
-                      </Text>
-                      <Text
-                        variant="body"
-                        style={[
-                          styles.rowCount,
-                          disabled && styles.rowLabelDisabled
-                        ]}
-                      >
-                        {brand.count > 500 ? ' (500+)' : ` (${brand.count})`}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        checked && styles.checkboxChecked,
-                        disabled && styles.checkboxDisabled
-                      ]}
-                    >
-                      {checked && !disabled && (
-                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                        <View style={styles.rowTextContainer}>
+                          <Text
+                            variant="body"
+                            style={[styles.rowLabel, disabled && styles.rowLabelDisabled]}
+                          >
+                            {brand.name}
+                          </Text>
+                          <Text
+                            variant="body"
+                            style={[styles.rowCount, disabled && styles.rowLabelDisabled]}
+                          >
+                            {brand.count > 500 ? ' (500+)' : ` (${brand.count})`}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.checkbox,
+                            checked && styles.checkboxChecked,
+                            disabled && styles.checkboxDisabled
+                          ]}
+                        >
+                          {checked && !disabled && (
+                            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
             </ScrollView>
           )}
         </View>
@@ -254,7 +330,7 @@ export default function BrandFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
           ]}
         >
           <Button
@@ -341,6 +417,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 4
+  },
+  brandSection: {
+    marginBottom: 8
+  },
+  brandSectionTitle: {
+    color: '#999999',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingTop: 12,
+    paddingBottom: 8,
+    paddingHorizontal: 0
   },
   list: {
     paddingBottom: 24

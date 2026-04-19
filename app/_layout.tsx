@@ -5,12 +5,19 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { ensureProfileExists } from '../lib/profile';
-import { useInterFonts } from '../lib/ui/fonts';
 import { ensureNotificationsConfigured, notifyNewMessage } from '../lib/notifications';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { SUPABASE_URL } from '../lib/env';
+import {
+  useFonts,
+  Quicksand_300Light,
+  Quicksand_400Regular,
+  Quicksand_500Medium,
+  Quicksand_600SemiBold,
+  Quicksand_700Bold
+} from '@expo-google-fonts/quicksand';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -149,8 +156,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         const permission = await Notifications.requestPermissionsAsync();
         const granted =
           (permission as any).granted ||
-          permission.status === Notifications.PermissionStatus.GRANTED ||
-          permission.status === 'granted';
+          permission.status === Notifications.PermissionStatus.GRANTED;
         if (!granted) return;
 
         const expoToken = await Notifications.getExpoPushTokenAsync({
@@ -199,7 +205,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const { fontsLoaded, fontError } = useInterFonts();
+  const [fontsLoaded, fontError] = useFonts({
+    Quicksand_300Light,
+    Quicksand_400Regular,
+    Quicksand_500Medium,
+    Quicksand_600SemiBold,
+    Quicksand_700Bold
+  });
   const router = useRouter();
 
   // Navigation au tap sur une notification (push/local)
@@ -325,7 +337,7 @@ export default function RootLayout() {
 
   // Si erreur de chargement des polices, continuer quand même (fallback sur système)
   if (fontError) {
-    console.warn('Erreur chargement polices Inter:', fontError);
+    console.warn('Erreur chargement polices Quicksand:', fontError);
   }
 
   return (

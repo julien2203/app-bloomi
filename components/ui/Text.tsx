@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-native';
+import { Text as RNText, TextProps as RNTextProps, StyleSheet, type TextStyle } from 'react-native';
 import { theme } from '../../lib/theme';
 
 type TextVariant = 'h1' | 'h2' | 'h3' | 'body' | 'caption' | 'captionSm' | 'button';
@@ -11,13 +11,38 @@ interface TextProps extends RNTextProps {
   color?: ColorKey;
 }
 
+function resolveQuicksandFamilyFromWeight(fontWeight?: TextStyle['fontWeight']) {
+  if (!fontWeight) return undefined;
+  if (fontWeight === 'normal') return theme.fontFamily.regular;
+  if (fontWeight === 'bold') return theme.fontFamily.bold;
+  if (fontWeight === '100' || fontWeight === '200' || fontWeight === '300') {
+    return 'Quicksand_300Light';
+  }
+  if (fontWeight === '400') return theme.fontFamily.regular;
+  if (fontWeight === '500') return theme.fontFamily.medium;
+  if (fontWeight === '600') return theme.fontFamily.semiBold;
+  if (fontWeight === '700' || fontWeight === '800' || fontWeight === '900') {
+    return theme.fontFamily.bold;
+  }
+  return undefined;
+}
+
 export function Text({ variant = 'body', color, style, ...props }: TextProps) {
   const baseStyle = styles[variant];
   const colorStyle = {
     color: color ? theme.colors[color] : theme.colors.textPrimary
   };
+  const flattenedStyle = StyleSheet.flatten(style) as TextStyle | undefined;
+  const weightFontFamily = resolveQuicksandFamilyFromWeight(flattenedStyle?.fontWeight);
+  const normalizedWeightStyle =
+    flattenedStyle?.fontWeight != null || weightFontFamily
+      ? {
+          ...(flattenedStyle?.fontWeight != null ? { fontWeight: undefined } : {}),
+          ...(weightFontFamily ? { fontFamily: weightFontFamily } : {})
+        }
+      : undefined;
 
-  return <RNText style={[baseStyle, colorStyle, style]} {...props} />;
+  return <RNText style={[baseStyle, colorStyle, style, normalizedWeightStyle]} {...props} />;
 }
 
 const styles = StyleSheet.create({

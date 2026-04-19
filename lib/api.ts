@@ -6,6 +6,7 @@
 import { supabase } from './supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
+import * as Location from 'expo-location';
 import type {
   Listing,
   ListingInsert,
@@ -26,6 +27,32 @@ import type {
 } from './types';
 import type { FeedFilters } from './store/feedFilters';
 import { sendPushNotificationWithUserJwt } from './pushNotifications';
+
+async function resolveFilterLabels(filters?: FeedFilters): Promise<{
+  brandLabels: string[];
+  sizeLabels: string[];
+  colorLabels: string[];
+}> {
+  if (!filters) {
+    return { brandLabels: [], sizeLabels: [], colorLabels: [] };
+  }
+
+  const brandIds = filters.brandIds ?? [];
+  const sizeIds = filters.sizeIds ?? [];
+  const colorIds = filters.colorIds ?? [];
+
+  const [brandsRes, sizesRes, colorsRes] = await Promise.all([
+    brandIds.length > 0 ? supabase.from('brands').select('id, name').in('id', brandIds as any) : Promise.resolve({ data: [], error: null } as any),
+    sizeIds.length > 0 ? supabase.from('sizes').select('id, label').in('id', sizeIds as any) : Promise.resolve({ data: [], error: null } as any),
+    colorIds.length > 0 ? supabase.from('colors').select('id, name').in('id', colorIds as any) : Promise.resolve({ data: [], error: null } as any)
+  ]);
+
+  return {
+    brandLabels: (brandsRes.data || []).map((r: any) => String(r.name)).filter(Boolean),
+    sizeLabels: (sizesRes.data || []).map((r: any) => String(r.label)).filter(Boolean),
+    colorLabels: (colorsRes.data || []).map((r: any) => String(r.name)).filter(Boolean)
+  };
+}
 
 // ============================================
 // TYPES POUR LE FEED
@@ -52,6 +79,8 @@ export type FeedListing = {
   cover_photo_order: number | null;
   seller_display_name: string | null;
   seller_avatar_url: string | null;
+  /** Présent sur `v_feed_listings` après migration `seller_is_influencer`. */
+  seller_is_influencer?: boolean | null;
   listing_city: string;
   listing_country: string;
 };
@@ -72,37 +101,41 @@ export async function getFeedListings(params?: {
   const { limit = 20, offset = 0, filters } = params || {};
 
   try {
+    const { brandLabels, sizeLabels, colorLabels } = await resolveFilterLabels(filters);
+
     // Nearby: use RPC that filters + sorts by distance.
     if (
       filters?.nearbyKm != null &&
       Number.isFinite(filters.nearbyKm) &&
-      filters.nearbyKm! > 0 &&
-      filters?.nearbyLat != null &&
-      filters?.nearbyLon != null
+      filters.nearbyKm > 0
     ) {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.granted) {
+        const pos = await Location.getCurrentPositionAsync({});
       const { data, error } = await supabase.rpc('nearby_feed_listings', {
-        p_lat: Number(filters.nearbyLat),
-        p_lon: Number(filters.nearbyLon),
+          p_lat: Number(pos.coords.latitude),
+          p_lon: Number(pos.coords.longitude),
         p_radius_km: Number(filters.nearbyKm),
         p_limit: limit,
         p_offset: offset,
         p_section: 'feed',
         p_query: null,
-        p_category: filters.category ?? null,
-        p_conditions: (filters.conditions ?? null) as any,
+          p_category: null,
+          p_conditions: (filters.conditionIds.length ? filters.conditionIds : null) as any,
         p_price_min: filters.priceMin ?? null,
         p_price_max: filters.priceMax ?? null,
-        p_brands: (filters.brands ?? null) as any,
-        p_sizes: (filters.sizes ?? null) as any,
-        p_colors: (filters.colors ?? null) as any,
+          p_brands: (brandLabels.length ? brandLabels : null) as any,
+          p_sizes: (sizeLabels.length ? sizeLabels : null) as any,
+          p_colors: (colorLabels.length ? colorLabels : null) as any,
         p_influencer_ids: null
       });
       if (error) return { data: [], error: new Error(error.message) };
       return { data: (data || []) as FeedListing[], error: null };
+      }
     }
 
     // Relevance: liked listings first (by like date desc), then newest.
-    if (filters?.sort === 'relevance') {
+    if (filters?.sortBy === 'relevance') {
       const {
         data: { user }
       } = await supabase.auth.getUser();
@@ -148,10 +181,12 @@ export async function getFeedListings(params?: {
 
       // Liked items matching current filters
       let likedQ = supabase.from('v_feed_listings').select('*').in('id', likedIds);
-      if (filters?.category) likedQ = likedQ.eq('category', filters.category);
-      if (filters?.conditions && filters.conditions.length > 0) likedQ = likedQ.in('condition', filters.conditions);
-      if (filters?.priceMin !== undefined) likedQ = likedQ.gte('price', filters.priceMin);
-      if (filters?.priceMax !== undefined) likedQ = likedQ.lte('price', filters.priceMax);
+      if (filters?.conditionIds && filters.conditionIds.length > 0) likedQ = likedQ.in('condition', filters.conditionIds);
+      if (filters?.priceMin != null) likedQ = likedQ.gte('price', filters.priceMin);
+      if (filters?.priceMax != null) likedQ = likedQ.lte('price', filters.priceMax);
+      if (brandLabels.length > 0) likedQ = likedQ.in('brand', brandLabels);
+      if (sizeLabels.length > 0) likedQ = likedQ.in('size', sizeLabels);
+      if (colorLabels.length > 0) likedQ = likedQ.in('color', colorLabels);
 
       const { data: likedData, error: likedErr } = await likedQ;
       if (likedErr) return { data: [], error: new Error(likedErr.message) };
@@ -176,10 +211,12 @@ export async function getFeedListings(params?: {
         .order('created_at', { ascending: false })
         .range(restOffset, restOffset + remaining - 1);
 
-      if (filters?.category) restQ = restQ.eq('category', filters.category);
-      if (filters?.conditions && filters.conditions.length > 0) restQ = restQ.in('condition', filters.conditions);
-      if (filters?.priceMin !== undefined) restQ = restQ.gte('price', filters.priceMin);
-      if (filters?.priceMax !== undefined) restQ = restQ.lte('price', filters.priceMax);
+      if (filters?.conditionIds && filters.conditionIds.length > 0) restQ = restQ.in('condition', filters.conditionIds);
+      if (filters?.priceMin != null) restQ = restQ.gte('price', filters.priceMin);
+      if (filters?.priceMax != null) restQ = restQ.lte('price', filters.priceMax);
+      if (brandLabels.length > 0) restQ = restQ.in('brand', brandLabels);
+      if (sizeLabels.length > 0) restQ = restQ.in('size', sizeLabels);
+      if (colorLabels.length > 0) restQ = restQ.in('color', colorLabels);
 
       const quoted = likedIds.map((x) => `"${x}"`).join(',');
       restQ = restQ.not('id', 'in', `(${quoted})`);
@@ -193,7 +230,7 @@ export async function getFeedListings(params?: {
     let orderColumn: 'created_at' | 'price' = 'created_at';
     let ascending = false;
 
-    switch (filters?.sort) {
+    switch (filters?.sortBy) {
       case 'price_asc':
         orderColumn = 'price';
         ascending = true;
@@ -202,7 +239,7 @@ export async function getFeedListings(params?: {
         orderColumn = 'price';
         ascending = false;
         break;
-      case 'newest':
+      case 'recent':
       default:
         orderColumn = 'created_at';
         ascending = false;
@@ -215,18 +252,18 @@ export async function getFeedListings(params?: {
       .order(orderColumn, { ascending })
       .range(offset, offset + limit - 1);
 
-    if (filters?.category) {
-      query = query.eq('category', filters.category);
+    if (filters?.conditionIds && filters.conditionIds.length > 0) {
+      query = query.in('condition', filters.conditionIds);
     }
-    if (filters?.conditions && filters.conditions.length > 0) {
-      query = query.in('condition', filters.conditions);
-    }
-    if (filters?.priceMin !== undefined) {
+    if (filters?.priceMin != null) {
       query = query.gte('price', filters.priceMin);
     }
-    if (filters?.priceMax !== undefined) {
+    if (filters?.priceMax != null) {
       query = query.lte('price', filters.priceMax);
     }
+    if (brandLabels.length > 0) query = query.in('brand', brandLabels);
+    if (sizeLabels.length > 0) query = query.in('size', sizeLabels);
+    if (colorLabels.length > 0) query = query.in('color', colorLabels);
 
     const { data, error } = await query;
 
@@ -249,21 +286,22 @@ export async function getPriceBounds(filters?: FeedFilters): Promise<{
   error: Error | null;
 }> {
   try {
+    const { brandLabels, sizeLabels, colorLabels } = await resolveFilterLabels(filters);
     // Base query helper pour appliquer les filtres existants
     const applyFilters = (q: any) => {
       let query = q;
-      if (filters?.category) {
-        query = query.eq('category', filters.category);
+      if (filters?.conditionIds && filters.conditionIds.length > 0) {
+        query = query.in('condition', filters.conditionIds);
       }
-      if (filters?.conditions && filters.conditions.length > 0) {
-        query = query.in('condition', filters.conditions);
-      }
-      if (filters?.priceMin !== undefined) {
+      if (filters?.priceMin != null) {
         query = query.gte('price', filters.priceMin);
       }
-      if (filters?.priceMax !== undefined) {
+      if (filters?.priceMax != null) {
         query = query.lte('price', filters.priceMax);
       }
+      if (brandLabels.length > 0) query = query.in('brand', brandLabels);
+      if (sizeLabels.length > 0) query = query.in('size', sizeLabels);
+      if (colorLabels.length > 0) query = query.in('color', colorLabels);
       return query;
     };
 
@@ -407,6 +445,7 @@ export type ListingDetail = {
   seller_display_name: string | null;
   seller_avatar_url: string | null;
   seller_country: string | null;
+  seller_is_influencer?: boolean | null;
   brand?: string | null;
   size?: string | null;
   color?: string | null;

@@ -22,9 +22,16 @@ import { AppIcon } from '../ui/AppIcon';
 import { ProductCard } from '../ProductCard';
 import { supabase } from '../../lib/supabase';
 import type { FeedListing } from '../../lib/api';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { type FeedFilters, useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { useSearchFiltersStore } from '../../lib/store/searchFilters';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../ui/HeaderBackButton';
+import {
+  FILTERS_PATH_SEARCH_STACK,
+  FILTERS_PATH_TABS_ROOT,
+  filtersScreenPath,
+  type FiltersStackBase
+} from '../../lib/navigation/filterRoutes';
 
 export type ResultsSection = 'sponsored' | 'trending' | 'influencer' | 'all' | 'search';
 
@@ -51,6 +58,51 @@ type MixedItem =
   | { type: 'showcase'; data: SellerShowcase; id: string };
 
 const PAGE_SIZE = 20;
+
+/** Tri sur la section Search une fois les filtres appliqués (`applyBaseSection` pour Search ne pose pas l’ordre). */
+function applySearchListingOrder(qb: any, sortBy: string | undefined) {
+  switch (sortBy) {
+    case 'price_asc':
+      return qb.order('price', { ascending: true }).order('created_at', { ascending: false });
+    case 'price_desc':
+      return qb.order('price', { ascending: false }).order('created_at', { ascending: false });
+    case 'relevance':
+    case 'recent':
+    default:
+      return qb.order('created_at', { ascending: false });
+  }
+}
+
+/** Pills catégories (EN) sur l’onglet Search → même flux que `filters/category-gender` (param `gender` Woman/Men/Kids/Baby). */
+const SEARCH_CATEGORY_GENDER_LABELS = ['Women', 'Men', 'Kids', 'Baby'] as const;
+type SearchCategoryGenderLabel = (typeof SEARCH_CATEGORY_GENDER_LABELS)[number];
+const SEARCH_CATEGORY_TO_FILTER_GENDER: Record<
+  SearchCategoryGenderLabel,
+  'Woman' | 'Men' | 'Kids' | 'Baby'
+> = {
+  Women: 'Woman',
+  Men: 'Men',
+  Kids: 'Kids',
+  Baby: 'Baby'
+};
+const SEARCH_CATEGORY_DB_GENDER: Record<SearchCategoryGenderLabel, string> = {
+  Women: 'femme',
+  Men: 'homme',
+  Kids: 'enfant',
+  Baby: 'bebe'
+};
+
+type ResultsFilterPill =
+  | SearchCategoryGenderLabel
+  | 'Clear'
+  | 'Filter'
+  | 'Nearby'
+  | 'Size'
+  | 'Brand'
+  | 'Condition'
+  | 'Color'
+  | 'Price';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_PADDING_X = 16;
 const GRID_GAP = 8;
@@ -61,10 +113,34 @@ export function UniversalResultsScreen(props: {
   section: ResultsSection;
   initialQuery?: string;
   showBack?: boolean;
+  /** Tab Search : au retour des filtres, relance la requête (focus) */
+  reloadOnFocus?: boolean;
+  /** Onglet Search uniquement : pills genre + filtres alignés, skeleton au reload, pas de vitrines vendeurs */
+  standaloneSearch?: boolean;
+  /** Incrémenté par le tab Search à chaque focus : force un reload aligné sur le store Zustand */
+  searchFocusReloadNonce?: number;
 }) {
-  const { title, section, initialQuery, showBack = true } = props;
+  const {
+    title,
+    section,
+    initialQuery,
+    showBack = true,
+    reloadOnFocus = false,
+    standaloneSearch = false,
+    searchFocusReloadNonce = 0
+  } = props;
   const router = useRouter();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const feedStore = useFeedFiltersStore();
+  const searchStore = useSearchFiltersStore();
+  const { filters, setFilter, resetFilters } = standaloneSearch ? searchStore : feedStore;
+
+  /** Même rangée de pills que l’onglet Search (Clear + genre + taille, etc.) pour les écrans Results « View all » (sponsored, trending, …). */
+  const searchStyleFilters = useMemo(
+    () =>
+      standaloneSearch ||
+      ['sponsored', 'trending', 'influencer', 'all'].includes(section),
+    [standaloneSearch, section]
+  );
 
   const [query, setQuery] = useState(initialQuery ?? '');
   const [results, setResults] = useState<ResultsListing[]>([]);
@@ -84,6 +160,11 @@ export function UniversalResultsScreen(props: {
   const [nearbyModalOpen, setNearbyModalOpen] = useState(false);
   const [nearbyDraftKm, setNearbyDraftKm] = useState<number | null>(filters.nearbyKm ?? null);
   const [nearbyConfirming, setNearbyConfirming] = useState(false);
+
+  /** Genre DB (`categories.gender`) pour la catégorie sélectionnée — pills actives sur Search */
+  const [resolvedCategoryGenderDb, setResolvedCategoryGenderDb] = useState<string | null>(null);
+  /** Libellés candidats pour `v_feed_listings.category` (nom + slug catégorie). */
+  const [resolvedCategoryLabels, setResolvedCategoryLabels] = useState<string[]>([]);
 
   const headerTitle = useMemo(() => {
     if (typeof title === 'string' && title.trim()) return title;
@@ -116,16 +197,22 @@ export function UniversalResultsScreen(props: {
     const resolve = async () => {
       // Sizes
       const sizeIds = effectiveFilters.sizeIds ?? [];
-      if (effectiveFilters.sizes && effectiveFilters.sizes.length > 0) {
-        setResolvedSizeLabels(effectiveFilters.sizes);
-      } else if (sizeIds.length > 0) {
-        const { data, error } = await supabase.from('sizes').select('id, label').in('id', sizeIds);
+      if (sizeIds.length > 0) {
+        const idsAsNumbers = sizeIds.map((id) => Number(id)).filter((n) => Number.isFinite(n));
+        const { data, error } = await supabase
+          .from('sizes')
+          .select('id, label')
+          .in('id', idsAsNumbers.length ? idsAsNumbers : [-1]);
         if (!cancelled) {
           if (error) setResolvedSizeLabels([]);
           else {
-            const byId = new Map<number, string>();
-            for (const r of (data || []) as any[]) byId.set(Number(r.id), String(r.label));
-            setResolvedSizeLabels(sizeIds.map((id) => byId.get(id)).filter(Boolean) as string[]);
+            const byId = new Map<string, string>();
+            for (const r of (data || []) as any[]) {
+              byId.set(String(r.id), String(r.label));
+            }
+            setResolvedSizeLabels(
+              sizeIds.map((id) => byId.get(String(id))).filter((x): x is string => Boolean(x))
+            );
           }
         }
       } else {
@@ -134,16 +221,22 @@ export function UniversalResultsScreen(props: {
 
       // Brands
       const brandIds = effectiveFilters.brandIds ?? [];
-      if (effectiveFilters.brands && effectiveFilters.brands.length > 0) {
-        setResolvedBrandNames(effectiveFilters.brands);
-      } else if (brandIds.length > 0) {
-        const { data, error } = await supabase.from('brands').select('id, name').in('id', brandIds);
+      if (brandIds.length > 0) {
+        const idsAsNumbers = brandIds.map((id) => Number(id)).filter((n) => Number.isFinite(n));
+        const { data, error } = await supabase
+          .from('brands')
+          .select('id, name')
+          .in('id', idsAsNumbers.length ? idsAsNumbers : [-1]);
         if (!cancelled) {
           if (error) setResolvedBrandNames([]);
           else {
-            const byId = new Map<number, string>();
-            for (const r of (data || []) as any[]) byId.set(Number(r.id), String(r.name));
-            setResolvedBrandNames(brandIds.map((id) => byId.get(id)).filter(Boolean) as string[]);
+            const byId = new Map<string, string>();
+            for (const r of (data || []) as any[]) {
+              byId.set(String(r.id), String(r.name));
+            }
+            setResolvedBrandNames(
+              brandIds.map((id) => byId.get(String(id))).filter((x): x is string => Boolean(x))
+            );
           }
         }
       } else {
@@ -152,16 +245,22 @@ export function UniversalResultsScreen(props: {
 
       // Colors
       const colorIds = effectiveFilters.colorIds ?? [];
-      if (effectiveFilters.colors && effectiveFilters.colors.length > 0) {
-        setResolvedColorNames(effectiveFilters.colors);
-      } else if (colorIds.length > 0) {
-        const { data, error } = await supabase.from('colors').select('id, name').in('id', colorIds);
+      if (colorIds.length > 0) {
+        const idsAsNumbers = colorIds.map((id) => Number(id)).filter((n) => Number.isFinite(n));
+        const { data, error } = await supabase
+          .from('colors')
+          .select('id, name')
+          .in('id', idsAsNumbers.length ? idsAsNumbers : [-1]);
         if (!cancelled) {
           if (error) setResolvedColorNames([]);
           else {
-            const byId = new Map<number, string>();
-            for (const r of (data || []) as any[]) byId.set(Number(r.id), String(r.name));
-            setResolvedColorNames(colorIds.map((id) => byId.get(id)).filter(Boolean) as string[]);
+            const byId = new Map<string, string>();
+            for (const r of (data || []) as any[]) {
+              byId.set(String(r.id), String(r.name));
+            }
+            setResolvedColorNames(
+              colorIds.map((id) => byId.get(String(id))).filter((x): x is string => Boolean(x))
+            );
           }
         }
       } else {
@@ -175,12 +274,42 @@ export function UniversalResultsScreen(props: {
     };
   }, [
     effectiveFilters.sizeIds,
-    effectiveFilters.sizes,
     effectiveFilters.brandIds,
-    effectiveFilters.brands,
-    effectiveFilters.colorIds,
-    effectiveFilters.colors
+    effectiveFilters.colorIds
   ]);
+
+  useEffect(() => {
+    const cid = filters.categoryId;
+    if (!cid) {
+      setResolvedCategoryGenderDb(null);
+      setResolvedCategoryLabels([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('gender, name, slug')
+        .eq('id', cid)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setResolvedCategoryGenderDb(null);
+        setResolvedCategoryLabels([]);
+        return;
+      }
+      const row = data as { gender?: string | null; name?: string | null; slug?: string | null };
+      const g = row.gender;
+      setResolvedCategoryGenderDb(typeof g === 'string' && g.length > 0 ? g : null);
+      const cands = [row.name, row.slug]
+        .map((x) => (x != null ? String(x).trim() : ''))
+        .filter(Boolean);
+      setResolvedCategoryLabels([...new Set(cands)]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters.categoryId]);
 
   const loadInfluencerIds = useCallback(async () => {
     if (section !== 'influencer') return;
@@ -222,6 +351,7 @@ export function UniversalResultsScreen(props: {
         case 'all':
           return qb.eq('status', 'published').order('created_at', { ascending: false });
         case 'search':
+          return qb.eq('status', 'published');
         default:
           return qb.eq('status', 'published').order('created_at', { ascending: false });
       }
@@ -255,19 +385,22 @@ export function UniversalResultsScreen(props: {
 
   const applyFilters = useCallback(
     (qb: any) => {
+      const f: FeedFilters = standaloneSearch
+        ? useSearchFiltersStore.getState().filters
+        : useFeedFiltersStore.getState().filters;
       let queryBuilder = qb;
 
-      if (effectiveFilters.category) {
-        queryBuilder = queryBuilder.eq('category', effectiveFilters.category);
+      if (f.categoryId && resolvedCategoryLabels.length > 0) {
+        queryBuilder = queryBuilder.in('category', resolvedCategoryLabels);
       }
-      if (effectiveFilters.conditions && effectiveFilters.conditions.length > 0) {
-        queryBuilder = queryBuilder.in('condition', effectiveFilters.conditions);
+      if (f.conditionIds && f.conditionIds.length > 0) {
+        queryBuilder = queryBuilder.in('condition', f.conditionIds);
       }
-      if (effectiveFilters.priceMin !== undefined) {
-        queryBuilder = queryBuilder.gte('price', effectiveFilters.priceMin);
+      if (f.priceMin != null) {
+        queryBuilder = queryBuilder.gte('price', f.priceMin);
       }
-      if (effectiveFilters.priceMax !== undefined) {
-        queryBuilder = queryBuilder.lte('price', effectiveFilters.priceMax);
+      if (f.priceMax != null) {
+        queryBuilder = queryBuilder.lte('price', f.priceMax);
       }
       if (resolvedBrandNames.length > 0) {
         queryBuilder = queryBuilder.in('brand', resolvedBrandNames);
@@ -276,12 +409,24 @@ export function UniversalResultsScreen(props: {
         queryBuilder = queryBuilder.in('size', resolvedSizeLabels);
       }
       if (resolvedColorNames.length > 0) {
-        queryBuilder = queryBuilder.in('color', resolvedColorNames);
+        if (resolvedColorNames.length === 1) {
+          queryBuilder = queryBuilder.ilike('color', `*${resolvedColorNames[0]}*`);
+        } else {
+          queryBuilder = queryBuilder.or(
+            resolvedColorNames.map((c) => `color.ilike.*${c}*`).join(',')
+          );
+        }
       }
 
       return queryBuilder;
     },
-    [effectiveFilters, resolvedBrandNames, resolvedColorNames, resolvedSizeLabels]
+    [
+      standaloneSearch,
+      resolvedCategoryLabels,
+      resolvedBrandNames,
+      resolvedColorNames,
+      resolvedSizeLabels
+    ]
   );
 
   const applySearchQuery = useCallback(
@@ -307,45 +452,53 @@ export function UniversalResultsScreen(props: {
         const from = page * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
+        const liveFilters = standaloneSearch
+          ? useSearchFiltersStore.getState().filters
+          : useFeedFiltersStore.getState().filters;
+
         // eslint-disable-next-line no-console
         console.log('[Results] active filters', {
           section,
           query: query.trim(),
-          category: effectiveFilters.category ?? null,
-          conditions: effectiveFilters.conditions ?? [],
-          priceMin: effectiveFilters.priceMin ?? null,
-          priceMax: effectiveFilters.priceMax ?? null,
-          brandIds: effectiveFilters.brandIds ?? [],
-          brands: effectiveFilters.brands ?? [],
+          categoryId: liveFilters.categoryId ?? null,
+          conditionIds: liveFilters.conditionIds ?? [],
+          priceMin: liveFilters.priceMin ?? null,
+          priceMax: liveFilters.priceMax ?? null,
+          brandIds: liveFilters.brandIds ?? [],
           resolvedBrandNames,
-          sizeIds: effectiveFilters.sizeIds ?? [],
-          sizes: effectiveFilters.sizes ?? [],
+          sizeIds: liveFilters.sizeIds ?? [],
           resolvedSizeLabels,
-          colorIds: effectiveFilters.colorIds ?? [],
-          colors: effectiveFilters.colors ?? [],
+          colorIds: liveFilters.colorIds ?? [],
           resolvedColorNames
         });
-
-        const sort = (effectiveFilters.sort as any) ?? 'newest';
+        const sort = (liveFilters.sortBy as any) ?? 'recent';
         const hasNearby =
-          effectiveFilters.nearbyKm != null &&
-          effectiveFilters.nearbyLat != null &&
-          effectiveFilters.nearbyLon != null &&
-          Number(effectiveFilters.nearbyKm) > 0;
+          liveFilters.nearbyKm != null &&
+          Number(liveFilters.nearbyKm) > 0;
 
         if (hasNearby) {
+          const perm = await Location.requestForegroundPermissionsAsync();
+          if (!perm.granted) {
+            if (replace) {
+              setResults([]);
+              setHasMore(false);
+              setResultCount(0);
+            }
+            return;
+          }
+          const pos = await Location.getCurrentPositionAsync({});
           const { data, error } = await supabase.rpc('nearby_feed_listings', {
-            p_lat: Number(effectiveFilters.nearbyLat),
-            p_lon: Number(effectiveFilters.nearbyLon),
-            p_radius_km: Number(effectiveFilters.nearbyKm),
+            p_lat: Number(pos.coords.latitude),
+            p_lon: Number(pos.coords.longitude),
+            p_radius_km: Number(liveFilters.nearbyKm),
             p_limit: PAGE_SIZE,
             p_offset: from,
             p_section: section,
             p_query: query.trim() ? query.trim() : null,
-            p_category: effectiveFilters.category ?? null,
-            p_conditions: (effectiveFilters.conditions ?? null) as any,
-            p_price_min: effectiveFilters.priceMin ?? null,
-            p_price_max: effectiveFilters.priceMax ?? null,
+            p_category: resolvedCategoryLabels[0] ?? null,
+            p_conditions: (liveFilters.conditionIds.length ? liveFilters.conditionIds : null) as any,
+            p_price_min: liveFilters.priceMin ?? null,
+            p_price_max: liveFilters.priceMax ?? null,
             p_brands: (resolvedBrandNames.length ? resolvedBrandNames : null) as any,
             p_sizes: (resolvedSizeLabels.length ? resolvedSizeLabels : null) as any,
             p_colors: (resolvedColorNames.length ? resolvedColorNames : null) as any,
@@ -366,7 +519,7 @@ export function UniversalResultsScreen(props: {
           // eslint-disable-next-line no-console
           console.log('[Results] loadPage nearby ok', {
             section,
-            km: effectiveFilters.nearbyKm,
+            km: liveFilters.nearbyKm,
             page,
             replace,
             returned: newItems.length
@@ -392,7 +545,12 @@ export function UniversalResultsScreen(props: {
             qb = applySectionConstraints(qb);
             qb = applyFilters(qb);
             qb = applySearchQuery(qb);
-            qb = qb.order('created_at', { ascending: false }).range(from, to);
+            if (section === 'search') {
+              qb = applySearchListingOrder(qb, sort);
+            } else {
+              qb = qb.order('created_at', { ascending: false });
+            }
+            qb = qb.range(from, to);
             const { data, error, count } = await qb;
             if (error) {
               console.warn('Results error:', error.message);
@@ -426,7 +584,12 @@ export function UniversalResultsScreen(props: {
             qb = applySectionConstraints(qb);
             qb = applyFilters(qb);
             qb = applySearchQuery(qb);
-            qb = qb.order('created_at', { ascending: false }).range(from, to);
+            if (section === 'search') {
+              qb = applySearchListingOrder(qb, sort);
+            } else {
+              qb = qb.order('created_at', { ascending: false });
+            }
+            qb = qb.range(from, to);
             const { data, error, count } = await qb;
             if (error) {
               console.warn('Results error:', error.message);
@@ -468,7 +631,11 @@ export function UniversalResultsScreen(props: {
             restQ = applySectionConstraints(restQ);
             restQ = applyFilters(restQ);
             restQ = applySearchQuery(restQ);
-            restQ = restQ.order('created_at', { ascending: false });
+            if (section === 'search') {
+              restQ = applySearchListingOrder(restQ, sort);
+            } else {
+              restQ = restQ.order('created_at', { ascending: false });
+            }
             const quoted = likedIds.map((x) => `"${x}"`).join(',');
             restQ = restQ.not('id', 'in', `(${quoted})`).range(restOffset, restOffset + remaining - 1);
             const { data: restData } = await restQ;
@@ -497,6 +664,9 @@ export function UniversalResultsScreen(props: {
         qb = applyBaseSection(qb);
         qb = applyFilters(qb);
         qb = applySearchQuery(qb);
+        if (section === 'search') {
+          qb = applySearchListingOrder(qb, sort);
+        }
 
         let { data, error, count } = await qb;
         if (error) {
@@ -515,6 +685,9 @@ export function UniversalResultsScreen(props: {
             qb2 = applyBaseSection(qb2);
             qb2 = applyFilters(qb2);
             qb2 = qb2.or(orFilter);
+            if (section === 'search') {
+              qb2 = applySearchListingOrder(qb2, sort);
+            }
             ({ data, error, count } = await qb2);
           }
         }
@@ -549,13 +722,38 @@ export function UniversalResultsScreen(props: {
         setLoadingMore(false);
       }
     },
-    [applyBaseSection, applyFilters, applySearchQuery, query, section]
+    [
+      applyBaseSection,
+      applySectionConstraints,
+      applyFilters,
+      applySearchQuery,
+      query,
+      section,
+      standaloneSearch,
+      resolvedCategoryLabels,
+      influencerIds,
+      resolvedBrandNames,
+      resolvedColorNames,
+      resolvedSizeLabels
+    ]
   );
 
   const triggerReload = useCallback(() => {
     pageRef.current = 0;
     void loadPage(0, true);
   }, [loadPage]);
+
+  const skipFirstSearchFocusReload = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (!reloadOnFocus || section !== 'search') return;
+      if (skipFirstSearchFocusReload.current) {
+        skipFirstSearchFocusReload.current = false;
+        return;
+      }
+      triggerReload();
+    }, [reloadOnFocus, section, triggerReload, effectiveFilters])
+  );
 
   useEffect(() => {
     void loadInfluencerIds();
@@ -587,10 +785,23 @@ export function UniversalResultsScreen(props: {
     };
   }, [query, triggerReload]);
 
-  // Refresh quand filtres changent
+  // Refresh quand filtres changent ou quand les libellés résolus sont prêts (évite la course async ID → texte)
   useEffect(() => {
     triggerReload();
-  }, [effectiveFilters, triggerReload]);
+  }, [
+    effectiveFilters,
+    resolvedBrandNames,
+    resolvedSizeLabels,
+    resolvedColorNames,
+    resolvedCategoryLabels,
+    triggerReload
+  ]);
+
+  useEffect(() => {
+    if (!standaloneSearch || section !== 'search') return;
+    if (!searchFocusReloadNonce) return;
+    triggerReload();
+  }, [searchFocusReloadNonce, standaloneSearch, section, triggerReload]);
 
   const handleLoadMore = () => {
     if (loadingMore || loading || !hasMore) return;
@@ -601,15 +812,26 @@ export function UniversalResultsScreen(props: {
 
   const resultLabel = useMemo(() => {
     if (resultCount == null) return '';
+    if (searchStyleFilters) {
+      if (resultCount >= 500) return '500+ résultats';
+      if (resultCount === 1) return '1 résultat';
+      return `${resultCount} résultats`;
+    }
     if (resultCount >= 500) return '500+ results';
     if (resultCount === 1) return '1 result';
     return `${resultCount} results`;
-  }, [resultCount]);
+  }, [resultCount, searchStyleFilters]);
+
+  /** Onglet Search + `standaloneSearch` : filtres sur la pile Search ; sinon (ex. Results) route tab `filters`. */
+  const filtersRouteBase = useMemo<FiltersStackBase>(() => {
+    if (standaloneSearch && section === 'search') return FILTERS_PATH_SEARCH_STACK;
+    return FILTERS_PATH_TABS_ROOT;
+  }, [standaloneSearch, section]);
 
   const confirmNearby = useCallback(async () => {
     const km = nearbyDraftKm;
     if (!km) {
-      setFilters({ nearbyKm: null, nearbyLat: null, nearbyLon: null });
+      setFilter('nearbyKm', null);
       setNearbyModalOpen(false);
       return;
     }
@@ -620,49 +842,82 @@ export function UniversalResultsScreen(props: {
         Alert.alert('Localisation', 'Activez la localisation pour utiliser ce filtre');
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({});
-      setFilters({
-        nearbyKm: km,
-        nearbyLat: pos.coords.latitude,
-        nearbyLon: pos.coords.longitude
-      });
+      await Location.getCurrentPositionAsync({});
+      setFilter('nearbyKm', km);
       setNearbyModalOpen(false);
     } catch {
       Alert.alert('Localisation', 'Activez la localisation pour utiliser ce filtre');
     } finally {
       setNearbyConfirming(false);
     }
-  }, [nearbyDraftKm, setFilters]);
+  }, [nearbyDraftKm, setFilter]);
 
-  const handlePressFilter = (type: 'Filter' | 'Nearby' | 'Size' | 'Brand' | 'Condition' | 'Color' | 'Price') => {
+  const handlePressFilter = (type: ResultsFilterPill) => {
     const resultsParams = {
-      returnTo: 'results',
+      returnTo: section === 'search' ? 'search' : 'results',
       resultsSection: section,
       resultsQuery: query.trim(),
       resultsTitle: headerTitle
     };
     switch (type) {
+      case 'Clear':
+        resetFilters();
+        break;
+      case 'Women':
+      case 'Men':
+      case 'Kids':
+      case 'Baby':
+        router.push({
+          pathname: filtersScreenPath(filtersRouteBase, 'category-gender') as any,
+          params: {
+            gender: SEARCH_CATEGORY_TO_FILTER_GENDER[type],
+            ...resultsParams
+          }
+        });
+        break;
       case 'Filter':
-        router.push({ pathname: '/tabs/filters/index', params: resultsParams });
+        router.push({
+          pathname: (
+            filtersRouteBase === FILTERS_PATH_TABS_ROOT
+              ? `${FILTERS_PATH_TABS_ROOT}/index`
+              : filtersRouteBase
+          ) as any,
+          params: resultsParams
+        });
         break;
       case 'Nearby':
         setNearbyDraftKm(effectiveFilters.nearbyKm ?? null);
         setNearbyModalOpen(true);
         break;
       case 'Size':
-        router.push({ pathname: '/tabs/filters/size', params: resultsParams });
+        router.push({
+          pathname: filtersScreenPath(filtersRouteBase, 'size') as any,
+          params: resultsParams
+        });
         break;
       case 'Brand':
-        router.push({ pathname: '/tabs/filters/brand-gender', params: resultsParams });
+        router.push({
+          pathname: filtersScreenPath(filtersRouteBase, 'brand-gender') as any,
+          params: resultsParams
+        });
         break;
       case 'Condition':
-        router.push({ pathname: '/tabs/filters/condition', params: resultsParams });
+        router.push({
+          pathname: filtersScreenPath(filtersRouteBase, 'condition') as any,
+          params: resultsParams
+        });
         break;
       case 'Color':
-        router.push({ pathname: '/tabs/filters/color', params: resultsParams });
+        router.push({
+          pathname: filtersScreenPath(filtersRouteBase, 'color') as any,
+          params: resultsParams
+        });
         break;
       case 'Price':
-        router.push({ pathname: '/tabs/filters/price', params: resultsParams });
+        router.push({
+          pathname: filtersScreenPath(filtersRouteBase, 'price') as any,
+          params: resultsParams
+        });
         break;
       default:
         break;
@@ -670,13 +925,10 @@ export function UniversalResultsScreen(props: {
   };
 
   const isAnyFilterActive =
-    Boolean(effectiveFilters.category) ||
-    Boolean(effectiveFilters.conditions && effectiveFilters.conditions.length) ||
+    Boolean(effectiveFilters.categoryId) ||
+    Boolean(effectiveFilters.conditionIds && effectiveFilters.conditionIds.length) ||
     Boolean(effectiveFilters.priceMin != null) ||
     Boolean(effectiveFilters.priceMax != null) ||
-    Boolean(effectiveFilters.brands && effectiveFilters.brands.length) ||
-    Boolean(effectiveFilters.sizes && effectiveFilters.sizes.length) ||
-    Boolean(effectiveFilters.colors && effectiveFilters.colors.length) ||
     Boolean(effectiveFilters.brandIds && effectiveFilters.brandIds.length) ||
     Boolean(effectiveFilters.sizeIds && effectiveFilters.sizeIds.length) ||
     Boolean(effectiveFilters.colorIds && effectiveFilters.colorIds.length) ||
@@ -684,18 +936,28 @@ export function UniversalResultsScreen(props: {
 
   const pillActive = (name: string) => {
     switch (name) {
+      case 'Clear':
+        return isAnyFilterActive;
+      case 'Women':
+        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Women;
+      case 'Men':
+        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Men;
+      case 'Kids':
+        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Kids;
+      case 'Baby':
+        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Baby;
       case 'Filter':
         return isAnyFilterActive;
       case 'Nearby':
         return effectiveFilters.nearbyKm != null;
       case 'Size':
-        return Boolean(effectiveFilters.sizes?.length || effectiveFilters.sizeIds?.length);
+        return Boolean(effectiveFilters.sizeIds?.length);
       case 'Brand':
-        return Boolean(effectiveFilters.brands?.length || effectiveFilters.brandIds?.length);
+        return Boolean(effectiveFilters.brandIds?.length);
       case 'Condition':
-        return Boolean(effectiveFilters.conditions?.length);
+        return Boolean(effectiveFilters.conditionIds?.length);
       case 'Color':
-        return Boolean(effectiveFilters.colors?.length || effectiveFilters.colorIds?.length);
+        return Boolean(effectiveFilters.colorIds?.length);
       case 'Price':
         return effectiveFilters.priceMin != null || effectiveFilters.priceMax != null;
       default:
@@ -703,7 +965,24 @@ export function UniversalResultsScreen(props: {
     }
   };
 
-  const shouldInjectShowcases = section === 'search' && query.trim().length > 0;
+  const shouldInjectShowcases =
+    section === 'search' && query.trim().length > 0 && !standaloneSearch;
+
+  const filterPills = useMemo(
+    () =>
+      searchStyleFilters
+        ? ([
+            'Clear',
+            ...SEARCH_CATEGORY_GENDER_LABELS,
+            'Size',
+            'Brand',
+            'Condition',
+            'Color',
+            'Price'
+          ] as const)
+        : (['Filter', 'Nearby', 'Size', 'Brand', 'Condition', 'Color', 'Price'] as const),
+    [searchStyleFilters]
+  );
 
   const listingSellerIds = useMemo(() => {
     if (!shouldInjectShowcases) return [];
@@ -858,6 +1137,9 @@ export function UniversalResultsScreen(props: {
         <ProductCard
           listingId={item.data.id}
           sellerId={item.data.seller_id}
+          sellerName={item.data.seller_display_name ?? undefined}
+          sellerAvatarUrl={item.data.seller_avatar_url ?? undefined}
+          sellerIsInfluencer={Boolean(item.data.seller_is_influencer)}
           title={item.data.title}
           price={item.data.price}
           currency="CHF"
@@ -877,14 +1159,6 @@ export function UniversalResultsScreen(props: {
     if (item.type === 'listing') return item.data.id;
     return item.id;
   };
-
-  useFocusEffect(
-    useCallback(() => {
-      // Ensure results refresh after coming back from filter subpages.
-      triggerReload();
-      return () => {};
-    }, [])
-  );
 
   const handleBack = () => {
     const canGoBack = typeof (router as any).canGoBack === 'function' ? (router as any).canGoBack() : true;
@@ -938,22 +1212,30 @@ export function UniversalResultsScreen(props: {
         {/* Filters */}
         <View style={styles.filtersRow}>
           <FlatList
-            data={['Filter', 'Nearby', 'Size', 'Brand', 'Condition', 'Color', 'Price']}
+            data={[...filterPills]}
             keyExtractor={(item) => item}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filtersContent}
             renderItem={({ item }) => {
               const active = pillActive(item);
+              const clearDisabled = item === 'Clear' && !isAnyFilterActive;
               return (
                 <TouchableOpacity
-                  style={[styles.filterPill, active && styles.filterPillActive]}
-                  onPress={() =>
-                    handlePressFilter(item as 'Filter' | 'Nearby' | 'Size' | 'Brand' | 'Condition' | 'Color' | 'Price')
-                  }
-                  activeOpacity={0.8}
+                  style={[
+                    styles.filterPill,
+                    active && styles.filterPillActive,
+                    clearDisabled && styles.filterPillDisabled
+                  ]}
+                  onPress={() => handlePressFilter(item as ResultsFilterPill)}
+                  activeOpacity={clearDisabled ? 1 : 0.8}
+                  disabled={clearDisabled}
                 >
-                  {item === 'Filter' ? (
+                  {item === 'Clear' ? (
+                    <Text style={[styles.filterText, clearDisabled && styles.filterTextDisabled]}>
+                      Tout effacer
+                    </Text>
+                  ) : item === 'Filter' ? (
                     <View style={styles.filterIconRow}>
                       <Text style={styles.filterIconText}>≡</Text>
                       <Text style={styles.filterText}>Filter</Text>
@@ -971,6 +1253,7 @@ export function UniversalResultsScreen(props: {
           />
         </View>
 
+        {!searchStyleFilters ? (
         <Modal
           visible={nearbyModalOpen}
           transparent
@@ -999,7 +1282,7 @@ export function UniversalResultsScreen(props: {
                   activeOpacity={0.8}
                   onPress={() => {
                     setNearbyDraftKm(null);
-                    setFilters({ nearbyKm: null, nearbyLat: null, nearbyLon: null });
+                    setFilter('nearbyKm', null);
                     setNearbyModalOpen(false);
                   }}
                   disabled={nearbyConfirming}
@@ -1023,18 +1306,19 @@ export function UniversalResultsScreen(props: {
             </Pressable>
           </Pressable>
         </Modal>
+        ) : null}
 
         {/* Result count */}
-        {resultLabel ? (
+        {resultLabel && !loading ? (
           <Text variant="body" style={styles.resultCountText}>
             {resultLabel}
           </Text>
         ) : null}
 
         {/* Results grid */}
-        {loading && results.length === 0 ? (
+        {loading ? (
           <View style={styles.skeletonContainer}>
-            {[0, 1, 2, 3].map((i) => (
+            {[0, 1, 2, 3, 4, 5].map((i) => (
               // eslint-disable-next-line react/no-array-index-key
               <View key={i} style={styles.skeletonBox} />
             ))}
@@ -1042,8 +1326,12 @@ export function UniversalResultsScreen(props: {
         ) : results.length === 0 ? (
           <View style={styles.emptyContainer}>
             <AppIcon name="searchOutline" size={48} color="#AAAAAA" />
-            <Text style={styles.emptyTitle}>No results found</Text>
-            <Text style={styles.emptySubtitle}>Try different keywords or filters</Text>
+            <Text style={[styles.emptyTitle, searchStyleFilters && styles.emptyTitleStandalone]}>
+              {searchStyleFilters ? 'Aucun résultat' : 'No results found'}
+            </Text>
+            {!searchStyleFilters ? (
+              <Text style={styles.emptySubtitle}>Try different keywords or filters</Text>
+            ) : null}
           </View>
         ) : (
           <FlatList
@@ -1052,7 +1340,7 @@ export function UniversalResultsScreen(props: {
             keyExtractor={keyExtractor}
             numColumns={2}
             renderItem={renderMixedItem as any}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, searchStyleFilters && styles.listContentTabSearch]}
             columnWrapperStyle={styles.listRow}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
@@ -1205,8 +1493,13 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   filterPillActive: {
-    backgroundColor: '#CCFF00',
-    borderColor: '#CCFF00'
+    backgroundColor: '#CCFF00'
+  },
+  filterPillDisabled: {
+    opacity: 0.45
+  },
+  filterTextDisabled: {
+    color: '#AAAAAA'
   },
   filterIconRow: {
     flexDirection: 'row',
@@ -1301,6 +1594,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24
   },
+  /** Réserve pour la navbar flottante sur l’onglet Search */
+  listContentTabSearch: {
+    paddingBottom: 120
+  },
   listRow: {
     columnGap: 8,
     marginBottom: 12
@@ -1388,12 +1685,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.muted
   },
   skeletonContainer: {
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingTop: 16,
     rowGap: 12,
-    columnGap: 8
+    columnGap: 8,
+    alignContent: 'flex-start'
   },
   skeletonBox: {
     width: '48%',
@@ -1411,6 +1710,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#888888'
+  },
+  emptyTitleStandalone: {
+    textAlign: 'center',
+    fontFamily: theme.fontFamily.medium
   },
   emptySubtitle: {
     marginTop: 6,

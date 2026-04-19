@@ -15,11 +15,13 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { InfluencerBadge } from '../../../components/InfluencerBadge';
 
 type ProfileRow = {
   id: string;
   avatar_url: string | null;
   display_name: string | null;
+  is_influencer?: boolean | null;
   vacation_mode: boolean | null;
   location?: string | null;
   city?: string | null;
@@ -55,7 +57,9 @@ export default function ProfileScreen() {
     try {
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('id, avatar_url, display_name, vacation_mode, location, city, country, location_visible')
+        .select(
+          'id, avatar_url, display_name, is_influencer, vacation_mode, location, city, country, location_visible'
+        )
         .eq('id', user.id)
         .maybeSingle();
 
@@ -145,7 +149,10 @@ export default function ProfileScreen() {
           </View>
         )}
         <View style={styles.headerTextContainer}>
-          <Text style={styles.headerName}>{displayName}</Text>
+          <View style={styles.headerNameRow}>
+            <Text style={styles.headerName}>{displayName}</Text>
+            {profile?.is_influencer ? <InfluencerBadge size={20} style={styles.headerInfluencerBadge} /> : null}
+          </View>
           <View style={styles.headerLocationRow}>
             <AppIcon name="mapPointOutline" size={11} color="#888888" />
             <Text style={styles.headerLocationText}>{location}</Text>
@@ -347,7 +354,17 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#000000'
+    color: '#000000',
+    flexShrink: 1
+  },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0
+  },
+  headerInfluencerBadge: {
+    flexShrink: 0
   },
   headerLocationRow: {
     flexDirection: 'row',

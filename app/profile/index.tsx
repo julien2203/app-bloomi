@@ -30,6 +30,7 @@ import { AppIcon } from '../../components/ui/AppIcon';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
+import { InfluencerBadge } from '../../components/InfluencerBadge';
 import { OwnerListingBottomSheet } from '../../components/listing/OwnerListingBottomSheet';
 
 type PublicProfileParams = {
@@ -41,6 +42,7 @@ type PublicProfile = {
   id: string;
   display_name: string | null;
   avatar_url: string | null;
+  is_influencer?: boolean | null;
   cover_image?: string | null;
   city?: string | null;
   country?: string | null;
@@ -194,7 +196,7 @@ export default function PublicProfileScreen() {
       let q = supabase
         .from('profiles')
         .select(
-          'id, display_name, avatar_url, cover_image, city, country, location, created_at, average_rating, reviews_count'
+          'id, display_name, avatar_url, cover_image, city, country, location, created_at, average_rating, reviews_count, is_influencer'
         );
 
       if (userIdParam) q = q.eq('id', userIdParam);
@@ -603,6 +605,7 @@ export default function PublicProfileScreen() {
           <ProductCard
             listingId={item.id}
             sellerId={item.seller_id}
+            sellerIsInfluencer={Boolean(item.seller_is_influencer)}
             title={item.title}
             price={Number(item.price)}
             currency="CHF"
@@ -715,9 +718,12 @@ export default function PublicProfileScreen() {
               {loadingInitial ? (
                 <View style={[styles.skeletonLine, { width: 120 }]} />
               ) : (
-                <Text variant="body" style={styles.username} numberOfLines={1}>
-                  {resolvedUsername}
-                </Text>
+                <View style={styles.usernameBadgeRow}>
+                  <Text variant="body" style={styles.username} numberOfLines={1}>
+                    {resolvedUsername}
+                  </Text>
+                  {profile?.is_influencer ? <InfluencerBadge size={22} style={styles.profileInfluencerBadge} /> : null}
+                </View>
               )}
 
               <View style={styles.ratingRow}>
@@ -1009,7 +1015,18 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 15,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.appleBlack
+    color: theme.colors.appleBlack,
+    flexShrink: 1
+  },
+  usernameBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+    flex: 1
+  },
+  profileInfluencerBadge: {
+    flexShrink: 0
   },
   ratingRow: {
     marginTop: 4,

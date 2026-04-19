@@ -7,10 +7,11 @@ import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
-import { getSizes } from '../../lib/api/filters';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
+import { getCategoryFilterContext, getSizes } from '../../lib/api/filters';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type SizeRow = {
   id: number;
@@ -54,15 +55,16 @@ export default function SizeFilterScreen() {
     resultsTitle?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
   const [sections, setSections] = useState<SizeSection[]>([]);
-  const [selectedSizes, setSelectedSizes] = useState<number[]>(filters.sizeIds ?? []);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>(filters.sizeIds ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const toggleSize = (id: number) => {
+    const nextId = String(id);
     setSelectedSizes((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+      prev.includes(nextId) ? prev.filter((s) => s !== nextId) : [...prev, nextId]
     );
   };
 
@@ -71,21 +73,8 @@ export default function SizeFilterScreen() {
   };
 
   const handleShowResult = () => {
-    setFilters({
-      sizeIds: selectedSizes.length > 0 ? selectedSizes : undefined
-    });
-    if (params.returnTo === 'results') {
-      router.replace({
-        pathname: '/tabs/results' as any,
-        params: {
-          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
-          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
-          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
-        }
-      });
-      return;
-    }
-    router.back();
+    setFilter('sizeIds', selectedSizes);
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const loadSizes = async () => {
@@ -93,7 +82,21 @@ export default function SizeFilterScreen() {
       setLoading(true);
       setError(null);
 
-      const data = await getSizes();
+      let gender: string | undefined;
+      let type: string | undefined;
+      let categoryIdForCounts: string | undefined;
+
+      const categoryId = filters.categoryId;
+      if (categoryId) {
+        categoryIdForCounts = String(categoryId);
+        const ctx = await getCategoryFilterContext(categoryId);
+        if (ctx?.gender) gender = ctx.gender;
+        if (ctx?.type) type = ctx.type;
+      }
+
+      const data = await getSizes(gender, type, {
+        categoryIdForCounts: categoryIdForCounts ?? null
+      });
 
       const bySectionTitle: Record<string, SizeRow[]> = {};
 
@@ -165,13 +168,13 @@ export default function SizeFilterScreen() {
   useEffect(() => {
     void loadSizes();
     // Recharger lorsque d'autres filtres changent pour mettre à jour les counts
-  }, [filters.brandIds, filters.categoryFilter, filters.colorIds, filters.conditions, filters.priceRange]);
+  }, [filters.brandIds, filters.categoryId, filters.colorIds, filters.conditionIds, filters.priceMin, filters.priceMax]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={handleShowResult} />
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             Size
           </Text>
@@ -230,7 +233,7 @@ export default function SizeFilterScreen() {
                   )}
                   {section.rows.map((row) => {
                     const disabled = row.count === 0;
-                    const checked = selectedSizes.includes(row.id);
+                    const checked = selectedSizes.includes(String(row.id));
                     return (
                       <TouchableOpacity
                         key={row.id}
@@ -282,7 +285,7 @@ export default function SizeFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
           ]}
         >
           <Button

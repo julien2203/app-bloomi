@@ -28,7 +28,7 @@ import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { createListing, uploadListingPhoto, addListingPhoto } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
-import { SUPABASE_URL } from '../../../lib/env';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../../../lib/env';
 import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
 import { useSellFormStore } from '../../../lib/store/sellForm';
@@ -590,9 +590,9 @@ export default function SellScreen() {
             {(() => {
               const hasCategory = !!sellValues.category;
               const showBrand = hasCategory;
-              const showCondition = showBrand && !!sellValues.brand;
-              const showSize = showCondition && !!sellValues.condition;
-              const showColor = showSize && !!sellValues.size;
+              const showCondition = hasCategory;
+              const showSize = hasCategory;
+              const showColor = hasCategory;
 
               return (
                 <>
@@ -883,6 +883,7 @@ export default function SellScreen() {
                     method: 'POST',
                     headers: {
                       Authorization: `Bearer ${accessToken}`,
+                      apikey: SUPABASE_ANON_KEY,
                       'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -929,6 +930,7 @@ export default function SellScreen() {
                     method: 'POST',
                     headers: {
                       Authorization: `Bearer ${accessToken}`,
+                      apikey: SUPABASE_ANON_KEY,
                       'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({

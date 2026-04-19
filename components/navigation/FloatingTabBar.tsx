@@ -1,22 +1,33 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, usePathname } from 'expo-router';
 import { theme } from '../../lib/theme';
+import { IconBox } from '../ui/IconBox';
 import HomeIcon from '../../assets/icons/icon_home_simple_outline.svg';
 import SearchIcon from '../../assets/icons/icon_search_short_handle.svg';
 import SellIcon from '../../assets/icons/icon_plus_shadow_C3EA4F.svg';
 import InboxIcon from '../../assets/icons/icon_message_envelope_clean.svg';
 import ProfileIcon from '../../assets/icons/icon_user_outline_premium.svg';
+import { supabase } from '../../lib/supabase';
+import { refreshUnreadThreadsBadge } from '../../lib/unreadMessagesBadge';
+import { useAuthStore } from '../../stores/authStore';
+import { useUnreadMessagesStore } from '../../stores/unreadMessagesStore';
 
 /** Largeur cible ; réduite automatiquement sur très petits écrans */
 const BAR_WIDTH_IDEAL = 400;
 const HORIZONTAL_SCREEN_GUTTER = 24;
 const BAR_HEIGHT = 84;
 const BAR_RADIUS = 18;
-const ICON_SIZE = 40;
 const SELL_ICON_SIZE = 40;
+/** Tailles de cadre (px) : ajuster par onglet pour compenser le blanc interne des SVG */
+const TAB_BOX = {
+  home: 28,
+  search: 32,
+  inbox: 28,
+  profile: 28
+} as const;
 
 // Ordre visuel fixe : Home, Search, Sell (+), Messages, Profile
 const TAB_ROUTES = [
@@ -31,9 +42,48 @@ export function FloatingTabBar(_: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const barWidth = Math.min(BAR_WIDTH_IDEAL, windowWidth - HORIZONTAL_SCREEN_GUTTER);
+  const user = useAuthStore((s) => s.user);
+  const unreadThreadsCount = useUnreadMessagesStore((s) => s.unreadThreadsCount);
+  const messagesBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Normaliser le pathname pour éviter les variations type "/tabs/feed/" vs "/tabs/feed"
   const rawPathname = usePathname();
   const pathname = rawPathname.replace(/\/+$/, '');
+
+  useEffect(() => {
+    if (!user?.id) {
+      useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
+      return;
+    }
+    void refreshUnreadThreadsBadge(user.id);
+
+    const scheduleRefresh = () => {
+      if (messagesBadgeDebounceRef.current) {
+        clearTimeout(messagesBadgeDebounceRef.current);
+      }
+      messagesBadgeDebounceRef.current = setTimeout(() => {
+        messagesBadgeDebounceRef.current = null;
+        void refreshUnreadThreadsBadge(user.id);
+      }, 400);
+    };
+
+    const ch = supabase
+      .channel(`messages:unread-badge:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages' },
+        scheduleRefresh
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(ch);
+      if (messagesBadgeDebounceRef.current) {
+        clearTimeout(messagesBadgeDebounceRef.current);
+        messagesBadgeDebounceRef.current = null;
+      }
+    };
+  }, [user?.id]);
 
   // On n'affiche la barre flottante UNIQUEMENT sur les écrans racine des tabs
   // (pas sur les pages de détail, ni sur le flow Sell, ni sur les sous-pages profile, etc.)
@@ -60,6 +110,8 @@ export function FloatingTabBar(_: BottomTabBarProps) {
   const showOnThisRoute =
     isRoot('/tabs/feed') ||
     isRoot('/tabs/search') ||
+    pathname.startsWith('/tabs/results') ||
+    pathname.startsWith('/tabs/filters') ||
     isRoot('/tabs/messages') ||
     isRoot('/tabs/profile');
 
@@ -80,7 +132,10 @@ export function FloatingTabBar(_: BottomTabBarProps) {
     >
       <View style={[styles.container, { width: barWidth }]} collapsable={false}>
         {TAB_ROUTES.map((tab) => {
-          const isFocused = pathname.startsWith(tab.href);
+          const isFocused =
+            pathname.startsWith(tab.href) ||
+            (tab.key === 'search' &&
+              (pathname.startsWith('/tabs/results') || pathname.startsWith('/tabs/filters')));
 
           const onPress = () => {
             if (!isFocused) {
@@ -99,17 +154,26 @@ export function FloatingTabBar(_: BottomTabBarProps) {
               style={styles.item}
             >
               {tab.key === 'home' ? (
-                <HomeIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
+                <IconBox Svg={HomeIcon} boxSize={TAB_BOX.home} />
               ) : tab.key === 'search' ? (
-                <SearchIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
+                <IconBox Svg={SearchIcon} boxSize={TAB_BOX.search} />
               ) : tab.key === 'sell' ? (
                 <View style={styles.sellIconWrap}>
                   <SellIcon width={SELL_ICON_SIZE} height={SELL_ICON_SIZE} pointerEvents="none" />
                 </View>
               ) : tab.key === 'inbox' ? (
-                <InboxIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
+                <View style={styles.inboxIconWrap}>
+                  <IconBox Svg={InboxIcon} boxSize={TAB_BOX.inbox} />
+                  {unreadThreadsCount > 0 ? (
+                    <View style={styles.messagesBadge}>
+                      <Text style={styles.messagesBadgeText}>
+                        {unreadThreadsCount > 99 ? '99+' : String(unreadThreadsCount)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               ) : (
-                <ProfileIcon width={ICON_SIZE} height={ICON_SIZE} pointerEvents="none" />
+                <IconBox Svg={ProfileIcon} boxSize={TAB_BOX.profile} />
               )}
               <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive]}>
                 {tab.label}
@@ -161,6 +225,30 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 0,
     overflow: 'visible'
+  },
+  inboxIconWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible'
+  },
+  messagesBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: -6,
+    right: -8
+  },
+  messagesBadgeText: {
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF'
   },
   label: {
     marginTop: 2,

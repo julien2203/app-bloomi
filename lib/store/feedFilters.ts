@@ -1,76 +1,54 @@
 import { create } from 'zustand';
 
-export type FeedSort = 'relevance' | 'price_desc' | 'price_asc' | 'newest';
+export type FeedSort = 'recent' | 'price_asc' | 'price_desc' | 'relevance';
 
 export type FeedFilters = {
-  /**
-   * Valeur legacy simple pour le genre / catégorie principale
-   * (utilisée aujourd'hui par l'API du feed).
-   */
-  category?: string;
-  /**
-   * Nouveau format structuré pour les catégories du feed :
-   * - gender: femme / homme / enfant / bebe...
-   * - categoryIds: IDs des sous-catégories sélectionnées.
-   */
-  categoryFilter?: {
-    gender?: string;
-    categoryIds: number[];
-  };
-  /**
-   * Legacy: filtres basés sur les labels.
-   * Gardés pour compatibilité, mais les nouveaux écrans
-   * stockent aussi les IDs correspondants.
-   */
-  brands?: string[];
-  sizes?: string[];
-  colors?: string[];
-  /**
-   * Nouveaux filtres orientés IDs (Supabase).
-   */
-  brandIds?: number[];
-  sizeIds?: number[];
-  colorIds?: number[];
-  conditions?: string[];
-  /**
-   * Legacy: borne min/max à plat.
-   */
-  priceMin?: number;
-  priceMax?: number;
-  /**
-   * Nouveau format structuré pour le range de prix.
-   */
-  priceRange?: {
-    min?: number;
-    max?: number;
-  };
-  sort?: FeedSort;
-
-  /**
-   * Nearby filter (distance in km) + cached coords used for queries.
-   */
-  nearbyKm?: number | null;
-  nearbyLat?: number | null;
-  nearbyLon?: number | null;
+  categoryId: string | null;
+  brandIds: string[];
+  sizeIds: string[];
+  colorIds: string[];
+  conditionIds: string[];
+  priceMin: number | null;
+  priceMax: number | null;
+  nearbyKm: number | null;
+  sortBy: FeedSort;
 };
 
 interface FeedFiltersState {
   filters: FeedFilters;
+  setFilter: <K extends keyof FeedFilters>(key: K, value: FeedFilters[K]) => void;
   setFilters: (
     update: Partial<FeedFilters> | ((prev: FeedFilters) => Partial<FeedFilters>)
   ) => void;
   resetFilters: () => void;
 }
 
-const defaultFilters: FeedFilters = {};
+const defaultFilters: FeedFilters = {
+  categoryId: null,
+  brandIds: [],
+  sizeIds: [],
+  colorIds: [],
+  conditionIds: [],
+  priceMin: null,
+  priceMax: null,
+  nearbyKm: null,
+  sortBy: 'recent'
+};
 
 export const useFeedFiltersStore = create<FeedFiltersState>((set) => ({
   filters: defaultFilters,
+  setFilter: (key, value) =>
+    set((state) => ({
+      filters: {
+        ...state.filters,
+        [key]: value
+      }
+    })),
   setFilters: (update) =>
     set((state) => {
       const partial = typeof update === 'function' ? update(state.filters) : update;
       return { filters: { ...state.filters, ...partial } };
     }),
-  resetFilters: () => set({ filters: defaultFilters })
+  resetFilters: () => set({ filters: { ...defaultFilters } })
 }));
 

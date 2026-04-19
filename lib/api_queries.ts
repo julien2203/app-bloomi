@@ -80,6 +80,55 @@ export async function getListingDetailById(listingId: string) {
 // 3. INBOX THREADS (v_thread_list)
 // ============================================
 
+/** Threads distincts où il existe au moins un message read_at IS NULL et sender_id != utilisateur. */
+export async function fetchUnreadThreadsCount(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('thread_id')
+    .is('read_at', null)
+    .neq('sender_id', userId);
+  if (error) throw error;
+  const set = new Set<string>();
+  for (const row of data ?? []) {
+    const tid = (row as { thread_id?: string }).thread_id;
+    if (tid) set.add(tid);
+  }
+  return set.size;
+}
+
+async function getUnreadThreadIdsForThreadList(userId: string, threadIds: string[]): Promise<Set<string>> {
+  const result = new Set<string>();
+  const chunkSize = 80;
+  for (let i = 0; i < threadIds.length; i += chunkSize) {
+    const chunk = threadIds.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from('messages')
+      .select('thread_id')
+      .in('thread_id', chunk)
+      .is('read_at', null)
+      .neq('sender_id', userId);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const tid = (row as { thread_id?: string }).thread_id;
+      if (tid) result.add(tid);
+    }
+  }
+  return result;
+}
+
+async function attachUnreadFlagsToThreads(
+  threads: Array<{ thread_id: string } & Record<string, unknown>>,
+  userId: string
+) {
+  const ids = threads.map((t) => t.thread_id).filter(Boolean);
+  if (ids.length === 0) return threads;
+  const unreadIds = await getUnreadThreadIdsForThreadList(userId, ids);
+  return threads.map((t) => ({
+    ...t,
+    has_unread_from_other: unreadIds.has(t.thread_id)
+  }));
+}
+
 export async function getInboxThreads(params?: {
   page?: number;
   pageSize?: number;
@@ -123,8 +172,13 @@ export async function getInboxThreads(params?: {
     };
   });
 
+  const withUnread =
+    user?.id && enrichedData.length > 0
+      ? await attachUnreadFlagsToThreads(enrichedData, user.id)
+      : enrichedData;
+
   return {
-    data: enrichedData,
+    data: withUnread,
     hasMore: (data?.length || 0) === pageSize,
     page,
     pageSize
@@ -245,6 +299,8 @@ export type ThreadListItem = {
   seller_avatar_url: string | null;
   other_participant_name?: string | null;
   other_participant_avatar?: string | null;
+  /** Au moins un message non lu envoyé par l’interlocuteur (read_at null, sender != moi). */
+  has_unread_from_other?: boolean;
 };
 
 export type ListingDetail = {

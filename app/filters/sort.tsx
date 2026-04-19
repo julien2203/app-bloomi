@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { useFeedFiltersStore, type FeedSort } from '../../lib/store/feedFilters';
+import type { FeedSort } from '../../lib/store/feedFilters';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Ionicons } from '@expo/vector-icons';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type SortOption = {
   label: string;
@@ -19,24 +21,26 @@ const SORT_OPTIONS: SortOption[] = [
   { label: 'Relevance', value: 'relevance' },
   { label: 'Price: high to low', value: 'price_desc' },
   { label: 'Price: low to high', value: 'price_asc' },
-  { label: 'Newest first', value: 'newest' }
+  { label: 'Newest first', value: 'recent' }
 ];
 
 export default function SortFilterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
-  const [selected, setSelected] = useState<FeedSort>(filters.sort ?? 'newest');
+  const { filters, setFilter } = useFiltersScreenStore();
+  const [selected, setSelected] = useState<FeedSort>(filters.sortBy ?? 'recent');
 
   const handleSelect = (value: FeedSort) => {
     setSelected(value);
   };
 
   const handleShowResult = () => {
-    setFilters({
-      sort: selected
-    });
-    router.back();
+    setFilter('sortBy', selected);
+    navigateAfterFilterCommit(
+      router,
+      typeof params.returnTo === 'string' ? params.returnTo : undefined
+    );
   };
 
   return (

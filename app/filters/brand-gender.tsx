@@ -7,6 +7,8 @@ import { Text } from '../../components/ui/Text';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 
 type GenderSegment = {
   label: string;
@@ -22,6 +24,7 @@ const GENDER_SEGMENTS: GenderSegment[] = [
 
 export default function BrandGenderScreen() {
   const router = useRouter();
+  const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     returnTo?: string;
@@ -32,7 +35,7 @@ export default function BrandGenderScreen() {
 
   const openGender = (segment: GenderSegment) => {
     router.push({
-      pathname: '/tabs/filters/brand-segment',
+      pathname: filtersScreenPath(stackBase, 'brand-segment') as any,
       params: {
         gender: segment.gender,
         ...(params.returnTo ? { returnTo: params.returnTo } : {}),
@@ -44,7 +47,7 @@ export default function BrandGenderScreen() {
   };
 
   const handleShowResult = () => {
-    router.back();
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   return (

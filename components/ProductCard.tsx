@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { theme } from '../lib/theme';
 import { Text } from './ui/Text';
 import { AppIcon } from './ui/AppIcon';
+import { InfluencerBadge } from './InfluencerBadge';
 import { useAuthStore } from '../stores/authStore';
 import { likeListing, unlikeListing } from '../lib/api';
 import { useLikesStore } from '../stores/likesStore';
@@ -20,6 +21,9 @@ interface ProductCardProps {
   listingId: string;
   /** When it matches the signed-in user, the like control is read-only (your own listing). */
   sellerId?: string | null;
+  sellerName?: string | null;
+  sellerAvatarUrl?: string | null;
+  sellerIsInfluencer?: boolean;
   title?: string;
   price: number;
   currency?: 'CHF';
@@ -39,6 +43,9 @@ interface ProductCardProps {
 export function ProductCard({
   listingId,
   sellerId = null,
+  sellerName = null,
+  sellerAvatarUrl = null,
+  sellerIsInfluencer = false,
   title,
   price,
   currency = 'CHF',
@@ -69,6 +76,8 @@ export function ProductCard({
 
   const formattedPrice = `${price.toFixed(2)} ${currency}`;
   const formattedPriceIncl = `${(price * 1.08).toFixed(2)} ${currency} incl.`;
+  const sellerDisplayName = (sellerName ?? '').trim();
+  const sellerInitial = sellerDisplayName ? sellerDisplayName[0]!.toUpperCase() : '';
 
   const heartIcon = useMemo(() => {
     if (likedByMe) return { name: 'likeHeartBold' as const, color: theme.colors.primary };
@@ -122,6 +131,55 @@ export function ProductCard({
       {imageUrl ? (
         <View style={[styles.imageContainer, styles.imageFrame, { height: effectiveImageHeight }]}>
           <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+          <View style={styles.imageOverlayTopRight}>
+            {isOwnListing ? (
+              <View style={styles.likeOverlayButton}>
+                <AppIcon name="likeHeartOutline" size={16} color={theme.colors.googleWhite} />
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.likeOverlayButton}
+                activeOpacity={0.8}
+                onPress={handleToggleLike}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={toggling}
+              >
+                <AppIcon
+                  name={heartIcon.name}
+                  size={16}
+                  color={likedByMe ? '#CCFF00' : theme.colors.googleWhite}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.imageOverlayBottomLeft}>
+            <View style={styles.sellerOverlayRow}>
+              {sellerAvatarUrl ? (
+                <Image source={{ uri: sellerAvatarUrl }} style={styles.sellerAvatar} resizeMode="cover" />
+              ) : (
+                <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
+                  <Text variant="captionSm" color="textPrimary">
+                    {sellerInitial}
+                  </Text>
+                </View>
+              )}
+              {(sellerDisplayName || sellerIsInfluencer) ? (
+                <View style={styles.sellerNameBadgeRow}>
+                  {sellerDisplayName ? (
+                    <Text
+                      variant="captionSm"
+                      style={[styles.sellerNameOverlay, styles.sellerNameFlex]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {sellerDisplayName}
+                    </Text>
+                  ) : null}
+                  {sellerIsInfluencer ? <InfluencerBadge size={13} /> : null}
+                </View>
+              ) : null}
+            </View>
+          </View>
         </View>
       ) : (
         <View style={[styles.imageContainer, { height: effectiveImageHeight }]}>
@@ -170,30 +228,6 @@ export function ProductCard({
           </Text>
         </View>
 
-        {/* Like — disabled for your own listings */}
-        <View style={styles.likesRow}>
-          {isOwnListing ? (
-            <View style={styles.likes} accessibilityElementsHidden>
-              <AppIcon name="likeHeartOutline" size={16} color={theme.colors.textSecondary} />
-              <Text variant="captionSm" color="textSecondary">
-                {likesCount}
-              </Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.likes}
-              activeOpacity={0.8}
-              onPress={handleToggleLike}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              disabled={toggling}
-            >
-              <AppIcon name={heartIcon.name} size={16} color={heartIcon.color} />
-              <Text variant="captionSm" color="textSecondary">
-                {likesCount}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
     </TouchableOpacity>
   );
@@ -225,6 +259,56 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%'
   },
+  imageOverlayTopRight: {
+    position: 'absolute',
+    top: 8,
+    right: 8
+  },
+  imageOverlayBottomLeft: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    right: 8
+  },
+  likeOverlayButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+    padding: 4
+  },
+  sellerOverlayRow: {
+    alignItems: 'flex-start'
+  },
+  sellerNameBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    maxWidth: '100%'
+  },
+  sellerNameFlex: {
+    flexShrink: 1
+  },
+  sellerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: theme.colors.googleWhite
+  },
+  sellerAvatarFallback: {
+    backgroundColor: theme.colors.muted,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sellerNameOverlay: {
+    marginTop: 4,
+    color: theme.colors.googleWhite,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2
+  },
   body: {
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -232,15 +316,16 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   priceBlock: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     alignSelf: 'stretch',
     marginBottom: 4,
-    gap: 2
+    columnGap: 6
   },
   priceIncl: {
     flexShrink: 1,
-    alignSelf: 'stretch'
+    textAlign: 'right'
   },
   meta: {
     marginBottom: 4
@@ -251,17 +336,6 @@ const styles = StyleSheet.create({
   },
   priceMain: {
     fontFamily: theme.fontFamily.semiBold,
-    flexShrink: 1
-  },
-  likesRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 4
-  },
-  likes: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 4,
     flexShrink: 0
   },
   

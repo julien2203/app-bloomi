@@ -8,9 +8,10 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getConditions } from '../../lib/api/filters';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type ConditionRow = {
   id: number;
@@ -28,10 +29,10 @@ export default function ConditionFilterScreen() {
     resultsTitle?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
 
   const [conditions, setConditions] = useState<ConditionRow[]>([]);
-  const [selected, setSelected] = useState<string[]>(filters.conditions ?? []);
+  const [selected, setSelected] = useState<string[]>(filters.conditionIds ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,21 +47,8 @@ export default function ConditionFilterScreen() {
   };
 
   const handleShowResult = () => {
-    setFilters({
-      conditions: selected.length > 0 ? selected : undefined
-    });
-    if (params.returnTo === 'results') {
-      router.replace({
-        pathname: '/tabs/results' as any,
-        params: {
-          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
-          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
-          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
-        }
-      });
-      return;
-    }
-    router.back();
+    setFilter('conditionIds', selected);
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const loadConditions = async () => {
@@ -94,7 +82,7 @@ export default function ConditionFilterScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={handleShowResult} />
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             Condition
           </Text>
@@ -181,7 +169,7 @@ export default function ConditionFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
           ]}
         >
           <Button

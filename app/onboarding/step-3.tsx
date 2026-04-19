@@ -3,21 +3,60 @@
  * Idem step-2 mais avec autre background (noir et blanc)
  */
 
-import React from 'react';
-import { View, Text, ImageBackground, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ImageBackground, StyleSheet, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Button } from '../../components/ui/Button';
 import { DividerOr } from '../../components/ui/DividerOr';
 import { theme } from '../../lib/theme';
+import { supabase } from '../../lib/supabase';
+import {
+  ensureProfileAfterOAuthLogin,
+  isOAuthCancelled,
+  signInWithOAuthProvider,
+  type OAuthProvider
+} from '../../lib/socialAuth';
 
 export default function OnboardingStep3() {
   const router = useRouter();
+  const [oauthLoading, setOauthLoading] = useState(false);
 
-  const handleSocialLogin = (provider: 'apple' | 'google' | 'facebook') => {
-    // TODO: Implémenter la logique de connexion sociale
-    console.log(`Login with ${provider}`);
+  const handleSocialLogin = async (provider: 'apple' | 'google' | 'facebook') => {
+    if (provider === 'facebook') {
+      Alert.alert('Facebook', 'Facebook sign-in is coming soon.');
+      return;
+    }
+
+    setOauthLoading(true);
+
+    try {
+      const oauthProvider = provider as OAuthProvider;
+      const { error } = await signInWithOAuthProvider(oauthProvider);
+
+      if (error) {
+        if (!isOAuthCancelled(error)) {
+          Alert.alert('Sign in', error.message);
+        }
+        return;
+      }
+
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert('Sign in', 'Unable to complete sign-in. Please try again.');
+        return;
+      }
+
+      await ensureProfileAfterOAuthLogin(session);
+      router.replace('/tabs/feed');
+    } catch {
+      Alert.alert('Sign in', 'Something went wrong during social sign-in.');
+    } finally {
+      setOauthLoading(false);
+    }
   };
 
   return (
@@ -53,21 +92,26 @@ export default function OnboardingStep3() {
           <View style={styles.footer}>
             <Button
               title="Continue with Apple"
-              onPress={() => handleSocialLogin('apple')}
+              onPress={() => void handleSocialLogin('apple')}
               variant="apple-black"
               style={styles.socialButton}
+              loading={oauthLoading}
+              disabled={oauthLoading}
             />
             <Button
               title="Continue with Google"
-              onPress={() => handleSocialLogin('google')}
+              onPress={() => void handleSocialLogin('google')}
               variant="google-white"
               style={styles.socialButton}
+              loading={oauthLoading}
+              disabled={oauthLoading}
             />
             <Button
               title="Continue with Facebook"
-              onPress={() => handleSocialLogin('facebook')}
+              onPress={() => void handleSocialLogin('facebook')}
               variant="facebook-blue"
               style={styles.socialButton}
+              disabled={oauthLoading}
             />
 
             <DividerOr variant="light" />
@@ -76,6 +120,7 @@ export default function OnboardingStep3() {
               title="Sign up to Bloomi"
               onPress={() => router.push('/auth/sign-up')}
               variant="primary-green"
+              disabled={oauthLoading}
             />
 
             <View style={styles.loginLink}>

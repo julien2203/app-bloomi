@@ -8,9 +8,10 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getColors } from '../../lib/api/filters';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type ColorRow = {
   id: number;
@@ -28,16 +29,17 @@ export default function ColorFilterScreen() {
     resultsTitle?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
 
   const [colors, setColors] = useState<ColorRow[]>([]);
-  const [selectedColorIds, setSelectedColorIds] = useState<number[]>(filters.colorIds ?? []);
+  const [selectedColorIds, setSelectedColorIds] = useState<string[]>(filters.colorIds ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const toggleColor = (id: number) => {
+    const nextId = String(id);
     setSelectedColorIds((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+      prev.includes(nextId) ? prev.filter((c) => c !== nextId) : [...prev, nextId]
     );
   };
 
@@ -46,26 +48,8 @@ export default function ColorFilterScreen() {
   };
 
   const handleShowResult = () => {
-    const selectedNames = colors
-      .filter((c) => selectedColorIds.includes(c.id))
-      .map((c) => c.name);
-
-    setFilters({
-      colorIds: selectedColorIds.length > 0 ? selectedColorIds : undefined,
-      colors: selectedNames.length > 0 ? selectedNames : undefined
-    });
-    if (params.returnTo === 'results') {
-      router.replace({
-        pathname: '/tabs/results' as any,
-        params: {
-          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
-          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
-          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
-        }
-      });
-      return;
-    }
-    router.back();
+    setFilter('colorIds', selectedColorIds);
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const loadColors = async () => {
@@ -107,7 +91,7 @@ export default function ColorFilterScreen() {
 
   useEffect(() => {
     void loadColors();
-  }, [filters.categoryFilter, filters.sizeIds, filters.brandIds, filters.conditions, filters.priceRange]);
+  }, [filters.categoryId, filters.sizeIds, filters.brandIds, filters.conditionIds, filters.priceMin, filters.priceMax]);
 
   const hasNoResults = !loading && colors.length === 0;
 
@@ -115,7 +99,7 @@ export default function ColorFilterScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={handleShowResult} />
+          <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
             Color
           </Text>
@@ -163,7 +147,7 @@ export default function ColorFilterScreen() {
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
               {colors.map((color) => {
-                const checked = selectedColorIds.includes(color.id);
+                const checked = selectedColorIds.includes(String(color.id));
                 const disabled = color.count === 0;
                 return (
                   <TouchableOpacity
@@ -214,7 +198,7 @@ export default function ColorFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
           ]}
         >
           <Button

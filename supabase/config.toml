@@ -118,3 +118,11 @@ entrypoint = "./functions/generate-shipping-label/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/generate-shipping-label/*.html" ]
+
+# JWT utilisateur en ES256 : la passerelle refuse verify_jwt par défaut (UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM).
+# Validation manuelle via createClient + auth.getUser() dans index.ts (comme les autres fonctions du projet).
+[functions.boost-listing]
+enabled = true
+verify_jwt = false
+import_map = "./functions/boost-listing/deno.json"
+entrypoint = "./functions/boost-listing/index.ts"

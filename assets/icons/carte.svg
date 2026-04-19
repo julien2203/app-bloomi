@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <g fill="none" stroke="#000" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Handle -->
+    <path d="M176 177V139c0-44.2 35.8-80 80-80s80 35.8 80 80v38"/>
+
+    <!-- Bag body -->
+    <path d="M141 153
+             H371
+             c10.5 0 19.2 8.2 19.8 18.7
+             l9.5 205.4
+             c1.6 34.4-25.9 63.4-60.4 63.4
+             H171.1
+             c-34.5 0-62-29-60.4-63.4
+             l9.5-205.4
+             c0.6-10.5 9.3-18.7 19.8-18.7z"/>
+  </g>
+</svg>

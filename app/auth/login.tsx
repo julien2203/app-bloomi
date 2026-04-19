@@ -17,12 +17,19 @@ import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ensureProfileExists } from '../../lib/profile';
+import {
+  ensureProfileAfterOAuthLogin,
+  isOAuthCancelled,
+  signInWithOAuthProvider,
+  type OAuthProvider
+} from '../../lib/socialAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
@@ -71,9 +78,41 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSocialLogin = (provider: 'apple' | 'google' | 'facebook') => {
-    // TODO: Implémenter la logique de connexion sociale
-    console.log(`Login with ${provider}`);
+  const handleSocialLogin = async (provider: 'apple' | 'google' | 'facebook') => {
+    if (provider === 'facebook') {
+      setError('Facebook sign-in is not available yet.');
+      return;
+    }
+
+    setError(null);
+    setOauthLoading(true);
+
+    try {
+      const oauthProvider = provider as OAuthProvider;
+      const { error: oauthError } = await signInWithOAuthProvider(oauthProvider);
+
+      if (oauthError) {
+        if (!isOAuthCancelled(oauthError)) {
+          setError(oauthError.message);
+        }
+        return;
+      }
+
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Unable to complete sign-in. Please try again.');
+        return;
+      }
+
+      await ensureProfileAfterOAuthLogin(session);
+      router.replace('/tabs/feed');
+    } catch {
+      setError('Something went wrong during social sign-in.');
+    } finally {
+      setOauthLoading(false);
+    }
   };
 
   return (
@@ -147,21 +186,26 @@ export default function LoginScreen() {
 
               <Button
                 title="Continue with Apple"
-                onPress={() => handleSocialLogin('apple')}
+                onPress={() => void handleSocialLogin('apple')}
                 variant="apple-black"
                 style={styles.socialButton}
+                loading={oauthLoading}
+                disabled={oauthLoading || loading}
               />
               <Button
                 title="Continue with Google"
-                onPress={() => handleSocialLogin('google')}
+                onPress={() => void handleSocialLogin('google')}
                 variant="google-white"
                 style={styles.socialButton}
+                loading={oauthLoading}
+                disabled={oauthLoading || loading}
               />
               <Button
                 title="Continue with Facebook"
-                onPress={() => handleSocialLogin('facebook')}
+                onPress={() => void handleSocialLogin('facebook')}
                 variant="facebook-blue"
                 style={styles.socialButton}
+                disabled={oauthLoading || loading}
               />
 
               <View style={styles.signupLink}>

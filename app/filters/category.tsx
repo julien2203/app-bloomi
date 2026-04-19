@@ -8,12 +8,15 @@ import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Ionicons } from '@expo/vector-icons';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 
 const GENDERS = ['Woman', 'Men', 'Kids', 'Baby'] as const;
 
 export default function CategoryFilterScreen() {
   const router = useRouter();
+  const stackBase = useFiltersStackBase();
   const params = useLocalSearchParams<{
     returnTo?: string;
     resultsSection?: string;
@@ -21,27 +24,24 @@ export default function CategoryFilterScreen() {
     resultsTitle?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
 
   const isInitiallyAllSelected = useMemo(
-    () => !filters.category && !filters.categoryFilter?.categoryIds?.length,
-    [filters.category, filters.categoryFilter]
+    () => !filters.categoryId,
+    [filters.categoryId]
   );
 
   const [isAllSelected, setIsAllSelected] = useState<boolean>(isInitiallyAllSelected);
 
   const handleSelectAll = () => {
     setIsAllSelected(true);
-    setFilters({
-      category: undefined,
-      categoryFilter: undefined
-    });
+    setFilter('categoryId', null);
   };
 
   const handleOpenGender = (gender: (typeof GENDERS)[number]) => {
     setIsAllSelected(false);
     router.push({
-      pathname: '/tabs/filters/category-gender',
+      pathname: filtersScreenPath(stackBase, 'category-gender') as any,
       params: {
         gender,
         ...(params.returnTo ? { returnTo: params.returnTo } : {}),
@@ -53,7 +53,7 @@ export default function CategoryFilterScreen() {
   };
 
   const handleShowResult = () => {
-    router.back();
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   return (

@@ -42,14 +42,18 @@ export default function TabsLayout() {
         name="feed"
         options={{ title: 'Feed' }}
       />
-      <Tabs.Screen
-        name="search/index"
-        options={{ title: 'Search' }}
-      />
+      <Tabs.Screen name="search" options={{ title: 'Search' }} />
       <Tabs.Screen
         name="results/index"
         options={{
           title: 'Results',
+          href: null
+        }}
+      />
+      <Tabs.Screen
+        name="results/[id]"
+        options={{
+          title: 'Result detail',
           href: null
         }}
       />
@@ -60,6 +64,17 @@ export default function TabsLayout() {
           href: null
         }}
       />
+      <Tabs.Screen name="filters/category" options={{ href: null }} />
+      <Tabs.Screen name="filters/category-gender" options={{ href: null }} />
+      <Tabs.Screen name="filters/category-detail" options={{ href: null }} />
+      <Tabs.Screen name="filters/brand-gender" options={{ href: null }} />
+      <Tabs.Screen name="filters/brand-segment" options={{ href: null }} />
+      <Tabs.Screen name="filters/brand" options={{ href: null }} />
+      <Tabs.Screen name="filters/condition" options={{ href: null }} />
+      <Tabs.Screen name="filters/size" options={{ href: null }} />
+      <Tabs.Screen name="filters/color" options={{ href: null }} />
+      <Tabs.Screen name="filters/price" options={{ href: null }} />
+      <Tabs.Screen name="filters/sort" options={{ href: null }} />
       <Tabs.Screen
         name="public-profile/index"
         options={{

@@ -71,19 +71,13 @@ export default function NotificationsScreen() {
   const [markingAll, setMarkingAll] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const markingReadIdsRef = useRef<Set<string>>(new Set());
-  /** Après « tout marquer comme lu » : ne pas recharger depuis Supabase au focus (évite d’écraser l’état local). */
-  const hasMarkedAllReadRef = useRef(false);
+  /** Dernière liste connue (évite closures périmées dans markAllAsRead). */
+  const rowsRef = useRef<NotificationRow[]>([]);
 
   const unreadCount = useMemo(() => rows.filter((r) => !r.read_at).length, [rows]);
+  rowsRef.current = rows;
 
-  useEffect(() => {
-    hasMarkedAllReadRef.current = false;
-  }, [userId]);
-
-  const loadNotifications = useCallback(async (opts?: { fromUserRefresh?: boolean }) => {
-    if (opts?.fromUserRefresh) {
-      hasMarkedAllReadRef.current = false;
-    }
+  const loadNotifications = useCallback(async (_opts?: { fromUserRefresh?: boolean }) => {
     markingReadIdsRef.current.clear();
     if (!userId) {
       setRows([]);
@@ -120,9 +114,6 @@ export default function NotificationsScreen() {
         setRows([]);
         useNotificationsBadgeStore.getState().setUnreadCount(0);
         setLoading(false);
-        return;
-      }
-      if (hasMarkedAllReadRef.current) {
         return;
       }
       void loadNotifications();
@@ -197,7 +188,9 @@ export default function NotificationsScreen() {
   const markAllAsRead = useCallback(async () => {
     if (!userId) return;
     if (markingAll) return;
-    if (unreadCount === 0) return;
+
+    const unreadIds = rowsRef.current.filter((r) => !r.read_at).map((r) => r.id);
+    if (unreadIds.length === 0) return;
 
     const nowIso = new Date().toISOString();
     setRows((prev) => prev.map((r) => (!r.read_at ? { ...r, read_at: nowIso } : r)));
@@ -205,20 +198,52 @@ export default function NotificationsScreen() {
 
     setMarkingAll(true);
     try {
-      const { error } = await supabase
+      const chunkSize = 80;
+      for (let i = 0; i < unreadIds.length; i += chunkSize) {
+        const chunk = unreadIds.slice(i, i + chunkSize);
+        const { error } = await supabase
+          .from('notifications')
+          .update({ read_at: nowIso })
+          .in('id', chunk)
+          .eq('user_id', userId)
+          .select('id');
+        if (error) throw error;
+      }
+
+      const { count, error: cErr } = await supabase
         .from('notifications')
-        .update({ read_at: nowIso })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .is('read_at', null);
-      if (error) throw error;
-      hasMarkedAllReadRef.current = true;
+      if (cErr) throw cErr;
+      const remaining = count ?? 0;
+      useNotificationsBadgeStore.getState().setUnreadCount(remaining);
+
+      if (remaining > 0) {
+        const { data: stillUnread } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .is('read_at', null);
+        const ids = (stillUnread ?? []).map((r: { id: string }) => r.id).filter(Boolean);
+        for (const id of ids) {
+          await supabase.from('notifications').update({ read_at: nowIso }).eq('id', id).eq('user_id', userId);
+        }
+        const { count: countAfterFallback } = await supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .is('read_at', null);
+        useNotificationsBadgeStore.getState().setUnreadCount(countAfterFallback ?? 0);
+      }
+
+      await loadNotifications();
     } catch {
-      hasMarkedAllReadRef.current = false;
       await loadNotifications();
     } finally {
       setMarkingAll(false);
     }
-  }, [loadNotifications, markingAll, unreadCount, userId]);
+  }, [loadNotifications, markingAll, userId]);
 
   const renderItem = useCallback(
     ({ item }: { item: NotificationRow }) => {

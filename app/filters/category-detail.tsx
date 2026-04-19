@@ -8,11 +8,12 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getChildCategories } from '../../lib/api/filters';
+import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type CategoryRow = {
-  id: number;
+  id: string | number;
   name: string;
 };
 
@@ -28,52 +29,35 @@ export default function CategoryDetailScreen() {
     resultsQuery?: string;
     resultsTitle?: string;
   }>();
-  const parentId = params.parentId ? Number(params.parentId) : NaN;
+  const parentKey =
+    typeof params.parentId === 'string' && params.parentId.trim() !== ''
+      ? params.parentId.trim()
+      : undefined;
   const headerTitle = params.title || 'Category';
   const gender = params.gender as string | undefined;
 
-  const { filters, setFilters } = useFeedFiltersStore();
+  const { filters, setFilter } = useFiltersScreenStore();
   const [categories, setCategories] = useState<CategoryRow[]>([]);
-  const [selectedIds, setSelectedIds] = useState<number[]>(filters.categoryFilter?.categoryIds ?? []);
+  const [selectedId, setSelectedId] = useState<string | null>(filters.categoryId ?? null);
   const [loading, setLoading] = useState(false);
 
-  const toggleCategory = (id: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
-    );
+  const toggleCategory = (id: string | number) => {
+    const next = String(id);
+    setSelectedId((prev) => (prev === next ? null : next));
   };
 
   const handleShowResult = () => {
-    setFilters({
-      categoryFilter:
-        selectedIds.length > 0
-          ? {
-              gender,
-              categoryIds: selectedIds
-            }
-          : undefined
-    });
-    if (params.returnTo === 'results') {
-      router.replace({
-        pathname: '/tabs/results' as any,
-        params: {
-          section: typeof params.resultsSection === 'string' ? params.resultsSection : undefined,
-          query: typeof params.resultsQuery === 'string' ? params.resultsQuery : undefined,
-          title: typeof params.resultsTitle === 'string' ? params.resultsTitle : undefined
-        }
-      });
-      return;
-    }
-    router.back();
+    setFilter('categoryId', selectedId);
+    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   useEffect(() => {
-    if (!Number.isFinite(parentId)) return;
+    if (!parentKey) return;
 
     const load = async () => {
       try {
         setLoading(true);
-        const data = await getChildCategories(parentId);
+        const data = await getChildCategories(parentKey);
         let mapped = (data as any[]).map((row) => ({
           id: row.id as number,
           name: row.name as string
@@ -96,7 +80,7 @@ export default function CategoryDetailScreen() {
     };
 
     void load();
-  }, [parentId]);
+  }, [parentKey]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
@@ -117,7 +101,7 @@ export default function CategoryDetailScreen() {
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
               {categories.map((cat) => {
-                const checked = selectedIds.includes(cat.id);
+                const checked = selectedId === String(cat.id);
                 return (
                   <TouchableOpacity
                     key={cat.id}

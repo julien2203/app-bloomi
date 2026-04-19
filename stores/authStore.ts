@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { ensureProfileExists } from '../lib/profile';
 import { useNotificationsBadgeStore } from './notificationsBadgeStore';
+import { useUnreadMessagesStore } from './unreadMessagesStore';
 
 type AuthState = {
   user: User | null;
@@ -24,6 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAuthFromSession: (session) => {
     if (!session?.user) {
       useNotificationsBadgeStore.getState().setUnreadCount(0);
+      useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
     }
     set({
       session,
@@ -62,6 +64,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     set({ isLoading: true });
     await supabase.auth.signOut();
+    useNotificationsBadgeStore.getState().setUnreadCount(0);
+    useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
     set({
       session: null,
       user: null,
