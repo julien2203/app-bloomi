@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -439,6 +439,7 @@ export default function ThreadScreen() {
                 user_id: buyerId,
                 title: "✅ Offre acceptée, let's gooo !",
                 body: `Le vendeur a accepté ton offre de ${amount.toFixed(2)} CHF. Finalise ton achat !`,
+                notification_type: 'new_message',
                 data: {
                   thread_id: threadId,
                   listing_id: threadMeta?.listing_id ?? '',
@@ -475,6 +476,7 @@ export default function ThreadScreen() {
                 title: '❌ Offre refusée… next !',
                 body:
                   "Le vendeur n'a pas accepté ton offre. Tu peux faire une nouvelle offre ou acheter au prix normal.",
+                notification_type: 'new_message',
                 data: {
                   thread_id: threadId,
                   listing_id: threadMeta?.listing_id ?? ''

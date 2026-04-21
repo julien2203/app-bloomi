@@ -343,6 +343,7 @@ export default function OrdersScreen() {
           user_id: order.buyer_id,
           title: '⭐ Donne ton avis sur ton achat',
           body: "Comment s'est passée ta commande ? Laisse un avis au vendeur !",
+          notification_type: 'new_feedback',
           data: { order_id: orderId, listing_id: order.listing_id }
         });
       } catch (e) {
@@ -724,6 +725,7 @@ export default function OrdersScreen() {
           user_id: order.buyer_id,
           title: "📦 C'est parti ! Ton colis est en route",
           body: 'Votre vendeur a expédié votre commande.',
+          notification_type: 'new_items',
           data: { order_id: order.id, listing_id: order.listing_id }
         });
       } catch (e) {

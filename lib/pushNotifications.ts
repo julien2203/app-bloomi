@@ -9,6 +9,7 @@ export async function sendPushNotificationWithUserJwt(params: {
   user_id: string;
   title: string;
   body: string;
+  notification_type?: 'new_message' | 'new_feedback' | 'favorite_items' | 'new_followers' | 'new_items';
   data?: Record<string, unknown> | null;
 }): Promise<void> {
   try {
@@ -26,7 +27,9 @@ export async function sendPushNotificationWithUserJwt(params: {
         user_id: params.user_id,
         title: params.title,
         body: params.body,
-        data: params.data ?? undefined
+        data: params.notification_type
+          ? { ...(params.data ?? {}), notification_type: params.notification_type }
+          : params.data ?? undefined
       })
     });
   } catch {

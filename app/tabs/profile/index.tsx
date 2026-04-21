@@ -228,12 +228,6 @@ export default function ProfileScreen() {
         icon="questionCircleOutline"
         onPress={() => router.push('/tabs/profile/help')}
       />
-      <ProfileItem
-        label="Send your feedback"
-        icon="smileCircleOutline"
-        onPress={() => router.push('/tabs/profile/feedback')}
-      />
-
       {/* Mode vacance dans la même liste */}
       <View style={styles.row}>
         <View style={styles.rowLeft}>

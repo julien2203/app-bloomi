@@ -165,11 +165,7 @@ export function FloatingTabBar(_: BottomTabBarProps) {
                 <View style={styles.inboxIconWrap}>
                   <IconBox Svg={InboxIcon} boxSize={TAB_BOX.inbox} />
                   {unreadThreadsCount > 0 ? (
-                    <View style={styles.messagesBadge}>
-                      <Text style={styles.messagesBadgeText}>
-                        {unreadThreadsCount > 99 ? '99+' : String(unreadThreadsCount)}
-                      </Text>
-                    </View>
+                    <View style={styles.messagesBadge} />
                   ) : null}
                 </View>
               ) : (
@@ -233,22 +229,13 @@ const styles = StyleSheet.create({
     overflow: 'visible'
   },
   messagesBadge: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#C3EA4F',
     position: 'absolute',
-    top: -6,
-    right: -8
-  },
-  messagesBadgeText: {
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF'
+    top: -2,
+    right: -4
   },
   label: {
     marginTop: 2,

@@ -14,8 +14,7 @@ export default function SettingsScreen() {
       { label: 'Profile detail', onPress: () => router.push('/tabs/profile/edit-profile') },
       { label: 'My address', onPress: () => router.push('/tabs/profile/my-address') },
       { label: 'Account settings', onPress: () => router.push('/tabs/profile/account-settings') },
-      { label: 'Payment', onPress: () => router.push('/tabs/profile/wallet') },
-      { label: 'Shipping', onPress: () => router.push('/tabs/profile/shipping') }
+      { label: 'Payment', onPress: () => router.push('/tabs/profile/wallet') }
     ],
     [router]
   );

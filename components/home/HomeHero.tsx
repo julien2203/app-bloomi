@@ -32,7 +32,7 @@ export function HomeHero({ backgroundUri, unreadNotificationsCount = 0 }: HomeHe
       >
         <View style={styles.overlay} pointerEvents="none" />
         <View style={styles.content}>
-          <View style={styles.bottomCtaContainer}>
+          <View style={styles.leftMiddleCtaContainer}>
             <TouchableOpacity
               onPress={handleSellPress}
               activeOpacity={0.85}
@@ -40,7 +40,7 @@ export function HomeHero({ backgroundUri, unreadNotificationsCount = 0 }: HomeHe
               hitSlop={HIT_SLOP_EXTRA}
             >
               <Text variant="button" style={styles.ctaText}>
-                Vendre maintenant
+                Sell now
               </Text>
             </TouchableOpacity>
           </View>
@@ -74,20 +74,19 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingBottom: 16
   },
-  bottomCtaContainer: {
-    alignItems: 'center'
+  leftMiddleCtaContainer: {
+    alignItems: 'flex-start'
   },
   ctaButton: {
-    height: 52,
-    borderRadius: theme.radius.button,
-    backgroundColor: theme.colors.primary,
-    borderWidth: 1,
-    borderColor: theme.colors.heroCtaBorder,
-    paddingHorizontal: theme.spacing.gapLg,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#C3EA4F',
+    borderWidth: 0,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center'
   },

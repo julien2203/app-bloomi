@@ -95,6 +95,7 @@ export default function LeaveReviewScreen() {
           user_id: reviewedId,
           title: "⭐ Quelqu'un t'a laissé un avis !",
           body: "Découvre ce qu'on pense de toi sur Bloomi.",
+          notification_type: 'new_feedback',
           data: { order_id: orderId, reviewer_id: user.id }
         });
       }

@@ -292,6 +292,7 @@ export default function ListingDetailScreen() {
         user_id: listing.seller_id,
         title: '👀 Ça regarde beaucoup par ici…',
         body: `Ton article a été vu ${m} fois !`,
+        notification_type: 'new_items',
         data: { listing_id: listing.id, views_milestone: m }
       });
     }

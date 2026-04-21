@@ -8,7 +8,6 @@ import CoeurIcon from '../../assets/icons/coeur.svg';
 import { IconBox } from '../ui/IconBox';
 import { theme } from '../../lib/theme';
 import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
-import { Text } from '../ui/Text';
 
 type FeedHeaderProps = {
   searchText: string;
@@ -65,11 +64,7 @@ export function FeedHeader({
             <View style={styles.bellWrap}>
               <IconBox Svg={NotificationIcon} boxSize={24} />
               {unreadNotificationsCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {unreadNotificationsCount > 99 ? '99+' : String(unreadNotificationsCount)}
-                  </Text>
-                </View>
+                <View style={styles.badge} />
               ) : null}
             </View>
           </TouchableOpacity>
@@ -78,11 +73,11 @@ export function FeedHeader({
       <View style={styles.searchBar}>
         <View style={styles.searchInputWrap}>
           <View style={styles.searchIconSlot}>
-            <Feather name="search" size={20} color={theme.colors.textSecondary} />
+            <Feather name="search" size={16} color="#AAAAAA" />
           </View>
           <TextInput
-            placeholder="Search for an item"
-            placeholderTextColor={theme.colors.textSecondary}
+            placeholder="Rechercher un article, une marque..."
+            placeholderTextColor="#AAAAAA"
             style={styles.searchInput}
             value={searchText}
             onChangeText={onSearchTextChange}
@@ -91,6 +86,15 @@ export function FeedHeader({
             allowFontScaling={false}
             maxFontSizeMultiplier={1}
           />
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.filterButton}
+            onPress={() => router.push('/tabs/filters' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Ouvrir les filtres"
+          >
+            <Feather name="menu" size={18} color="#000000" />
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -122,30 +126,38 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 48
+    minHeight: 44
   },
   searchInputWrap: {
     flex: 1,
-    minHeight: 48,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    backgroundColor: theme.colors.googleWhite,
-    borderRadius: theme.radius.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.separator
+    backgroundColor: '#F2F2F2',
+    borderRadius: 24,
+    borderWidth: 0,
+    paddingRight: 4
   },
   searchIconSlot: {
-    width: 28,
-    height: 28,
+    paddingLeft: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.gapSm
+    marginRight: 8
   },
   searchInput: {
     flex: 1,
-    ...theme.typography.body,
-    color: theme.colors.textPrimary
+    fontSize: 14,
+    color: '#000000',
+    paddingVertical: 0,
+    paddingRight: 8
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#CCFF00',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   headerIconHit: {
     ...HEADER_ICON_TOUCH_CONTAINER,
@@ -159,21 +171,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   badge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'red',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#C3EA4F',
     position: 'absolute',
-    top: -4,
-    right: -4
-  },
-  badgeText: {
-    textAlign: 'center',
-    lineHeight: 18,
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: 'white'
+    top: 4,
+    right: 4
   }
 });

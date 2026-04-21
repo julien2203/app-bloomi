@@ -44,7 +44,7 @@
     "android": {
       "package": "com.jupouch.bloomiapp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon-fullsize.png",
         "backgroundColor": "#ffffff"
       },
       "intentFilters": [

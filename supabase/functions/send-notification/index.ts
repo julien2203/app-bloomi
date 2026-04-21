@@ -18,6 +18,36 @@ type RequestBody = {
   data?: unknown;
 };
 
+type PushNotificationSettings = {
+  enabled?: boolean;
+  newMessage?: boolean;
+  newFeedback?: boolean;
+  favoriteItems?: boolean;
+  newFollowers?: boolean;
+  newItems?: boolean;
+};
+
+function isPushAllowed(settings: PushNotificationSettings | null, data: unknown): boolean {
+  if (!settings) return true;
+  if (settings.enabled === false) return false;
+
+  const d = (data ?? {}) as Record<string, unknown>;
+  const t = typeof d.notification_type === "string" ? d.notification_type.trim() : "";
+  if (!t) return true;
+
+  const byType: Record<string, keyof PushNotificationSettings> = {
+    new_message: "newMessage",
+    new_feedback: "newFeedback",
+    favorite_items: "favoriteItems",
+    new_followers: "newFollowers",
+    new_items: "newItems",
+  };
+
+  const key = byType[t];
+  if (!key) return true;
+  return settings[key] !== false;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -56,7 +86,7 @@ Deno.serve(async (req) => {
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
-    .select("expo_push_token")
+    .select("expo_push_token, push_notification_settings")
     .eq("id", user_id)
     .maybeSingle();
 
@@ -71,8 +101,13 @@ Deno.serve(async (req) => {
     profile && typeof (profile as any).expo_push_token === "string"
       ? String((profile as any).expo_push_token).trim()
       : "";
+  const pushSettings =
+    profile && typeof (profile as any).push_notification_settings === "object"
+      ? ((profile as any).push_notification_settings as PushNotificationSettings)
+      : null;
+  const shouldSendPush = isPushAllowed(pushSettings, data);
 
-  if (token) {
+  if (token && shouldSendPush) {
     try {
       const expoResp = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",

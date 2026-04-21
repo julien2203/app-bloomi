@@ -35,7 +35,6 @@ export default function ProfileStackLayout() {
       <Stack.Screen name="notification-settings" options={{ title: 'Push notifications' }} />
       <Stack.Screen name="account-settings" options={{ title: 'Account settings' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
-      <Stack.Screen name="shipping" options={{ title: 'Shipping' }} />
       <Stack.Screen name="legal" options={{ title: 'Legal information' }} />
       <Stack.Screen name="help" options={{ title: 'Help center' }} />
       <Stack.Screen name="feedback" options={{ title: 'Send your feedback' }} />

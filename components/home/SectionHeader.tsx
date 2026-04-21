@@ -6,12 +6,13 @@ import { Text } from '../ui/Text';
 interface SectionHeaderProps {
   title: string;
   onPressSeeAll?: () => void;
+  titleColor?: string;
 }
 
-export function SectionHeader({ title, onPressSeeAll }: SectionHeaderProps) {
+export function SectionHeader({ title, onPressSeeAll, titleColor }: SectionHeaderProps) {
   return (
     <View style={styles.container}>
-      <Text variant="h3" style={styles.title}>
+      <Text variant="h3" style={[styles.title, titleColor ? { color: titleColor } : null]}>
         {title}
       </Text>
       {onPressSeeAll && (

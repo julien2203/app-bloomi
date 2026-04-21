@@ -372,6 +372,7 @@ export default function HomeScreen() {
             <View style={styles.section}>
               <SectionHeader
                 title="Sponsored"
+                titleColor="#000000"
                 onPressSeeAll={() => {
                   router.push({
                     pathname: '/tabs/results' as any,
@@ -414,6 +415,7 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <SectionHeader
               title="Trending"
+              titleColor="#000000"
               onPressSeeAll={() => {
                 router.push({
                   pathname: '/tabs/results' as any,
@@ -456,6 +458,7 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <SectionHeader
               title="Influencers"
+              titleColor="#000000"
               onPressSeeAll={() => {
                 router.push({
                   pathname: '/tabs/results' as any,
@@ -497,6 +500,7 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionHeader
             title="All items"
+            titleColor="#000000"
             onPressSeeAll={() => {
               router.push({
                 pathname: '/tabs/results' as any,
