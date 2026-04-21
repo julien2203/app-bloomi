@@ -17,7 +17,6 @@ coverage/
 
 # Builds natifs (si présents)
 android/
-ios/
 
 # Fichiers temporaires et logs
 *.log
