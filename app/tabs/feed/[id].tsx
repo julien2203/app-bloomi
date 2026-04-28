@@ -8,6 +8,7 @@ import {
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Share,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -42,6 +43,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
 import { supabase } from '../../../lib/supabase';
 import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
+import * as Clipboard from 'expo-clipboard';
 
 /** Paliers de vues déjà notifiés pour un listing (évite les doublons si l’écran se remonte). */
 const listingViewMilestonesNotified = new Map<string, Set<number>>();
@@ -61,6 +63,12 @@ type PhotoItem = {
 const BUYER_PROTECTION_RATE = 0.08;
 const RELATED_GRID_GAP = 8;
 const RELATED_GRID_PADDING_X = 16;
+const REPORT_REASONS = [
+  'Contenu inapproprie',
+  'Arnaque',
+  'Contenu illegal',
+  'Autre'
+] as const;
 
 const conditionLabelMap: Record<string, string> = {
   new: 'New with tags',
@@ -105,6 +113,8 @@ export default function ListingDetailScreen() {
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [showBuyerProtectionInfo, setShowBuyerProtectionInfo] = useState(false);
   const [ownerSheetVisible, setOwnerSheetVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [submittingReport, setSubmittingReport] = useState(false);
 
   const fetchListing = useCallback(async () => {
     if (!id) {
@@ -151,8 +161,6 @@ export default function ListingDetailScreen() {
 
       setLoadingRelated(true);
       try {
-        const category = (listing.category ?? '').trim();
-
         const otherPromise = supabase
           .from('v_listing_detail')
           .select('*')
@@ -161,22 +169,94 @@ export default function ListingDetailScreen() {
           .neq('id', listing.id)
           .limit(6);
 
-        // Similar items: be tolerant to category formatting differences.
-        // Some rows store category as a hierarchical string, so strict equality can easily miss matches.
-        const similarPromise = category
-          ? supabase
-              .from('v_listing_detail')
-              .select('*')
-              .eq('status', 'published')
-              .ilike('category', `%${category}%`)
-              .neq('id', listing.id)
-              .limit(6)
-          : Promise.resolve({ data: [], error: null } as any);
+        const similarPromise = (async () => {
+          const { data: currentListingRow, error: currentListingErr } = await supabase
+            .from('listings')
+            .select('category_id')
+            .eq('id', listing.id)
+            .maybeSingle();
+          if (currentListingErr) return [] as any[];
 
-        const [{ data: otherRows }, { data: similarRows }] = await Promise.all([
-          otherPromise,
-          similarPromise
-        ]);
+          const currentCategoryId = String((currentListingRow as any)?.category_id ?? '').trim();
+          if (!currentCategoryId) return [] as any[];
+
+          const excludedIds = new Set<string>([listing.id]);
+          const similarIds: string[] = [];
+
+          // 1) Strict same category_id
+          const { data: exactRows } = await supabase
+            .from('listings')
+            .select('id')
+            .eq('status', 'published')
+            .eq('category_id', currentCategoryId)
+            .neq('id', listing.id)
+            .neq('seller_id', listing.seller_id)
+            .order('created_at', { ascending: false })
+            .limit(6);
+
+          for (const row of (exactRows || []) as any[]) {
+            const lid = String(row.id ?? '').trim();
+            if (!lid || excludedIds.has(lid)) continue;
+            excludedIds.add(lid);
+            similarIds.push(lid);
+          }
+
+          // 2) Fallback with same parent_id if needed
+          if (similarIds.length < 6) {
+            const { data: currentCategoryRow } = await supabase
+              .from('categories')
+              .select('parent_id')
+              .eq('id', currentCategoryId)
+              .maybeSingle();
+
+            const parentId = String((currentCategoryRow as any)?.parent_id ?? '').trim();
+            if (parentId) {
+              const { data: siblingCategories } = await supabase
+                .from('categories')
+                .select('id')
+                .eq('parent_id', parentId);
+
+              const siblingCategoryIds = (siblingCategories || [])
+                .map((row: any) => String(row.id ?? '').trim())
+                .filter(Boolean);
+
+              if (siblingCategoryIds.length > 0) {
+                const { data: parentRows } = await supabase
+                  .from('listings')
+                  .select('id')
+                  .eq('status', 'published')
+                  .in('category_id', siblingCategoryIds as any)
+                  .neq('id', listing.id)
+                  .neq('seller_id', listing.seller_id)
+                  .order('created_at', { ascending: false })
+                  .limit(30);
+
+                for (const row of (parentRows || []) as any[]) {
+                  const lid = String(row.id ?? '').trim();
+                  if (!lid || excludedIds.has(lid)) continue;
+                  excludedIds.add(lid);
+                  similarIds.push(lid);
+                  if (similarIds.length >= 6) break;
+                }
+              }
+            }
+          }
+
+          if (similarIds.length === 0) return [] as any[];
+
+          const { data: similarRows } = await supabase
+            .from('v_listing_detail')
+            .select('*')
+            .in('id', similarIds as any);
+
+          const rowsById = new Map<string, any>();
+          for (const row of (similarRows || []) as any[]) {
+            rowsById.set(String(row.id), row);
+          }
+          return similarIds.map((sid) => rowsById.get(sid)).filter(Boolean);
+        })();
+
+        const [{ data: otherRows }, similarRows] = await Promise.all([otherPromise, similarPromise]);
 
         const normalizeListing = (row: any): ListingDetail => {
           const photos = Array.isArray(row?.photos) ? row.photos : [];
@@ -526,6 +606,45 @@ export default function ListingDetailScreen() {
     })();
   };
 
+  const openReportMenu = useCallback(() => {
+    if (isOwner || !listing?.id) return;
+    setReportModalVisible(true);
+  }, [isOwner, listing?.id]);
+
+  const submitReport = useCallback(
+    async (reason: (typeof REPORT_REASONS)[number]) => {
+      if (!listing?.id) return;
+      const {
+        data: { user: authedUser }
+      } = await supabase.auth.getUser();
+      if (!authedUser?.id) {
+        router.push('/auth/login');
+        return;
+      }
+
+      try {
+        setSubmittingReport(true);
+        const { error: reportError } = await supabase.from('reports').insert({
+          reporter_id: authedUser.id,
+          listing_id: listing.id,
+          reason
+        });
+        if (reportError) throw reportError;
+        setReportModalVisible(false);
+        Alert.alert('Merci', 'Votre signalement a bien ete envoye.');
+      } catch (e) {
+        const message =
+          e instanceof Error && e.message
+            ? e.message
+            : "Impossible d'envoyer le signalement.";
+        Alert.alert('Erreur', message);
+      } finally {
+        setSubmittingReport(false);
+      }
+    },
+    [listing?.id, router]
+  );
+
   const handleMakeOffer = () => {
     if (!listing) return;
     router.push({
@@ -551,6 +670,21 @@ export default function ListingDetailScreen() {
       }
     });
   };
+
+  const handleShareListing = useCallback(async () => {
+    if (!listing?.id) return;
+    const deepLink = `bloomi://listing/${listing.id}`;
+    try {
+      await Share.share({
+        title: listing.title ?? 'Annonce Bloomi',
+        message: `${listing.title ?? 'Annonce Bloomi'}\n${deepLink}`,
+        url: deepLink
+      });
+    } catch {
+      await Clipboard.setStringAsync(deepLink);
+      Alert.alert('Lien copie !');
+    }
+  }, [listing?.id, listing?.title]);
 
   const handleImagePress = (index: number) => {
     setModalImageIndex(index);
@@ -658,6 +792,19 @@ export default function ListingDetailScreen() {
               style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
               accessibilityRole="button"
               accessibilityLabel="Listing menu"
+            >
+              <Text variant="body" style={styles.headerMenuDots}>
+                •••
+              </Text>
+            </TouchableOpacity>
+          ) : user?.id ? (
+            <TouchableOpacity
+              onPress={openReportMenu}
+              activeOpacity={0.7}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
+              accessibilityRole="button"
+              accessibilityLabel="Signaler cette annonce"
             >
               <Text variant="body" style={styles.headerMenuDots}>
                 •••
@@ -900,12 +1047,9 @@ export default function ListingDetailScreen() {
               <TouchableOpacity
                 style={[styles.favoriteShareButton, isOwner && styles.favoriteShareButtonFull]}
                 activeOpacity={0.8}
-                onPress={() =>
-                  Alert.alert(
-                    'Coming soon',
-                    'Sharing this listing will be available soon.'
-                  )
-                }
+                onPress={() => {
+                  void handleShareListing();
+                }}
               >
                 <Feather
                   name="share-2"
@@ -921,8 +1065,8 @@ export default function ListingDetailScreen() {
             {/* Details table */}
             <View style={styles.detailsList}>
               <DetailRow label="Category" value={listing.category ?? '—'} />
-              <DetailRow label="Size" value={listing.size ?? '—'} withInfo />
-              <DetailRow label="Condition" value={conditionLabel ?? '—'} withInfo />
+              <DetailRow label="Size" value={listing.size ?? '—'} />
+              <DetailRow label="Condition" value={conditionLabel ?? '—'} />
               <DetailRow label="Color" value={listing.color ?? '—'} />
               <DetailRow label="Views" value={viewsCount != null ? String(viewsCount) : '—'} />
               <DetailRow label="Interested" value={String(likesCount)} />
@@ -995,6 +1139,8 @@ export default function ListingDetailScreen() {
                       key={l.id}
                       listingId={l.id}
                       sellerId={l.seller_id}
+                      sellerName={l.seller_display_name ?? null}
+                      sellerAvatarUrl={l.seller_avatar_url ?? null}
                       sellerIsInfluencer={Boolean(l.seller_is_influencer)}
                       title={l.title}
                       price={Number(l.price) || 0}
@@ -1166,6 +1312,47 @@ export default function ListingDetailScreen() {
                 onPress={() => setShowBuyerProtectionInfo(false)}
                 variant="primary"
                 style={styles.bpModalCloseButton}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={reportModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setReportModalVisible(false)}
+        >
+          <View style={styles.bpModalOverlay}>
+            <TouchableOpacity
+              style={styles.bpModalBackdropPressable}
+              activeOpacity={1}
+              onPress={() => setReportModalVisible(false)}
+            />
+            <View style={styles.bpModalCard}>
+              <Text variant="body" style={styles.bpModalTitle}>
+                Signaler cette annonce
+              </Text>
+              {REPORT_REASONS.map((reason) => (
+                <Button
+                  key={reason}
+                  title={reason}
+                  onPress={() => {
+                    if (!submittingReport) {
+                      void submitReport(reason);
+                    }
+                  }}
+                  variant="secondary"
+                  style={styles.reportReasonButton}
+                  disabled={submittingReport}
+                />
+              ))}
+              <Button
+                title="Annuler"
+                onPress={() => setReportModalVisible(false)}
+                variant="primary"
+                style={styles.bpModalCloseButton}
+                disabled={submittingReport}
               />
             </View>
           </View>
@@ -1371,7 +1558,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.gapSm
   },
   productTitle: {
-    ...theme.typography.h1,
+    ...theme.typography.h2,
+    fontSize: 24,
+    lineHeight: 30,
     marginBottom: theme.spacing.gapSm
   },
   metaRow: {
@@ -1391,7 +1580,7 @@ const styles = StyleSheet.create({
   mainPrice: {
     ...theme.typography.h2,
     fontFamily: theme.fontFamily.bold,
-    color: '#555555',
+    color: '#171819',
     marginBottom: theme.spacing.gapSm
   },
   protectionRow: {
@@ -1442,8 +1631,12 @@ const styles = StyleSheet.create({
   bpModalCloseButton: {
     marginTop: 14
   },
+  reportReasonButton: {
+    marginTop: 8
+  },
   descriptionBlock: {
     paddingHorizontal: theme.spacing.screenPaddingX,
+    marginTop: 16,
     paddingBottom: theme.spacing.gapLg
   },
   relatedSection: {
@@ -1565,8 +1758,9 @@ const styles = StyleSheet.create({
   },
   bottomButtonBuyNow: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#C3EA4F'
+    backgroundColor: '#C3EA4F',
+    borderWidth: 0,
+    borderColor: 'transparent'
   },
   bottomButtonOwnerFull: {
     flex: 1,
@@ -1575,14 +1769,14 @@ const styles = StyleSheet.create({
   },
   bottomButtonSecondaryDisabled: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#C3EA4F',
+    borderWidth: 0,
+    backgroundColor: '#F0F0F0',
     opacity: 0.45
   },
   bottomButtonSecondary: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#C3EA4F'
+    borderWidth: 0,
+    backgroundColor: '#F0F0F0'
   },
   bottomButtonDisabled: {
     opacity: 0.45

@@ -1065,22 +1065,21 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5'
   },
   headerTitle: {
     ...theme.typography.body,
-    fontSize: 17,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.textPrimary
   },
   headerRightPlaceholder: {
-    width: 32
+    width: 28
   },
   scrollView: {
     flex: 1
@@ -1122,13 +1121,12 @@ const styles = StyleSheet.create({
     width: 220,
     height: 56,
     alignSelf: 'center',
-    borderWidth: 1.5,
-    borderColor: '#C3EA4F',
+    borderWidth: 0,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.backgroundWhite,
+    backgroundColor: '#F0F0F0',
     gap: 8
   },
   photoActionsRow: {

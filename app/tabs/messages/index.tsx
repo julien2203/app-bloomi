@@ -17,7 +17,6 @@ import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
-import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 
 function formatRelativeDate(dateString: string | null): string {
   if (!dateString) return '';
@@ -228,11 +227,11 @@ export default function MessagesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <HeaderBackButton onPress={() => router.back()} />
+        <View style={styles.headerSidePlaceholder} />
         <Text variant="body" style={styles.headerTitle}>
           Messages
         </Text>
-        <View style={styles.headerRightPlaceholder} />
+        <View style={styles.headerSidePlaceholder} />
       </View>
       <View style={styles.headerSeparator} />
       {renderContent}
@@ -255,11 +254,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.body,
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.textPrimary
   },
-  headerRightPlaceholder: {
+  headerSidePlaceholder: {
     width: 28
   },
   headerSeparator: {

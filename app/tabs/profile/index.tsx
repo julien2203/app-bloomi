@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -12,10 +14,14 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { theme } from '../../../lib/theme';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
 import { InfluencerBadge } from '../../../components/InfluencerBadge';
+import CoeurIcon from '../../../assets/icons/heart2.svg';
+import BellIcon from '../../../assets/icons/bell2.svg';
 
 type ProfileRow = {
   id: string;
@@ -33,6 +39,8 @@ type ProfileItemProps = {
   label: string;
   icon: import('../../../lib/assets').IconName;
   onPress: () => void;
+  useFeedHeartIcon?: boolean;
+  useFeedBellIcon?: boolean;
 };
 
 export default function ProfileScreen() {
@@ -45,6 +53,7 @@ export default function ProfileScreen() {
   const [vacationMode, setVacationMode] = useState<boolean>(false);
   const [updatingVacation, setUpdatingVacation] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [signOutModalOpen, setSignOutModalOpen] = useState(false);
 
   const loadProfile = useCallback(async () => {
     if (!user?.id) {
@@ -179,6 +188,7 @@ export default function ProfileScreen() {
       <ProfileItem
         label="Favorite items"
         icon="likeHeartOutline"
+        useFeedHeartIcon
         onPress={() => router.push('/tabs/profile/favorites')}
       />
       {user?.id ? (
@@ -206,6 +216,7 @@ export default function ProfileScreen() {
       <ProfileItem
         label="Notifications"
         icon="notificationsBellOutline"
+        useFeedBellIcon
         onPress={() => router.push('/tabs/profile/notifications')}
       />
       <ProfileItem
@@ -249,9 +260,7 @@ export default function ProfileScreen() {
         label="Sign out"
         icon="exitOutline"
         onPress={() => {
-          if (!isLoading) {
-            signOut();
-          }
+          setSignOutModalOpen(true);
         }}
       />
 
@@ -265,14 +274,42 @@ export default function ProfileScreen() {
           <Text style={styles.footerLink}>Terms &amp; Conditions</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={signOutModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSignOutModalOpen(false)}
+      >
+        <Pressable style={styles.confirmOverlay} onPress={() => setSignOutModalOpen(false)}>
+          <Pressable style={styles.confirmCard} onPress={() => null}>
+            <Text style={styles.confirmTitle}>Sign out</Text>
+            <Text style={styles.confirmMessage}>Are you sure you want to sign out?</Text>
+            <View style={styles.confirmSeparator} />
+            <View style={styles.confirmActionsRow}>
+              <Pressable style={styles.confirmCancelBtn} onPress={() => setSignOutModalOpen(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.confirmSignOutBtn}
+                onPress={() => {
+                  setSignOutModalOpen(false);
+                  if (!isLoading) {
+                    signOut();
+                  }
+                }}
+              >
+                <Text style={styles.confirmSignOutText}>Sign out</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 
-  // Espace pour éviter que le contenu soit masqué par la barre d’onglets flottante
-  // (aligné avec la logique dans `app/tabs/_layout.tsx` et `FloatingTabBar.tsx`).
-  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
-  const floatingTabBarReserveSpace = 20 + 68 + bottomPad + 28;
-  const scrollPaddingBottom = floatingTabBarReserveSpace;
+  // Espace pour éviter que le contenu soit masqué par la tab bar fixe.
+  const scrollPaddingBottom = getFixedTabBarHeight(insets.bottom) + 8;
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -290,12 +327,22 @@ export default function ProfileScreen() {
   );
 }
 
-function ProfileItem({ label, icon, onPress }: ProfileItemProps) {
+function ProfileItem({ label, icon, onPress, useFeedHeartIcon, useFeedBellIcon }: ProfileItemProps) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
       <View style={styles.row}>
         <View style={styles.rowLeft}>
-          <AppIcon name={icon} size={20} color="#000000" />
+          {useFeedHeartIcon ? (
+            <View style={styles.favoriteHeartWrap}>
+              <CoeurIcon width={20} height={20} stroke="#000000" fill="none" strokeWidth={1.7} />
+            </View>
+          ) : useFeedBellIcon ? (
+            <View style={styles.feedBellWrap}>
+              <BellIcon width={30} height={30} color="#000000" />
+            </View>
+          ) : (
+            <AppIcon name={icon} size={20} color="#000000" />
+          )}
           <Text style={styles.rowLabel}>{label}</Text>
         </View>
         <Feather name="chevron-right" size={18} color="#C0C0C0" />
@@ -412,6 +459,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center'
   },
+  favoriteHeartWrap: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  feedBellWrap: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   rowLabel: {
     fontSize: 14,
     color: '#000000',
@@ -432,6 +491,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888888',
     marginHorizontal: 8
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24
+  },
+  confirmTitle: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: 18,
+    color: '#000000',
+    textAlign: 'center'
+  },
+  confirmMessage: {
+    marginTop: 12,
+    fontFamily: theme.fontFamily.regular,
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center'
+  },
+  confirmSeparator: {
+    marginTop: 16,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E5E5'
+  },
+  confirmActionsRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    columnGap: 10
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  confirmCancelText: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: '#000000'
+  },
+  confirmSignOutBtn: {
+    flex: 1,
+    backgroundColor: '#C3EA4F',
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  confirmSignOutText: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: '#000000'
   }
 });
 

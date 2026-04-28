@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
   },
   text: {
     ...theme.typography.button,
+    fontFamily: 'Quicksand_600SemiBold',
     color: theme.colors.textPrimary
   },
   disabled: {

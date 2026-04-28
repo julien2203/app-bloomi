@@ -19,5 +19,5 @@ export const HEADER_ICON_TOUCH_CONTAINER = {
   alignItems: 'center' as const
 };
 
-/** Espace au-dessus de la tab bar flottante pour ne pas masquer les boutons pied de page des écrans filtres */
-export const FLOATING_TAB_BAR_BOTTOM_RESERVE = 96;
+/** Espace de base au-dessus de la tab bar fixe pour ne pas masquer les boutons pied de page des écrans filtres */
+export const FLOATING_TAB_BAR_BOTTOM_RESERVE = 84;

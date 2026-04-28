@@ -27,6 +27,7 @@ import { type FeedFilters, useFeedFiltersStore } from '../../lib/store/feedFilte
 import { useSearchFiltersStore } from '../../lib/store/searchFilters';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../ui/HeaderBackButton';
+import { getFixedTabBarHeight } from '../../components/navigation/FloatingTabBar';
 import {
   FILTERS_PATH_SEARCH_STACK,
   FILTERS_PATH_TABS_ROOT,
@@ -135,8 +136,7 @@ export function UniversalResultsScreen(props: {
   const feedStore = useFeedFiltersStore();
   const searchStore = useSearchFiltersStore();
   const { filters, setFilter, resetFilters } = standaloneSearch ? searchStore : feedStore;
-  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
-  const floatingTabBarReserveSpace = 20 + 84 + bottomPad + 2;
+  const fixedTabBarReserveSpace = getFixedTabBarHeight(insets.bottom);
   const isSearchTabScreen = standaloneSearch && section === 'search';
 
   /** Même rangée de pills que l’onglet Search (Clear + genre + taille, etc.) pour les écrans Results « View all » (sponsored, trending, …). */
@@ -977,6 +977,7 @@ export function UniversalResultsScreen(props: {
     () =>
       searchStyleFilters
         ? ([
+            ...(isSearchTabScreen ? (['Filter'] as const) : []),
             'Clear',
             ...SEARCH_CATEGORY_GENDER_LABELS,
             'Size',
@@ -986,7 +987,7 @@ export function UniversalResultsScreen(props: {
             'Price'
           ] as const)
         : (['Filter', 'Nearby', 'Size', 'Brand', 'Condition', 'Color', 'Price'] as const),
-    [searchStyleFilters]
+    [isSearchTabScreen, searchStyleFilters]
   );
 
   const listingSellerIds = useMemo(() => {
@@ -1345,8 +1346,11 @@ export function UniversalResultsScreen(props: {
             keyExtractor={keyExtractor}
             numColumns={2}
             renderItem={renderMixedItem as any}
-            style={isSearchTabScreen ? { marginBottom: floatingTabBarReserveSpace } : undefined}
-            contentContainerStyle={[styles.listContent, searchStyleFilters && styles.listContentTabSearch]}
+            contentContainerStyle={[
+              styles.listContent,
+              searchStyleFilters && styles.listContentTabSearch,
+              isSearchTabScreen ? { paddingBottom: fixedTabBarReserveSpace + 8 } : null
+            ]}
             columnWrapperStyle={styles.listRow}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
@@ -1440,8 +1444,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.body,
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.textPrimary,
     textAlign: 'center',
     flex: 1
@@ -1460,7 +1463,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F2',
+    backgroundColor: '#F8F8F6',
     borderRadius: 24,
     minHeight: 48,
     paddingVertical: 4,
@@ -1600,7 +1603,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24
   },
-  /** Réserve pour la navbar flottante sur l’onglet Search */
+  /** Ajustements de padding quand l'écran reprend le style de l'onglet Search */
   listContentTabSearch: {
     paddingBottom: 16
   },

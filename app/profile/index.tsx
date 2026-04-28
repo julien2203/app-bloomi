@@ -12,6 +12,9 @@ import {
   View
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
@@ -72,9 +75,14 @@ const LIME = '#C3EA4F';
 const STAR_ORANGE = '#F59E0B';
 const COVER_HEIGHT = 160;
 const PAGE_SIZE = 20;
-const COVER_SOURCE = require('../../assets/home/cover-profile.png');
 const PROFILE_AVATAR_SIZE = 56;
 const PROFILE_TEXT_LEFT_GAP = 10;
+const REPORT_REASONS = [
+  'Contenu inapproprie',
+  'Arnaque',
+  'Contenu illegal',
+  'Autre'
+] as const;
 
 function formatRelativeDate(dateString: string | null): string {
   if (!dateString) return '';
@@ -169,6 +177,7 @@ export default function PublicProfileScreen() {
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [reviewersById, setReviewersById] = useState<Record<string, ReviewerMini>>({});
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const lastLoadMoreScrollYRef = useRef<number>(-1);
   const [closetOwnerMenuListing, setClosetOwnerMenuListing] = useState<FeedListing | null>(null);
 
@@ -397,19 +406,90 @@ export default function PublicProfileScreen() {
   }, [loadClosetPage, loadProfile, loadReviews]);
 
   const openMenu = useCallback(() => {
+    if (isMe) {
+      Alert.alert('Options', '', [{ text: 'Fermer', style: 'cancel' }]);
+      return;
+    }
+
+    const onReport = () => {
+      if (!myId) {
+        router.push('/auth/login');
+        return;
+      }
+      if (!profile?.id) return;
+      const listingIdToReport = closetItems[0]?.id;
+      if (!listingIdToReport) {
+        Alert.alert('Signalement', 'Aucune annonce active a signaler pour ce vendeur.');
+        return;
+      }
+
+      Alert.alert(
+        'Signaler',
+        'Pourquoi souhaitez-vous signaler ?',
+        [
+          ...REPORT_REASONS.map((reason) => ({
+            text: reason,
+            onPress: () => {
+              void (async () => {
+                const { error } = await supabase.from('reports').insert({
+                  reporter_id: myId,
+                  listing_id: listingIdToReport,
+                  reason
+                });
+                if (error) {
+                  Alert.alert('Erreur', error.message);
+                  return;
+                }
+                Alert.alert('Merci', 'Votre signalement a ete envoye.');
+              })();
+            }
+          })),
+          { text: 'Annuler', style: 'cancel' as const }
+        ]
+      );
+    };
+
+    const onBlock = () => {
+      if (!myId) {
+        router.push('/auth/login');
+        return;
+      }
+      if (!profile?.id) return;
+      Alert.alert(
+        'Bloquer cet utilisateur ?',
+        'Ses annonces ne seront plus visibles dans votre feed.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Bloquer',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                const { error } = await supabase.from('blocked_users').insert({
+                  blocker_id: myId,
+                  blocked_id: profile.id
+                });
+
+                if (error && error.code !== '23505') {
+                  Alert.alert('Erreur', error.message);
+                  return;
+                }
+                Alert.alert('Utilisateur bloque', 'Ses annonces sont maintenant masquees.');
+                setClosetItems((prev) => prev.filter((item) => item.seller_id !== profile.id));
+                setClosetDraftItems((prev) => prev.filter((item) => item.seller_id !== profile.id));
+              })();
+            }
+          }
+        ]
+      );
+    };
+
     Alert.alert('Options', '', [
-      {
-        text: 'Report',
-        onPress: () => Alert.alert('Thanks', 'Reporting will be available soon.')
-      },
-      {
-        text: 'Block',
-        style: 'destructive',
-        onPress: () => Alert.alert('Block', 'Blocking will be available soon.')
-      },
-      { text: 'Cancel', style: 'cancel' }
+      { text: 'Signaler', onPress: onReport },
+      { text: 'Bloquer', style: 'destructive', onPress: onBlock },
+      { text: 'Annuler', style: 'cancel' }
     ]);
-  }, []);
+  }, [closetItems, isMe, myId, profile?.id, router]);
 
   const onToggleFollow = useCallback(async () => {
     if (!profile?.id) return;
@@ -498,6 +578,61 @@ export default function PublicProfileScreen() {
     return closetItems;
   }, [closetDraftItems, closetItems, isMe]);
 
+  const coverImageUri = useMemo(() => {
+    const raw = String(profile?.cover_image ?? '').trim();
+    return raw.length > 0 ? raw : null;
+  }, [profile?.cover_image]);
+
+  const handlePickCoverImage = useCallback(async () => {
+    if (!isMe || !myId || coverUploading) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission requise', 'Autorise la galerie pour changer la photo de couverture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.85,
+        aspect: [3, 1]
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      const picked = result.assets[0];
+      const coverPath = `${myId}/cover-${Date.now()}.jpg`;
+      setCoverUploading(true);
+
+      const base64 = await FileSystem.readAsStringAsync(picked.uri, {
+        encoding: FileSystem.EncodingType.Base64
+      });
+      const fileBuffer = decodeBase64(base64);
+
+      const { error: uploadErr } = await supabase.storage.from('cover').upload(coverPath, fileBuffer, {
+        upsert: true,
+        contentType: picked.mimeType || 'image/jpeg'
+      });
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicData } = supabase.storage.from('cover').getPublicUrl(coverPath);
+      const publicUrl = publicData?.publicUrl ?? '';
+      if (!publicUrl) throw new Error('Impossible de generer l URL publique.');
+
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ cover_image: publicUrl })
+        .eq('id', myId);
+      if (updateErr) throw updateErr;
+
+      setProfile((prev) => (prev ? { ...prev, cover_image: publicUrl } : prev));
+    } catch (e) {
+      Alert.alert('Erreur', e instanceof Error ? e.message : 'Impossible de mettre a jour la cover.');
+    } finally {
+      setCoverUploading(false);
+    }
+  }, [coverUploading, isMe, myId]);
+
   const closetCountLabel = useMemo(() => {
     const n = isMe ? closetDraftItems.length + closetItems.length : closetItems.length;
     return `${n} item${n !== 1 ? 's' : ''}`;
@@ -509,6 +644,19 @@ export default function PublicProfileScreen() {
     const gap = 8;
     return (width - pad - gap) / 2;
   }, []);
+
+  const handleBack = useCallback(() => {
+    // Depuis "View my closet" (profil public de soi-même), retour explicite vers Profile.
+    if (isMe) {
+      router.replace('/tabs/profile');
+      return;
+    }
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/tabs/profile');
+  }, [isMe, router]);
 
   const handleDeleteClosetListing = useCallback(async (listingId: string) => {
     let removedSnapshot: FeedListing | undefined;
@@ -661,7 +809,7 @@ export default function PublicProfileScreen() {
 
       {/* Header (même layout que les autres écrans) */}
       <View style={styles.header}>
-        <HeaderBackButton onPress={() => router.back()} />
+        <HeaderBackButton onPress={handleBack} />
         <Text variant="body" style={styles.headerTitle} numberOfLines={1}>
           {headerTitle}
         </Text>
@@ -704,7 +852,30 @@ export default function PublicProfileScreen() {
       >
         {/* Cover */}
         <View style={styles.coverWrap}>
-          <Image source={COVER_SOURCE} style={styles.coverImage} />
+          {coverImageUri ? (
+            <Image source={{ uri: coverImageUri }} style={styles.coverImage} />
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              {isMe ? (
+                <Text variant="caption" style={styles.coverPlaceholderText}>
+                  Add a cover photo
+                </Text>
+              ) : null}
+            </View>
+          )}
+          {isMe ? (
+            <Pressable
+              onPress={() => {
+                void handlePickCoverImage();
+              }}
+              style={({ pressed }) => [styles.coverEditButton, pressed && styles.coverEditButtonPressed]}
+              disabled={coverUploading}
+            >
+              <Text variant="captionSm" style={styles.coverEditButtonText}>
+                {coverUploading ? 'Uploading...' : 'Edit'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Profile block */}
@@ -945,8 +1116,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.body,
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.textPrimary,
     flex: 1,
     textAlign: 'center'
@@ -967,7 +1137,7 @@ const styles = StyleSheet.create({
   coverWrap: {
     height: COVER_HEIGHT,
     width: '100%',
-    backgroundColor: theme.colors.muted
+    backgroundColor: '#F0F0F0'
   },
   coverImage: {
     width: '100%',
@@ -977,7 +1147,30 @@ const styles = StyleSheet.create({
   coverPlaceholder: {
     width: '100%',
     height: COVER_HEIGHT,
-    backgroundColor: theme.colors.muted
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  coverPlaceholderText: {
+    color: theme.colors.textSecondary
+  },
+  coverEditButton: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E5E5'
+  },
+  coverEditButtonPressed: {
+    opacity: 0.75
+  },
+  coverEditButtonText: {
+    color: '#000000',
+    fontFamily: theme.fontFamily.semiBold
   },
   profileBlock: {
     marginTop: 0,

@@ -4,12 +4,12 @@
  * Basé sur les specs Figma (iPhone 375px)
  */
 
-// Familles de polices Quicksand
+// Familles de polices Poppins
 const fontFamily = {
-  regular: 'Quicksand_400Regular',
-  medium: 'Quicksand_500Medium',
-  semiBold: 'Quicksand_600SemiBold',
-  bold: 'Quicksand_700Bold'
+  regular: 'Poppins_400Regular',
+  medium: 'Poppins_500Medium',
+  semiBold: 'Poppins_600SemiBold',
+  bold: 'Poppins_700Bold'
 } as const;
 
 // Couleurs principales
@@ -32,7 +32,7 @@ const colors = {
   heroCtaBorder: '#14141A'
 } as const;
 
-// Typographie Quicksand
+// Typographie Poppins
 const typography = {
   h1: {
     fontSize: 28,

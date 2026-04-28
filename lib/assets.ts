@@ -82,6 +82,7 @@ import ForbiddenCircleOutline from '../assets/icons/forbidden-circle-outline.svg
 import HomeOutline from '../assets/icons/home-outline.svg';
 import InfoCircleOutline from '../assets/icons/info-circle-outline.svg';
 import LikeHeartOutline from '../assets/icons/like-heart-outline.svg';
+import Heart2 from '../assets/icons/heart2.svg';
 import MapPointOutline from '../assets/icons/map-point-outline.svg';
 import MenuDotsOutline from '../assets/icons/menu-dots-outline.svg';
 import MessagesLetterOutline from '../assets/icons/messages-letter-outline.svg';
@@ -141,7 +142,7 @@ export const icons = {
   forbiddenCircleBold: ForbiddenCircleBold,
   homeBold: HomeBold,
   infoCircleBold: InfoCircleBold,
-  likeHeartBold: LikeHeartBold,
+  likeHeartBold: Heart2,
   mapPointBold: MapPointBold,
   menuDotsBold: MenuDotsBold,
   messagesLetterBold: MessagesLetterBold,
@@ -193,7 +194,7 @@ export const icons = {
   forbiddenCircleOutline: ForbiddenCircleOutline,
   homeOutline: HomeOutline,
   infoCircleOutline: InfoCircleOutline,
-  likeHeartOutline: LikeHeartOutline,
+  likeHeartOutline: Heart2,
   mapPointOutline: MapPointOutline,
   menuDotsOutline: MenuDotsOutline,
   messagesLetterOutline: MessagesLetterOutline,

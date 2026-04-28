@@ -92,7 +92,18 @@ export default function FiltersIndexScreen() {
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={handleShowResult} />
+          <HeaderBackButton
+            onPress={() => {
+              if (router.canGoBack && router.canGoBack()) {
+                router.back();
+              } else {
+                navigateAfterFilterCommit(
+                  router,
+                  typeof params.returnTo === 'string' ? params.returnTo : undefined
+                );
+              }
+            }}
+          />
           <Text variant="body" style={styles.headerTitle}>
             {headerTitle}
           </Text>

@@ -48,7 +48,15 @@ export default function ResetPasswordScreen() {
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={() => router.replace('/auth/login')} />
+          <HeaderBackButton
+            onPress={() => {
+              if (router.canGoBack && router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/auth/login');
+              }
+            }}
+          />
           <View style={{ flex: 1 }} />
         </View>
 

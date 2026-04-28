@@ -657,7 +657,11 @@ export default function ThreadScreen() {
   ]);
 
   const handleBack = () => {
-    router.replace('/tabs/messages');
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/tabs/messages');
+    }
   };
 
   return (
@@ -818,7 +822,9 @@ const styles = StyleSheet.create({
     width: 24
   },
   otherName: {
-    fontFamily: theme.fontFamily.semiBold
+    ...theme.typography.body,
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.textPrimary
   },
   center: {
     flex: 1,

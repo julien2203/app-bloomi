@@ -67,7 +67,10 @@
     "ios": {
       "bundleIdentifier": "com.jupouch.bloomiapp",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Bloomi uses your camera to take photos of items you want to sell on the marketplace.",
+        "NSPhotoLibraryUsageDescription": "Bloomi uses your photo library to select photos of items you want to sell on the marketplace.",
+        "NSPhotoLibraryAddUsageDescription": "Bloomi saves photos to your library when you download listing images."
       }
     }
   }

@@ -85,6 +85,23 @@ export type FeedListing = {
   listing_country: string;
 };
 
+async function getBlockedSellerIdsForCurrentUser(): Promise<string[]> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user?.id) return [];
+
+  const { data, error } = await supabase
+    .from('blocked_users')
+    .select('blocked_id')
+    .eq('blocker_id', user.id);
+
+  if (error) return [];
+  return (data || [])
+    .map((row: any) => String(row.blocked_id ?? ''))
+    .filter(Boolean);
+}
+
 // ============================================
 // LISTINGS - FEED
 // ============================================
@@ -101,6 +118,7 @@ export async function getFeedListings(params?: {
   const { limit = 20, offset = 0, filters } = params || {};
 
   try {
+    const blockedSellerIds = await getBlockedSellerIdsForCurrentUser();
     const { brandLabels, sizeLabels, colorLabels } = await resolveFilterLabels(filters);
 
     // Nearby: use RPC that filters + sorts by distance.
@@ -130,7 +148,12 @@ export async function getFeedListings(params?: {
         p_influencer_ids: null
       });
       if (error) return { data: [], error: new Error(error.message) };
-      return { data: (data || []) as FeedListing[], error: null };
+      const rows = (data || []) as FeedListing[];
+      const filteredRows =
+        blockedSellerIds.length > 0
+          ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+          : rows;
+      return { data: filteredRows, error: null };
       }
     }
 
@@ -147,7 +170,12 @@ export async function getFeedListings(params?: {
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
         if (error) return { data: [], error: new Error(error.message) };
-        return { data: (data || []) as FeedListing[], error: null };
+        const rows = (data || []) as FeedListing[];
+        const filteredRows =
+          blockedSellerIds.length > 0
+            ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+            : rows;
+        return { data: filteredRows, error: null };
       }
 
       const { data: likesRows, error: likesErr } = await supabase
@@ -163,7 +191,12 @@ export async function getFeedListings(params?: {
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
         if (error) return { data: [], error: new Error(error.message) };
-        return { data: (data || []) as FeedListing[], error: null };
+        const rows = (data || []) as FeedListing[];
+        const filteredRows =
+          blockedSellerIds.length > 0
+            ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+            : rows;
+        return { data: filteredRows, error: null };
       }
 
       const likedIds = (likesRows || [])
@@ -176,7 +209,12 @@ export async function getFeedListings(params?: {
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
         if (error) return { data: [], error: new Error(error.message) };
-        return { data: (data || []) as FeedListing[], error: null };
+        const rows = (data || []) as FeedListing[];
+        const filteredRows =
+          blockedSellerIds.length > 0
+            ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+            : rows;
+        return { data: filteredRows, error: null };
       }
 
       // Liked items matching current filters
@@ -224,7 +262,12 @@ export async function getFeedListings(params?: {
       const { data: restData, error: restErr } = await restQ;
       if (restErr) return { data: [], error: new Error(restErr.message) };
 
-      return { data: [...likedSlice, ...((restData || []) as FeedListing[])], error: null };
+      const rows = [...likedSlice, ...((restData || []) as FeedListing[])];
+      const filteredRows =
+        blockedSellerIds.length > 0
+          ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+          : rows;
+      return { data: filteredRows, error: null };
     }
 
     let orderColumn: 'created_at' | 'price' = 'created_at';
@@ -271,7 +314,12 @@ export async function getFeedListings(params?: {
       return { data: [], error: new Error(error.message) };
     }
 
-    return { data: (data || []) as FeedListing[], error: null };
+    const rows = (data || []) as FeedListing[];
+    const filteredRows =
+      blockedSellerIds.length > 0
+        ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+        : rows;
+    return { data: filteredRows, error: null };
   } catch (err) {
     return {
       data: [],

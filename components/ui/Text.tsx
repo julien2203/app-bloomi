@@ -11,12 +11,12 @@ interface TextProps extends RNTextProps {
   color?: ColorKey;
 }
 
-function resolveQuicksandFamilyFromWeight(fontWeight?: TextStyle['fontWeight']) {
+function resolvePoppinsFamilyFromWeight(fontWeight?: TextStyle['fontWeight']) {
   if (!fontWeight) return undefined;
   if (fontWeight === 'normal') return theme.fontFamily.regular;
   if (fontWeight === 'bold') return theme.fontFamily.bold;
   if (fontWeight === '100' || fontWeight === '200' || fontWeight === '300') {
-    return 'Quicksand_300Light';
+    return 'Poppins_300Light';
   }
   if (fontWeight === '400') return theme.fontFamily.regular;
   if (fontWeight === '500') return theme.fontFamily.medium;
@@ -33,7 +33,7 @@ export function Text({ variant = 'body', color, style, ...props }: TextProps) {
     color: color ? theme.colors[color] : theme.colors.textPrimary
   };
   const flattenedStyle = StyleSheet.flatten(style) as TextStyle | undefined;
-  const weightFontFamily = resolveQuicksandFamilyFromWeight(flattenedStyle?.fontWeight);
+  const weightFontFamily = resolvePoppinsFamilyFromWeight(flattenedStyle?.fontWeight);
   const normalizedWeightStyle =
     flattenedStyle?.fontWeight != null || weightFontFamily
       ? {

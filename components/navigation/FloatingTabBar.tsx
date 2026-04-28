@@ -15,11 +15,10 @@ import { refreshUnreadThreadsBadge } from '../../lib/unreadMessagesBadge';
 import { useAuthStore } from '../../stores/authStore';
 import { useUnreadMessagesStore } from '../../stores/unreadMessagesStore';
 
-/** Largeur cible ; réduite automatiquement sur très petits écrans */
-const BAR_WIDTH_IDEAL = 400;
-const HORIZONTAL_SCREEN_GUTTER = 24;
-const BAR_HEIGHT = 84;
-const BAR_RADIUS = 18;
+export const TAB_BAR_BASE_HEIGHT = 84;
+export function getFixedTabBarHeight(bottomInset: number) {
+  return TAB_BAR_BASE_HEIGHT + (bottomInset > 0 ? bottomInset : 8);
+}
 /** Tailles de cadre (px) : ajuster par onglet pour compenser le blanc interne des SVG */
 const TAB_BOX = {
   home: 30,
@@ -41,7 +40,7 @@ const TAB_ROUTES = [
 export function FloatingTabBar(_: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const barWidth = Math.min(BAR_WIDTH_IDEAL, windowWidth - HORIZONTAL_SCREEN_GUTTER);
+  const safeBottomInset = insets.bottom > 0 ? insets.bottom : 8;
   const user = useAuthStore((s) => s.user);
   const unreadThreadsCount = useUnreadMessagesStore((s) => s.unreadThreadsCount);
   const messagesBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,13 +123,22 @@ export function FloatingTabBar(_: BottomTabBarProps) {
       style={[
         styles.wrapper,
         {
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 8
+          width: windowWidth
         }
       ]}
       pointerEvents="box-none"
       collapsable={false}
     >
-      <View style={[styles.container, { width: barWidth }]} collapsable={false}>
+      <View
+        style={[
+          styles.container,
+          {
+            height: TAB_BAR_BASE_HEIGHT + safeBottomInset,
+            paddingBottom: safeBottomInset
+          }
+        ]}
+        collapsable={false}
+      >
         {TAB_ROUTES.map((tab) => {
           const isFocused =
             pathname.startsWith(tab.href) ||
@@ -189,27 +197,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 20,
-    alignItems: 'center',
+    bottom: 0,
+    alignItems: 'stretch',
     zIndex: 99999,
     elevation: 999,
     overflow: 'visible'
   },
   container: {
-    height: BAR_HEIGHT,
-    borderRadius: BAR_RADIUS,
-    borderWidth: 1,
-    borderColor: 'rgba(242,241,241,1)',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
     backgroundColor: theme.colors.googleWhite,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.gapLg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 12,
+    paddingTop: 8,
     overflow: 'visible'
   },
   item: {

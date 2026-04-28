@@ -158,7 +158,7 @@ export function ProductCard({
                 <Image source={{ uri: sellerAvatarUrl }} style={styles.sellerAvatar} resizeMode="cover" />
               ) : (
                 <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
-                  <Text variant="captionSm" color="textPrimary">
+                  <Text variant="captionSm" style={styles.sellerAvatarInitials}>
                     {sellerInitial}
                   </Text>
                 </View>
@@ -288,9 +288,13 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.googleWhite
   },
   sellerAvatarFallback: {
-    backgroundColor: theme.colors.muted,
+    backgroundColor: '#E5E5E5',
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  sellerAvatarInitials: {
+    color: '#000000',
+    fontFamily: theme.fontFamily.semiBold
   },
   sellerNameOverlay: {
     marginTop: 4,
@@ -328,6 +332,7 @@ const styles = StyleSheet.create({
   },
   priceMain: {
     fontFamily: theme.fontFamily.semiBold,
+    color: '#171819',
     flexShrink: 0
   },
   

@@ -26,16 +26,16 @@ export function FeedHeader({
 }: FeedHeaderProps) {
   const router = useRouter();
   const topIconBoxSize = {
-    heart: 24,
-    cart: 28,
-    notification: 32
+    heart: 27,
+    cart: 30,
+    notification: 36
   };
 
   return (
     <View style={styles.stickyHeader}>
       <View style={styles.topHeaderRow}>
         <Image
-          source={require('../../assets/brand/logo-top.png')}
+          source={require('../../assets/brand/logo-bloomi-black.png')}
           style={styles.headerLogo}
           resizeMode="contain"
         />
@@ -138,9 +138,9 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   headerLogo: {
-    width: 164,
-    height: 42,
-    marginLeft: -16
+    width: 166,
+    height: 32,
+    marginLeft: -10
   },
   headerActions: {
     flexDirection: 'row',
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F2',
+    backgroundColor: '#F8F8F6',
     borderRadius: 24,
     borderWidth: 0,
     paddingRight: 4

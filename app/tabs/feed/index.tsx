@@ -27,6 +27,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
 import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
 import { FeedHeader } from '../../../components/feed/FeedHeader';
+import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -53,8 +54,7 @@ export default function HomeScreen() {
   const gridPaddingX = 16;
   const gridGap = 12;
   const gridCardWidth = (screenWidth - gridPaddingX * 2 - gridGap) / 2;
-  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
-  const floatingTabBarReserveSpace = 20 + 84 + bottomPad + 2;
+  const fixedTabBarReserveSpace = getFixedTabBarHeight(insets.bottom);
 
   const submitSearch = useCallback(() => {
     const q = searchText.trim();
@@ -68,6 +68,23 @@ export default function HomeScreen() {
   const fetchFeed = useCallback(async () => {
     try {
       setError(null);
+      const {
+        data: { user: authedUser }
+      } = await supabase.auth.getUser();
+      const blockedSellerIds: string[] = authedUser?.id
+        ? (
+            await supabase
+              .from('blocked_users')
+              .select('blocked_id')
+              .eq('blocker_id', authedUser.id)
+          ).data?.map((row: any) => String(row.blocked_id)).filter(Boolean) ?? []
+        : [];
+
+      const filterBlocked = (rows: FeedListing[]) =>
+        blockedSellerIds.length > 0
+          ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+          : rows;
+
       const feedPromise = getFeedListings({
         limit: 40,
         offset: 0,
@@ -184,12 +201,12 @@ export default function HomeScreen() {
         setError(fetchError);
         setListings([]);
       } else {
-        setListings(data);
+        setListings(filterBlocked(data));
       }
 
-      setSponsoredListings(sponsoredRes);
-      setTrendingListings(trendingRes);
-      setInfluencerListings(influencersRes);
+      setSponsoredListings(filterBlocked(sponsoredRes));
+      setTrendingListings(filterBlocked(trendingRes));
+      setInfluencerListings(filterBlocked(influencersRes));
 
       // Hydrate store instantanément dès qu'on a l'info user-likes.
       if (!user) {
@@ -362,8 +379,11 @@ export default function HomeScreen() {
 
         {/* Scroll only below */}
         <ScrollView
-          style={[styles.scroll, { marginBottom: floatingTabBarReserveSpace }]}
-          contentContainerStyle={styles.scrollContent}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: fixedTabBarReserveSpace + theme.spacing.gapMd }
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         >
@@ -574,7 +594,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
-    paddingBottom: theme.spacing.gapLg * 2
+    paddingBottom: theme.spacing.gapLg
   },
   centerContent: {
     flex: 1,

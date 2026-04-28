@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View, Linking, Platform } from 'react-native';
+import { ActivityIndicator, View, Linking, Platform, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -12,12 +12,16 @@ import Constants from 'expo-constants';
 import { SUPABASE_URL } from '../lib/env';
 import {
   useFonts,
-  Quicksand_300Light,
-  Quicksand_400Regular,
-  Quicksand_500Medium,
-  Quicksand_600SemiBold,
-  Quicksand_700Bold
-} from '@expo-google-fonts/quicksand';
+  Poppins_300Light,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold
+} from '@expo-google-fonts/poppins';
+import { Text } from '../components/ui/Text';
+import { Button } from '../components/ui/Button';
+
+const TERMS_ACCEPTED_KEY = 'terms_accepted_v1';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -26,6 +30,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   const { session, user, isLoading, initialized, setAuthFromSession, restoreSession } =
     useAuthStore();
+  const [termsChecked, setTermsChecked] = React.useState(false);
+  const [termsAccepted, setTermsAccepted] = React.useState(false);
 
   // Initialisation de la session + abonnement aux changements Supabase
   useEffect(() => {
@@ -60,6 +66,22 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       data.subscription.unsubscribe();
     };
   }, [restoreSession, setAuthFromSession]);
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
+        if (!mounted) return;
+        setTermsAccepted(raw === 'true');
+      } finally {
+        if (mounted) setTermsChecked(true);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Redirections en fonction de l'état d'auth
   useEffect(() => {
@@ -188,7 +210,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     })();
   }, [session]);
 
-  if (!initialized) {
+  if (!initialized || !termsChecked) {
     return (
       <View
         style={{
@@ -202,16 +224,46 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (!termsAccepted) {
+    return (
+      <View style={styles.termsOverlay}>
+        <View style={styles.termsCard}>
+          <Text variant="h2" style={styles.termsTitle}>
+            Conditions generales d'utilisation
+          </Text>
+          <ScrollView style={styles.termsScroll} contentContainerStyle={styles.termsScrollContent}>
+            <Text variant="captionSm" color="textSecondary" style={styles.termsText}>
+              En utilisant Bloomi, vous vous engagez a respecter les autres utilisateurs, a ne pas
+              publier de contenu illegal, trompeur ou inapproprie, et a suivre nos regles de
+              securite et de moderation. Les contenus signales peuvent etre examines et supprimes.
+            </Text>
+          </ScrollView>
+          <Button
+            title="J'accepte"
+            onPress={() => {
+              void (async () => {
+                await AsyncStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
+                setTermsAccepted(true);
+              })();
+            }}
+            variant="primary"
+            style={styles.termsAcceptButton}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return <>{children}</>;
 }
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Quicksand_300Light,
-    Quicksand_400Regular,
-    Quicksand_500Medium,
-    Quicksand_600SemiBold,
-    Quicksand_700Bold
+    Poppins_300Light,
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold
   });
   const router = useRouter();
 
@@ -338,7 +390,7 @@ export default function RootLayout() {
 
   // Si erreur de chargement des polices, continuer quand même (fallback sur système)
   if (fontError) {
-    console.warn('Erreur chargement polices Quicksand:', fontError);
+    console.warn('Erreur chargement polices Poppins:', fontError);
   }
 
   return (
@@ -354,4 +406,38 @@ export default function RootLayout() {
     </StripeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  termsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20
+  },
+  termsCard: {
+    width: '100%',
+    maxWidth: 460,
+    maxHeight: '80%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16
+  },
+  termsTitle: {
+    textAlign: 'center',
+    marginBottom: 10
+  },
+  termsScroll: {
+    maxHeight: 260
+  },
+  termsScrollContent: {
+    paddingBottom: 8
+  },
+  termsText: {
+    lineHeight: 20
+  },
+  termsAcceptButton: {
+    marginTop: 14
+  }
+});
 

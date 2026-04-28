@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.gapSm / 2
   },
   priceMain: {
-    color: theme.colors.textPrimary,
+    color: '#171819',
     fontFamily: theme.fontFamily.bold
   },
   likes: {

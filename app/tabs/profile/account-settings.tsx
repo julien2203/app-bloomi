@@ -300,7 +300,11 @@ export default function AccountSettingsScreen() {
               <Text style={styles.actionChevron}>{'›'}</Text>
             </Pressable>
             <View style={styles.rowSeparator} />
-            <Pressable onPress={() => setDeleteModalOpen(true)} style={styles.actionRow} hitSlop={6}>
+            <Pressable
+              onPress={() => setDeleteModalOpen(true)}
+              style={styles.actionRow}
+              hitSlop={6}
+            >
               <Text style={styles.actionLabel}>Delete my account</Text>
               <Text style={styles.actionChevron}>{'›'}</Text>
             </Pressable>
@@ -379,23 +383,35 @@ export default function AccountSettingsScreen() {
         animationType="fade"
         onRequestClose={() => setDeleteModalOpen(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setDeleteModalOpen(false)}>
-          <Pressable style={styles.modalCard} onPress={() => null}>
-            <Text style={styles.modalTitle}>Delete my account</Text>
-            <Text style={styles.modalBody}>This action is permanent. Your account will be deleted.</Text>
-            <View style={styles.modalButtonsRow}>
-              <Pressable onPress={() => setDeleteModalOpen(false)} style={styles.modalBtn}>
-                <Text style={styles.modalBtnText}>Cancel</Text>
+        <Pressable style={styles.deleteConfirmOverlay} onPress={() => setDeleteModalOpen(false)}>
+          <Pressable style={styles.deleteConfirmCard} onPress={() => null}>
+            <Text style={styles.deleteConfirmTitle}>Delete account</Text>
+            <Text style={styles.deleteConfirmMessage}>
+              Are you sure you want to delete your account? This action is permanent and cannot be
+              undone.
+            </Text>
+            <View style={styles.deleteConfirmSeparator} />
+            <View style={styles.deleteConfirmActionsRow}>
+              <Pressable
+                onPress={() => setDeleteModalOpen(false)}
+                style={styles.deleteConfirmCancelBtn}
+              >
+                <Text style={styles.deleteConfirmCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
-                onPress={handleDeleteAccount}
+                onPress={() => {
+                  void handleDeleteAccount();
+                }}
                 disabled={deleting}
-                style={[styles.modalBtn, styles.deleteBtn, deleting && styles.modalBtnDisabled]}
+                style={[
+                  styles.deleteConfirmDeleteBtn,
+                  deleting && styles.modalBtnDisabled
+                ]}
               >
                 {deleting ? (
-                  <ActivityIndicator size="small" color={theme.colors.googleWhite} />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.deleteBtnText}>Delete</Text>
+                  <Text style={styles.deleteConfirmDeleteText}>Delete</Text>
                 )}
               </Pressable>
             </View>
@@ -699,6 +715,67 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     color: theme.colors.googleWhite,
     fontFamily: theme.fontFamily.semiBold
+  },
+  deleteConfirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24
+  },
+  deleteConfirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24
+  },
+  deleteConfirmTitle: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: 18,
+    color: '#000000',
+    textAlign: 'center'
+  },
+  deleteConfirmMessage: {
+    marginTop: 12,
+    fontFamily: theme.fontFamily.regular,
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center'
+  },
+  deleteConfirmSeparator: {
+    marginTop: 16,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E5E5'
+  },
+  deleteConfirmActionsRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    columnGap: 10
+  },
+  deleteConfirmCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  deleteConfirmCancelText: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: '#000000'
+  },
+  deleteConfirmDeleteBtn: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  deleteConfirmDeleteText: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: '#FFFFFF'
   }
 });
 

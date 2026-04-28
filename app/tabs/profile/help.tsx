@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '../../../components/ui/Text';
+import { theme } from '../../../lib/theme';
 
 type HelpItem = {
   question: string;
@@ -253,6 +254,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32
   },
   pageTitle: {
+    fontFamily: theme.fontFamily.bold,
     color: '#000000',
     marginBottom: 12
   },
@@ -261,6 +263,7 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
+    fontFamily: theme.fontFamily.semiBold,
     color: '#000000',
     marginBottom: 8
   },
@@ -268,9 +271,11 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   question: {
+    fontFamily: theme.fontFamily.regular,
     color: '#000000'
   },
   answer: {
+    fontFamily: theme.fontFamily.regular,
     marginTop: 2,
     lineHeight: 18
   }
