@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../ui/Screen';
 import { Text } from '../ui/Text';
 import { theme } from '../../lib/theme';
@@ -130,9 +131,13 @@ export function UniversalResultsScreen(props: {
     searchFocusReloadNonce = 0
   } = props;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const feedStore = useFeedFiltersStore();
   const searchStore = useSearchFiltersStore();
   const { filters, setFilter, resetFilters } = standaloneSearch ? searchStore : feedStore;
+  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
+  const floatingTabBarReserveSpace = 20 + 84 + bottomPad + 2;
+  const isSearchTabScreen = standaloneSearch && section === 'search';
 
   /** Même rangée de pills que l’onglet Search (Clear + genre + taille, etc.) pour les écrans Results « View all » (sponsored, trending, …). */
   const searchStyleFilters = useMemo(
@@ -1340,6 +1345,7 @@ export function UniversalResultsScreen(props: {
             keyExtractor={keyExtractor}
             numColumns={2}
             renderItem={renderMixedItem as any}
+            style={isSearchTabScreen ? { marginBottom: floatingTabBarReserveSpace } : undefined}
             contentContainerStyle={[styles.listContent, searchStyleFilters && styles.listContentTabSearch]}
             columnWrapperStyle={styles.listRow}
             onEndReached={handleLoadMore}
@@ -1493,7 +1499,7 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   filterPillActive: {
-    backgroundColor: '#CCFF00'
+    backgroundColor: '#C3EA4F'
   },
   filterPillDisabled: {
     opacity: 0.45
@@ -1543,8 +1549,8 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   modalRowSelected: {
-    borderColor: '#CCFF00',
-    backgroundColor: '#CCFF00'
+    borderColor: '#C3EA4F',
+    backgroundColor: '#C3EA4F'
   },
   modalRowText: {
     ...theme.typography.body,
@@ -1567,8 +1573,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF'
   },
   modalBtnPrimary: {
-    backgroundColor: '#CCFF00',
-    borderColor: '#CCFF00'
+    backgroundColor: '#C3EA4F',
+    borderColor: '#C3EA4F'
   },
   modalBtnText: {
     fontSize: 14,
@@ -1596,7 +1602,7 @@ const styles = StyleSheet.create({
   },
   /** Réserve pour la navbar flottante sur l’onglet Search */
   listContentTabSearch: {
-    paddingBottom: 120
+    paddingBottom: 16
   },
   listRow: {
     columnGap: 8,

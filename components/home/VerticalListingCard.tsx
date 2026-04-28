@@ -51,7 +51,9 @@ export function VerticalListingCard({
       )}
       <View style={styles.body}>
         <View style={styles.priceRow}>
-          <Text variant="button">{Math.round(item.price)} CHF</Text>
+          <Text variant="button" style={styles.priceMain}>
+            {Math.round(item.price)} CHF
+          </Text>
           <View style={styles.likes}>
             <Ionicons name="heart-outline" size={14} color={theme.colors.textSecondary} />
             <Text variant="caption" color="textSecondary">
@@ -124,6 +126,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.gapSm / 2
+  },
+  priceMain: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fontFamily.bold
   },
   likes: {
     flexDirection: 'row',

@@ -2,12 +2,14 @@ import React from 'react';
 import { Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import CartIcon from '../../assets/icons/cart.svg';
-import NotificationIcon from '../../assets/icons/notification_icon.svg';
-import CoeurIcon from '../../assets/icons/coeur.svg';
+import CartIcon from '../../assets/icons/cart2.svg';
+import NotificationIcon from '../../assets/icons/bell2.svg';
+import CoeurIcon from '../../assets/icons/heart2.svg';
+import SearchIcon from '../../assets/icons/search2.svg';
 import { IconBox } from '../ui/IconBox';
 import { theme } from '../../lib/theme';
 import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
+import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 
 type FeedHeaderProps = {
   searchText: string;
@@ -23,12 +25,17 @@ export function FeedHeader({
   unreadNotificationsCount
 }: FeedHeaderProps) {
   const router = useRouter();
+  const topIconBoxSize = {
+    heart: 24,
+    cart: 28,
+    notification: 32
+  };
 
   return (
     <View style={styles.stickyHeader}>
       <View style={styles.topHeaderRow}>
         <Image
-          source={require('../../assets/brand/logo-bloomi-black.png')}
+          source={require('../../assets/brand/logo-top.png')}
           style={styles.headerLogo}
           resizeMode="contain"
         />
@@ -41,7 +48,7 @@ export function FeedHeader({
             accessibilityRole="button"
             accessibilityLabel="Favoris"
           >
-            <IconBox Svg={CoeurIcon} boxSize={32} />
+            <IconBox Svg={CoeurIcon} boxSize={topIconBoxSize.heart} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/tabs/profile/orders')}
@@ -51,7 +58,7 @@ export function FeedHeader({
             accessibilityRole="button"
             accessibilityLabel="Panier"
           >
-            <IconBox Svg={CartIcon} boxSize={28} />
+            <IconBox Svg={CartIcon} boxSize={topIconBoxSize.cart} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/tabs/profile/notifications' as any)}
@@ -62,7 +69,7 @@ export function FeedHeader({
             accessibilityLabel="Notifications"
           >
             <View style={styles.bellWrap}>
-              <IconBox Svg={NotificationIcon} boxSize={24} />
+              <IconBox Svg={NotificationIcon} boxSize={topIconBoxSize.notification} />
               {unreadNotificationsCount > 0 ? (
                 <View style={styles.badge} />
               ) : null}
@@ -73,7 +80,7 @@ export function FeedHeader({
       <View style={styles.searchBar}>
         <View style={styles.searchInputWrap}>
           <View style={styles.searchIconSlot}>
-            <Feather name="search" size={16} color="#AAAAAA" />
+            <IconBox Svg={SearchIcon} boxSize={16} />
           </View>
           <TextInput
             placeholder="Rechercher un article, une marque..."
@@ -89,7 +96,21 @@ export function FeedHeader({
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.filterButton}
-            onPress={() => router.push('/tabs/filters' as any)}
+            onPress={() =>
+              {
+                // Sécurité: le feed ne doit jamais rester filtré par ce bouton.
+                useFeedFiltersStore.getState().resetFilters();
+                router.push({
+                  pathname: '/tabs/search/filters' as any,
+                  params: {
+                    returnTo: 'search',
+                    scope: 'search',
+                    from: 'feed-search-filters',
+                    resultsSection: 'search'
+                  }
+                });
+              }
+            }
             accessibilityRole="button"
             accessibilityLabel="Ouvrir les filtres"
           >
@@ -103,7 +124,8 @@ export function FeedHeader({
 
 const styles = StyleSheet.create({
   stickyHeader: {
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 16,
     paddingTop: 8,
     paddingBottom: 8,
     backgroundColor: theme.colors.background
@@ -116,8 +138,9 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   headerLogo: {
-    width: 110,
-    height: 28
+    width: 164,
+    height: 42,
+    marginLeft: -16
   },
   headerActions: {
     flexDirection: 'row',
@@ -155,13 +178,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#C3EA4F',
     alignItems: 'center',
     justifyContent: 'center'
   },
   headerIconHit: {
     ...HEADER_ICON_TOUCH_CONTAINER,
-    marginLeft: 4
+    marginLeft: 2
   },
   bellWrap: {
     position: 'relative',

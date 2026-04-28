@@ -242,6 +242,7 @@ export default function WalletScreen() {
               title="Activate my seller account"
               onPress={() => router.push('/tabs/profile/activate-seller-account')}
               variant="primary"
+              style={styles.activateSellerAccountButton}
             />
           </View>
         ) : (
@@ -392,6 +393,9 @@ const styles = StyleSheet.create({
   centerText: {
     textAlign: 'center',
     marginBottom: 16
+  },
+  activateSellerAccountButton: {
+    paddingHorizontal: 20
   }
 });
 

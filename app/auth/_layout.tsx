@@ -31,6 +31,10 @@ export default function AuthLayout() {
         options={{ headerShown: false, gestureEnabled: true }}
       />
       <Stack.Screen
+        name="reset-password"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
         name="verify-phone"
         options={{ headerShown: false, gestureEnabled: true }}
       />

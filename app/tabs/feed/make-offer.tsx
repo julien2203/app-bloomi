@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF'
   },
   quickCardSelected: {
-    borderColor: '#CCFF00',
+    borderColor: '#C3EA4F',
     backgroundColor: '#F7FFE0'
   },
   quickPrice: {
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   },
   toInputFocused: {
     borderBottomWidth: 2,
-    borderBottomColor: '#CCFF00'
+    borderBottomColor: '#C3EA4F'
   },
   toInputBlurred: {
     borderBottomWidth: 1,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   submitButton: {
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#CCFF00'
+    backgroundColor: '#C3EA4F'
   },
   submitText: {
     fontSize: 16,

@@ -15,7 +15,7 @@ const fontFamily = {
 // Couleurs principales
 const colors = {
   primary: '#C3EA4F',
-  lime: '#CCFF00',
+  lime: '#C3EA4F',
   appleBlack: '#000000',
   googleWhite: '#FFFFFF',
   facebookBlue: '#425B90',

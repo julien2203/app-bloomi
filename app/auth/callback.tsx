@@ -35,6 +35,7 @@ export default function AuthCallbackScreen() {
           const search = new URLSearchParams(hashPart);
           const fragmentAccessToken = search.get('access_token');
           const fragmentRefreshToken = search.get('refresh_token');
+          const fragmentType = search.get('type');
 
           if (fragmentAccessToken && fragmentRefreshToken) {
             const { data, error } = await supabase.auth.setSession({
@@ -43,6 +44,10 @@ export default function AuthCallbackScreen() {
             });
 
             if (!error && data.session) {
+              if (fragmentType === 'recovery') {
+                router.replace('/auth/reset-password');
+                return;
+              }
               router.replace('/auth/verify-phone');
               return;
             }
@@ -62,6 +67,10 @@ export default function AuthCallbackScreen() {
           });
 
           if (!error && data.session) {
+            if (typeParam === 'recovery') {
+              router.replace('/auth/reset-password');
+              return;
+            }
             router.replace('/auth/verify-phone');
             return;
           }

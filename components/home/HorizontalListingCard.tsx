@@ -45,8 +45,10 @@ export function HorizontalListingCard({
           </TouchableOpacity>
         ) : null}
         <View style={styles.priceRow}>
-          <Text variant="button">{Math.round(item.price)} CHF</Text>
-          <Text variant="caption" color="danger">
+          <Text variant="button" style={styles.priceMain}>
+            {Math.round(item.price)} CHF
+          </Text>
+          <Text variant="caption" style={styles.priceIncl}>
             {Math.round(item.price * 1.08)} CHF incl.
           </Text>
         </View>
@@ -108,6 +110,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.gapSm / 2
+  },
+  priceMain: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fontFamily.bold
+  },
+  priceIncl: {
+    color: '#C3EA4F',
+    fontFamily: theme.fontFamily.semiBold
   },
   footer: {
     flexDirection: 'row',

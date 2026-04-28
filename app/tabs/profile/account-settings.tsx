@@ -170,7 +170,9 @@ export default function AccountSettingsScreen() {
   const handleResetPassword = useCallback(async () => {
     if (!email) return;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `bloomi://auth/callback?type=recovery&email=${encodeURIComponent(email)}`
+      });
       if (error) throw error;
       Alert.alert('Password', 'A password reset email has been sent.');
     } catch (e) {

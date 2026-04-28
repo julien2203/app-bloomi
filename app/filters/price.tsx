@@ -23,7 +23,7 @@ import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getPriceBounds } from '../../lib/api';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
-const LIME = '#CCFF00';
+const LIME = '#C3EA4F';
 const SEPARATOR_GRAY = '#E5E5E5';
 const BORDER_GRAY = '#CCCCCC';
 const HEADER_SIDE_W = 88;

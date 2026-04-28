@@ -171,7 +171,7 @@ export default function FavoritesScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={styles.heartBtn}
         >
-          <AppIcon name="likeHeartBold" size={22} color="#CCFF00" />
+          <AppIcon name="likeHeartBold" size={22} color="#C3EA4F" />
         </TouchableOpacity>
 
         <LinearGradient
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   priceIncl: {
-    color: '#CCFF00',
+    color: '#C3EA4F',
     fontSize: 12,
     textDecorationLine: 'line-through'
   },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   brand: {
     marginTop: 4,
-    color: '#CCFF00',
+    color: '#C3EA4F',
     fontSize: 12
   }
 });

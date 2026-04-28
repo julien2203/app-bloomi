@@ -13,6 +13,7 @@ import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
+import { supabase } from '../../lib/supabase';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -21,12 +22,19 @@ export default function ForgotPasswordScreen() {
   const [sent, setSent] = useState(false);
 
   const handleSendResetLink = async () => {
-    // TODO: Implémenter la logique d'envoi de lien de réinitialisation
+    if (!email || loading) return;
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `bloomi://auth/callback?type=recovery&email=${encodeURIComponent(email.trim())}`
+      });
+      if (error) throw error;
       setLoading(false);
       setSent(true);
-    }, 1000);
+    } catch (error) {
+      setLoading(false);
+      console.warn('Failed to send reset password email:', error);
+    }
   };
 
   if (sent) {

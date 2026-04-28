@@ -9,6 +9,7 @@ import {
   View
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getFeedListings,
   getMyLikedListingIds,
@@ -29,6 +30,7 @@ import { FeedHeader } from '../../../components/feed/FeedHeader';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { filters } = useFeedFiltersStore();
   const { user } = useAuthStore();
   const setLikedIds = useLikesStore((s) => s.setLikedIds);
@@ -51,6 +53,8 @@ export default function HomeScreen() {
   const gridPaddingX = 16;
   const gridGap = 12;
   const gridCardWidth = (screenWidth - gridPaddingX * 2 - gridGap) / 2;
+  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
+  const floatingTabBarReserveSpace = 20 + 84 + bottomPad + 2;
 
   const submitSearch = useCallback(() => {
     const q = searchText.trim();
@@ -358,7 +362,7 @@ export default function HomeScreen() {
 
         {/* Scroll only below */}
         <ScrollView
-          style={styles.scroll}
+          style={[styles.scroll, { marginBottom: floatingTabBarReserveSpace }]}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}

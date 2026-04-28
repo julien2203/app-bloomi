@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#CCFF00'
+    backgroundColor: '#C3EA4F'
   },
   continueButtonDisabled: {
     backgroundColor: '#E5E5E5',

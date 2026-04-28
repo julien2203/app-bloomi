@@ -627,7 +627,7 @@ export default function ThreadScreen() {
           <Button
             title="Back"
             variant="secondary"
-            onPress={() => router.back()}
+            onPress={() => router.replace('/tabs/messages')}
             style={styles.errorButton}
           />
         </View>
@@ -657,12 +657,7 @@ export default function ThreadScreen() {
   ]);
 
   const handleBack = () => {
-    // @ts-expect-error canGoBack peut exister
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/tabs/messages');
-    }
+    router.replace('/tabs/messages');
   };
 
   return (
@@ -932,7 +927,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#C3EA4F',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8
@@ -979,7 +974,7 @@ const styles = StyleSheet.create({
   listingHeaderProtection: {
     marginTop: 2,
     fontSize: 13,
-    color: theme.colors.danger
+    color: theme.colors.primary
   },
   offerCard: {
     maxWidth: '80%',
@@ -1041,7 +1036,7 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   offerPayLimeButton: {
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#C3EA4F',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,

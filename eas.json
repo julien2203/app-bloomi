@@ -40,7 +40,7 @@
       },
       "env": {
         "EXPO_PUBLIC_ENV": "production",
-        "EXPO_NO_CAPABILITY_SYNC": "1"
+        "EXPO_NO_CAPABILITY_SYNC": "true"
       }
     }
   },

@@ -68,7 +68,7 @@ type ReviewerMini = {
 
 type TabKey = 'closet' | 'reviews';
 
-const LIME = '#CCFF00';
+const LIME = '#C3EA4F';
 const STAR_ORANGE = '#F59E0B';
 const COVER_HEIGHT = 160;
 const PAGE_SIZE = 20;
@@ -605,6 +605,8 @@ export default function PublicProfileScreen() {
           <ProductCard
             listingId={item.id}
             sellerId={item.seller_id}
+            sellerName={item.seller_display_name}
+            sellerAvatarUrl={item.seller_avatar_url}
             sellerIsInfluencer={Boolean(item.seller_is_influencer)}
             title={item.title}
             price={Number(item.price)}

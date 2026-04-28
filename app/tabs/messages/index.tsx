@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#C3EA4F',
     marginTop: 6,
     alignSelf: 'flex-end'
   },

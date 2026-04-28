@@ -74,12 +74,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 16,
+    paddingTop: 128,
     paddingBottom: 16
   },
   leftMiddleCtaContainer: {
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    marginTop: 0
   },
   ctaButton: {
     height: 44,

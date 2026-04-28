@@ -509,7 +509,7 @@ export default function EditProfileScreen() {
               style={{
                 fontSize: 16,
                 fontWeight: '600',
-                color: '#CCFF00',
+                color: '#C3EA4F',
                 opacity: isSaveDisabled ? 0.4 : 1
               }}
             >
@@ -606,7 +606,7 @@ export default function EditProfileScreen() {
               <Switch
                 value={locationVisible}
                 onValueChange={handleToggleLocationVisible}
-                trackColor={{ false: '#CCCCCC', true: '#CCFF00' }}
+                trackColor={{ false: '#CCCCCC', true: '#C3EA4F' }}
                 thumbColor="#FFFFFF"
                 ios_backgroundColor="#CCCCCC"
                 disabled={updatingLocationVisible || loading || detectingLocation}

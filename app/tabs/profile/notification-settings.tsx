@@ -274,8 +274,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 8,
     fontSize: 13,
-    fontWeight: '400',
-    color: '#AAAAAA'
+    fontWeight: '700',
+    color: '#000000'
   },
   groupTopSeparator: {
     height: StyleSheet.hairlineWidth,

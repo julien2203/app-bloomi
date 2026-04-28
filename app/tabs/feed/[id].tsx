@@ -470,10 +470,6 @@ export default function ListingDetailScreen() {
     }
   };
 
-  const handleMore = () => {
-    console.log('More actions');
-  };
-
   const handleToggleLike = async () => {
     if (!listing?.id) return;
     if (togglingLike) return;
@@ -668,18 +664,7 @@ export default function ListingDetailScreen() {
               </Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              onPress={handleMore}
-              activeOpacity={0.7}
-              hitSlop={HIT_SLOP_COMFORTABLE}
-              style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
-            >
-              <Feather
-                name="more-horizontal"
-                size={24}
-                color={theme.colors.textPrimary}
-              />
-            </TouchableOpacity>
+            <View style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]} />
           )}
         </View>
 
@@ -915,7 +900,12 @@ export default function ListingDetailScreen() {
               <TouchableOpacity
                 style={[styles.favoriteShareButton, isOwner && styles.favoriteShareButtonFull]}
                 activeOpacity={0.8}
-                onPress={() => console.log('Share action')}
+                onPress={() =>
+                  Alert.alert(
+                    'Coming soon',
+                    'Sharing this listing will be available soon.'
+                  )
+                }
               >
                 <Feather
                   name="share-2"
@@ -1411,7 +1401,8 @@ const styles = StyleSheet.create({
   },
   protectionPrice: {
     ...theme.typography.captionSm,
-    color: '#555555',
+    color: '#C3EA4F',
+    fontFamily: theme.fontFamily.semiBold,
     marginRight: theme.spacing.gapSm
   },
   protectionIcon: {
@@ -1485,7 +1476,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     height: 2,
     width: '100%',
-    backgroundColor: '#CCFF00'
+    backgroundColor: '#C3EA4F'
   },
   relatedGrid: {
     flexDirection: 'row',
@@ -1642,7 +1633,7 @@ const styles = StyleSheet.create({
   },
   modalThumbWrapperActive: {
     borderWidth: 2,
-    borderColor: '#CCFF00'
+    borderColor: '#C3EA4F'
   },
   modalThumb: {
     width: '100%',

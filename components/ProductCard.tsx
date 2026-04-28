@@ -147,7 +147,7 @@ export function ProductCard({
                 <AppIcon
                   name={heartIcon.name}
                   size={16}
-                  color={likedByMe ? '#CCFF00' : theme.colors.googleWhite}
+                  color={likedByMe ? '#C3EA4F' : theme.colors.googleWhite}
                 />
               </TouchableOpacity>
             )}
@@ -163,19 +163,9 @@ export function ProductCard({
                   </Text>
                 </View>
               )}
-              {(sellerDisplayName || sellerIsInfluencer) ? (
+              {sellerIsInfluencer ? (
                 <View style={styles.sellerNameBadgeRow}>
-                  {sellerDisplayName ? (
-                    <Text
-                      variant="captionSm"
-                      style={[styles.sellerNameOverlay, styles.sellerNameFlex]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {sellerDisplayName}
-                    </Text>
-                  ) : null}
-                  {sellerIsInfluencer ? <InfluencerBadge size={13} /> : null}
+                  <InfluencerBadge size={13} />
                 </View>
               ) : null}
             </View>
@@ -219,7 +209,7 @@ export function ProductCard({
           </Text>
           <Text
             variant="captionSm"
-            color="danger"
+            color="primary"
             style={styles.priceIncl}
             numberOfLines={1}
             ellipsizeMode="tail"
@@ -267,7 +257,7 @@ const styles = StyleSheet.create({
   imageOverlayBottomLeft: {
     position: 'absolute',
     left: 8,
-    bottom: 8,
+    top: 8,
     right: 8
   },
   likeOverlayButton: {
@@ -325,7 +315,9 @@ const styles = StyleSheet.create({
   },
   priceIncl: {
     flexShrink: 1,
-    textAlign: 'right'
+    textAlign: 'right',
+    color: '#C3EA4F',
+    fontFamily: theme.fontFamily.semiBold
   },
   meta: {
     marginBottom: 4

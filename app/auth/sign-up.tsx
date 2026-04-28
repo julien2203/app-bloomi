@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#CCFF00'
+    backgroundColor: '#C3EA4F'
   },
   signupButtonDisabled: {
     backgroundColor: '#E5E5E5',

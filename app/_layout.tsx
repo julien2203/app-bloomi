@@ -71,6 +71,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       segments[0] === 'auth' &&
       (segments[1] === 'verify-email' ||
         segments[1] === 'callback' ||
+        segments[1] === 'reset-password' ||
         segments[1] === 'verify-phone' ||
         segments[1] === 'verify-phone-info' ||
         segments[1] === 'verify-phone-code');

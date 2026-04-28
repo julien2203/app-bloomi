@@ -5,11 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, usePathname } from 'expo-router';
 import { theme } from '../../lib/theme';
 import { IconBox } from '../ui/IconBox';
-import HomeIcon from '../../assets/icons/icon_home_simple_outline.svg';
-import SearchIcon from '../../assets/icons/icon_search_short_handle.svg';
-import SellIcon from '../../assets/icons/icon_plus_shadow_C3EA4F.svg';
-import InboxIcon from '../../assets/icons/icon_message_envelope_clean.svg';
-import ProfileIcon from '../../assets/icons/icon_user_outline_premium.svg';
+import HomeIcon from '../../assets/icons/home2.svg';
+import SearchIcon from '../../assets/icons/search2.svg';
+import SellIcon from '../../assets/icons/sell2.svg';
+import InboxIcon from '../../assets/icons/inbox2.svg';
+import ProfileIcon from '../../assets/icons/profile2.svg';
 import { supabase } from '../../lib/supabase';
 import { refreshUnreadThreadsBadge } from '../../lib/unreadMessagesBadge';
 import { useAuthStore } from '../../stores/authStore';
@@ -20,13 +20,13 @@ const BAR_WIDTH_IDEAL = 400;
 const HORIZONTAL_SCREEN_GUTTER = 24;
 const BAR_HEIGHT = 84;
 const BAR_RADIUS = 18;
-const SELL_ICON_SIZE = 40;
 /** Tailles de cadre (px) : ajuster par onglet pour compenser le blanc interne des SVG */
 const TAB_BOX = {
-  home: 28,
-  search: 32,
-  inbox: 28,
-  profile: 28
+  home: 30,
+  search: 30,
+  sell: 33,
+  inbox: 30,
+  profile: 30
 } as const;
 
 // Ordre visuel fixe : Home, Search, Sell (+), Messages, Profile
@@ -153,24 +153,26 @@ export function FloatingTabBar(_: BottomTabBarProps) {
               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
               style={styles.item}
             >
-              {tab.key === 'home' ? (
-                <IconBox Svg={HomeIcon} boxSize={TAB_BOX.home} />
-              ) : tab.key === 'search' ? (
-                <IconBox Svg={SearchIcon} boxSize={TAB_BOX.search} />
-              ) : tab.key === 'sell' ? (
-                <View style={styles.sellIconWrap}>
-                  <SellIcon width={SELL_ICON_SIZE} height={SELL_ICON_SIZE} pointerEvents="none" />
-                </View>
-              ) : tab.key === 'inbox' ? (
-                <View style={styles.inboxIconWrap}>
-                  <IconBox Svg={InboxIcon} boxSize={TAB_BOX.inbox} />
-                  {unreadThreadsCount > 0 ? (
-                    <View style={styles.messagesBadge} />
-                  ) : null}
-                </View>
-              ) : (
-                <IconBox Svg={ProfileIcon} boxSize={TAB_BOX.profile} />
-              )}
+              <View style={styles.iconSlot}>
+                {tab.key === 'home' ? (
+                  <IconBox Svg={HomeIcon} boxSize={TAB_BOX.home} />
+                ) : tab.key === 'search' ? (
+                  <IconBox Svg={SearchIcon} boxSize={TAB_BOX.search} />
+                ) : tab.key === 'sell' ? (
+                  <View style={styles.sellIconWrap}>
+                    <IconBox Svg={SellIcon} boxSize={TAB_BOX.sell} />
+                  </View>
+                ) : tab.key === 'inbox' ? (
+                  <View style={styles.inboxIconWrap}>
+                    <IconBox Svg={InboxIcon} boxSize={TAB_BOX.inbox} />
+                    {unreadThreadsCount > 0 ? (
+                      <View style={styles.messagesBadge} />
+                    ) : null}
+                  </View>
+                ) : (
+                  <IconBox Svg={ProfileIcon} boxSize={TAB_BOX.profile} />
+                )}
+              </View>
               <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive]}>
                 {tab.label}
               </Text>
@@ -216,6 +218,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 60,
     overflow: 'visible'
+  },
+  iconSlot: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   sellIconWrap: {
     marginTop: 0,

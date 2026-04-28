@@ -192,22 +192,20 @@ export default function NotificationsScreen() {
     const unreadIds = rowsRef.current.filter((r) => !r.read_at).map((r) => r.id);
     if (unreadIds.length === 0) return;
 
-    const nowIso = new Date().toISOString();
-    setRows((prev) => prev.map((r) => (!r.read_at ? { ...r, read_at: nowIso } : r)));
-    useNotificationsBadgeStore.getState().setUnreadCount(0);
-
     setMarkingAll(true);
     try {
-      const chunkSize = 80;
-      for (let i = 0; i < unreadIds.length; i += chunkSize) {
-        const chunk = unreadIds.slice(i, i + chunkSize);
-        const { error } = await supabase
-          .from('notifications')
-          .update({ read_at: nowIso })
-          .in('id', chunk)
-          .eq('user_id', userId)
-          .select('id');
-        if (error) throw error;
+      const nowIso = new Date().toISOString();
+      // Mise à jour bulk fiable: toutes les notifications non lues du user courant.
+      const { data: updatedRows, error: updateErr } = await supabase
+        .from('notifications')
+        .update({ read_at: nowIso })
+        .eq('user_id', userId)
+        .is('read_at', null)
+        .select('id');
+      if (updateErr) throw updateErr;
+      const updatedCount = (updatedRows ?? []).length;
+      if (updatedCount === 0 && unreadIds.length > 0) {
+        throw new Error('No rows updated. Supabase RLS/policy may block UPDATE on notifications.');
       }
 
       const { count, error: cErr } = await supabase
@@ -219,26 +217,14 @@ export default function NotificationsScreen() {
       const remaining = count ?? 0;
       useNotificationsBadgeStore.getState().setUnreadCount(remaining);
 
-      if (remaining > 0) {
-        const { data: stillUnread } = await supabase
-          .from('notifications')
-          .select('id')
-          .eq('user_id', userId)
-          .is('read_at', null);
-        const ids = (stillUnread ?? []).map((r: { id: string }) => r.id).filter(Boolean);
-        for (const id of ids) {
-          await supabase.from('notifications').update({ read_at: nowIso }).eq('id', id).eq('user_id', userId);
-        }
-        const { count: countAfterFallback } = await supabase
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .is('read_at', null);
-        useNotificationsBadgeStore.getState().setUnreadCount(countAfterFallback ?? 0);
-      }
-
+      if (remaining > 0) await loadNotifications();
       await loadNotifications();
-    } catch {
+    } catch (err: any) {
+      const details = typeof err?.message === 'string' ? err.message : 'Unknown database error';
+      Alert.alert(
+        'Unable to mark as read',
+        `Some notifications could not be updated. ${details}`
+      );
       await loadNotifications();
     } finally {
       setMarkingAll(false);
