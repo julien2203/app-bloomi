@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
@@ -11,11 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
-
-const GENDERS = ['Woman', 'Men', 'Kids', 'Baby'] as const;
+import { FILTER_GENDER_OPTIONS } from '../../lib/filterGenderParams';
 
 export default function CategoryFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+
   const stackBase = useFiltersStackBase();
   const params = useLocalSearchParams<{
     returnTo?: string;
@@ -27,23 +29,23 @@ export default function CategoryFilterScreen() {
   const { filters, setFilter } = useFiltersScreenStore();
 
   const isInitiallyAllSelected = useMemo(
-    () => !filters.categoryId,
-    [filters.categoryId]
+    () => (filters.categoryIds?.length ?? 0) === 0,
+    [filters.categoryIds]
   );
 
   const [isAllSelected, setIsAllSelected] = useState<boolean>(isInitiallyAllSelected);
 
   const handleSelectAll = () => {
     setIsAllSelected(true);
-    setFilter('categoryId', null);
+    setFilter('categoryIds', []);
   };
 
-  const handleOpenGender = (gender: (typeof GENDERS)[number]) => {
+  const handleOpenGender = (genderKey: (typeof FILTER_GENDER_OPTIONS)[number]['genderKey']) => {
     setIsAllSelected(false);
     router.push({
       pathname: filtersScreenPath(stackBase, 'category-gender') as any,
       params: {
-        gender,
+        gender: genderKey,
         ...(params.returnTo ? { returnTo: params.returnTo } : {}),
         ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
         ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
@@ -62,7 +64,7 @@ export default function CategoryFilterScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Category
+            {t('filters.category')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -74,7 +76,7 @@ export default function CategoryFilterScreen() {
             onPress={handleSelectAll}
           >
             <Text variant="body" style={styles.rowLabel}>
-              All
+              {t('common.all')}
             </Text>
             <View
               style={[
@@ -88,15 +90,15 @@ export default function CategoryFilterScreen() {
             </View>
           </TouchableOpacity>
 
-          {GENDERS.map((gender) => (
+          {FILTER_GENDER_OPTIONS.map((option) => (
             <TouchableOpacity
-              key={gender}
+              key={option.genderKey}
               style={styles.row}
               activeOpacity={0.7}
-              onPress={() => handleOpenGender(gender)}
+              onPress={() => handleOpenGender(option.genderKey)}
             >
               <Text variant="body" style={styles.rowLabel}>
-                {gender}
+                {t(option.labelKey)}
               </Text>
               <Text style={styles.chevron}>{'›'}</Text>
             </TouchableOpacity>
@@ -110,7 +112,7 @@ export default function CategoryFilterScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

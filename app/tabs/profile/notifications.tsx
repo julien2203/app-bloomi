@@ -8,8 +8,9 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
@@ -29,7 +30,7 @@ type NotificationRow = {
   read_at: string | null;
 };
 
-function formatRelative(dateString: string): string {
+function formatRelative(dateString: string, t: (key: string, opts?: any) => string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -41,13 +42,13 @@ function formatRelative(dateString: string): string {
   const w = Math.floor(d / 7);
   const mo = Math.floor(d / 30);
   const y = Math.floor(d / 365);
-  if (m < 1) return 'Just now';
-  if (h < 1) return `${m}m ago`;
-  if (d < 1) return `${h}h ago`;
-  if (w < 1) return `${d}d ago`;
-  if (mo < 1) return `${w}w ago`;
-  if (y < 1) return `${mo}mo ago`;
-  return `${y}y ago`;
+  if (m < 1) return t('feed.listingDetail.justNow');
+  if (h < 1) return t('feed.listingDetail.minutesAgo', { count: m });
+  if (d < 1) return t('feed.listingDetail.hoursAgo', { count: h });
+  if (w < 1) return t('feed.listingDetail.daysAgo', { count: d });
+  if (mo < 1) return t('feed.listingDetail.weeksAgo', { count: w });
+  if (y < 1) return t('feed.listingDetail.monthsAgo', { count: mo });
+  return t('feed.listingDetail.yearsAgo', { count: y });
 }
 
 function pickIconName(data: any): import('../../../lib/assets').IconName {
@@ -62,7 +63,10 @@ function pickIconName(data: any): import('../../../lib/assets').IconName {
 }
 
 export default function NotificationsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const notificationsOrigin = from === 'feed' || from === 'profile' ? from : undefined;
   const { user } = useAuthStore();
   const userId = user?.id ?? null;
 
@@ -71,6 +75,7 @@ export default function NotificationsScreen() {
   const [markingAll, setMarkingAll] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const markingReadIdsRef = useRef<Set<string>>(new Set());
+  const skipFirstFocusReload = useRef(true);
   /** Dernière liste connue (évite closures périmées dans markAllAsRead). */
   const rowsRef = useRef<NotificationRow[]>([]);
 
@@ -108,8 +113,22 @@ export default function NotificationsScreen() {
     }
   }, [userId]);
 
+  useEffect(() => {
+    if (!userId) {
+      setRows([]);
+      useNotificationsBadgeStore.getState().setUnreadCount(0);
+      setLoading(false);
+      return;
+    }
+    void loadNotifications();
+  }, [loadNotifications, userId]);
+
   useFocusEffect(
     useCallback(() => {
+      if (skipFirstFocusReload.current) {
+        skipFirstFocusReload.current = false;
+        return;
+      }
       if (!userId) {
         setRows([]);
         useNotificationsBadgeStore.getState().setUnreadCount(0);
@@ -136,18 +155,44 @@ export default function NotificationsScreen() {
       const orderId = typeof data?.order_id === 'string' ? data.order_id : null;
 
       if (threadId) {
-        router.push({ pathname: '/tabs/messages/[id]', params: { id: threadId } });
+        router.replace({
+          pathname: '/tabs/messages/[id]',
+          params: {
+            id: threadId,
+            from_notifications: '1',
+            ...(notificationsOrigin
+              ? { from_notifications_origin: notificationsOrigin }
+              : {})
+          }
+        });
         return;
       }
       if (listingId) {
-        router.push({ pathname: '/tabs/feed/[id]', params: { id: listingId } });
+        router.replace({
+          pathname: '/tabs/feed/[id]',
+          params: {
+            id: listingId,
+            from_notifications: '1',
+            ...(notificationsOrigin
+              ? { from_notifications_origin: notificationsOrigin }
+              : {})
+          }
+        });
         return;
       }
       if (orderId) {
-        router.push('/tabs/profile/orders');
+        router.replace({
+          pathname: '/tabs/profile/orders',
+          params: {
+            from_notifications: '1',
+            ...(notificationsOrigin
+              ? { from_notifications_origin: notificationsOrigin }
+              : {})
+          }
+        } as any);
       }
     },
-    [router]
+    [notificationsOrigin, router]
   );
 
   const markAsReadAndNavigate = useCallback(
@@ -222,8 +267,8 @@ export default function NotificationsScreen() {
     } catch (err: any) {
       const details = typeof err?.message === 'string' ? err.message : 'Unknown database error';
       Alert.alert(
-        'Unable to mark as read',
-        `Some notifications could not be updated. ${details}`
+        t('profile.notificationsScreen.unableMarkRead'),
+        t('profile.notificationsScreen.markReadPartial', { details })
       );
       await loadNotifications();
     } finally {
@@ -254,7 +299,7 @@ export default function NotificationsScreen() {
             </View>
           </View>
           <Text variant="captionSm" color="textSecondary" style={styles.time}>
-            {formatRelative(item.created_at)}
+            {formatRelative(item.created_at, t)}
           </Text>
         </Pressable>
       );
@@ -262,18 +307,30 @@ export default function NotificationsScreen() {
     [markAsReadAndNavigate]
   );
 
+  const handleBack = useCallback(() => {
+    if (from === 'feed') {
+      router.replace('/tabs/feed');
+      return;
+    }
+    if (from === 'profile') {
+      router.replace('/tabs/profile');
+      return;
+    }
+    router.back();
+  }, [from, router]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.header}>
-        <HeaderBackButton onPress={() => router.back()} />
+        <HeaderBackButton onPress={handleBack} />
         <Text variant="body" style={styles.headerTitle}>
-          Notifications
+          {t('profile.notifications')}
         </Text>
         <View style={styles.headerRight}>
           <Button
-            title="Mark all as read"
+            title={t('profile.notificationsScreen.markAllRead')}
             onPress={() => void markAllAsRead()}
             variant="link"
             disabled={markingAll || unreadCount === 0}
@@ -298,7 +355,7 @@ export default function NotificationsScreen() {
       ) : rows.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Text variant="body" color="textSecondary">
-            No notifications yet
+            {t('profile.notificationsScreen.empty')}
           </Text>
         </View>
       ) : (
@@ -307,6 +364,7 @@ export default function NotificationsScreen() {
           extraData={unreadCount}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
+          removeClippedSubviews={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -398,6 +456,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24
   },
   skeletonWrap: {
+    flex: 1,
     paddingHorizontal: 16,
     paddingTop: 16
   },

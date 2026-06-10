@@ -49,7 +49,7 @@ export const SUPABASE_URL = (() => {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
   if (!url) {
     throw new Error(
-      'EXPO_PUBLIC_SUPABASE_URL doit être définie. Vérifiez votre fichier .env ou vos variables EAS.'
+      'EXPO_PUBLIC_SUPABASE_URL is required. Check your .env file or EAS environment variables.'
     );
   }
   return url;
@@ -65,7 +65,7 @@ export const SUPABASE_ANON_KEY = (() => {
   const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   if (!key) {
     throw new Error(
-      'EXPO_PUBLIC_SUPABASE_ANON_KEY doit être définie. Vérifiez votre fichier .env ou vos variables EAS.'
+      'EXPO_PUBLIC_SUPABASE_ANON_KEY is required. Check your .env file or EAS environment variables.'
     );
   }
   return key;
@@ -75,7 +75,14 @@ export const SUPABASE_ANON_KEY = (() => {
  * Clé publique Stripe
  * Optionnelle, peut être undefined si Stripe n'est pas encore configuré
  */
-export const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || undefined;
+export const STRIPE_PUBLISHABLE_KEY =
+  process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() || undefined;
+
+/** True when `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` is set (pk_test_ or pk_live_). */
+export function isStripePublishableKeyConfigured(): boolean {
+  const k = STRIPE_PUBLISHABLE_KEY ?? '';
+  return k.startsWith('pk_test_') || k.startsWith('pk_live_');
+}
 
 /**
  * Mode OTP de développement
@@ -94,4 +101,5 @@ if (__DEV__) {
   console.log(`[ENV] Environnement: ${ENV}`);
   console.log(`[ENV] Supabase URL: ${SUPABASE_URL}`);
   console.log(`[ENV] DEV_OTP_MODE: ${DEV_OTP_MODE}`);
+  console.log(`[ENV] Stripe publishable key: ${isStripePublishableKeyConfigured() ? 'configured' : 'MISSING'}`);
 }

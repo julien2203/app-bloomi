@@ -1,6 +1,18 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View, Linking, Platform, ScrollView, StyleSheet } from 'react-native';
+import { GuestAuthPromptModal } from '../components/auth/GuestAuthPromptModal';
+import { isGuestBrowseRoute } from '../lib/guestRoutes';
+import { openGuestAuthPrompt } from '../lib/guestAuthPrompt';
+import {
+  ActivityIndicator,
+  View,
+  Linking,
+  AppState,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -9,7 +21,14 @@ import { ensureNotificationsConfigured, notifyNewMessage } from '../lib/notifica
 import { StripeProvider } from '@stripe/stripe-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { SUPABASE_URL } from '../lib/env';
+import { STRIPE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/env';
+import { isAuthCallbackUrl } from '../lib/auth/authCallbackUrl';
+import {
+  isStripeConnectReturnUrl,
+  consumeStripeConnectReturnPending,
+  navigateAfterStripeConnectReturn,
+  navigateInTabs
+} from '../lib/navigation/navigateInTabs';
 import {
   useFonts,
   Poppins_300Light,
@@ -20,18 +39,36 @@ import {
 } from '@expo-google-fonts/poppins';
 import { Text } from '../components/ui/Text';
 import { Button } from '../components/ui/Button';
+import { theme } from '../lib/theme';
+import * as SplashScreen from 'expo-splash-screen';
+import '../lib/i18n';
+import { initAppLanguage } from '../lib/i18n';
+import { useTranslation } from 'react-i18next';
+import { installGlobalCrashLogging } from '../lib/crashLogging';
+
+installGlobalCrashLogging();
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const TERMS_ACCEPTED_KEY = 'terms_accepted_v1';
+const TERMS_OF_USE_URL = 'https://bloomi.app/terms';
+const PRIVACY_POLICY_URL = 'https://bloomi.app/privacy';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const segments = useSegments();
   const pathname = usePathname();
 
-  const { session, user, isLoading, initialized, setAuthFromSession, restoreSession } =
+  const { session, user, isLoading, initialized, setAuthFromSession, restoreSession, isGuest } =
     useAuthStore();
   const [termsChecked, setTermsChecked] = React.useState(false);
   const [termsAccepted, setTermsAccepted] = React.useState(false);
+
+  useEffect(() => {
+    if (!initialized) return;
+    void initAppLanguage(user?.id ?? null);
+  }, [initialized, user?.id]);
 
   // Initialisation de la session + abonnement aux changements Supabase
   useEffect(() => {
@@ -98,10 +135,21 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         segments[1] === 'verify-phone-info' ||
         segments[1] === 'verify-phone-code');
     const needsPhoneVerification = !!session && !user?.phone;
-    
-    if (!session && !isPublicRoute) {
-      router.replace('/onboarding/splash');
-      return;
+    const normalizedPath = (pathname ?? '').replace(/\/+$/, '') || '/';
+
+    if (!session) {
+      if (isPublicRoute) {
+        // ok : auth / onboarding
+      } else if (isGuest && isGuestBrowseRoute(normalizedPath)) {
+        // ok : parcours invité (feed, recherche en lecture, fiche annonce, profil public)
+      } else if (isGuest && !isGuestBrowseRoute(normalizedPath)) {
+        navigateInTabs('/tabs/feed');
+        setTimeout(() => openGuestAuthPrompt(), 0);
+        return;
+      } else {
+        router.replace('/onboarding/splash');
+        return;
+      }
     }
 
     // Si connecté mais que le numéro de téléphone n'est pas encore vérifié,
@@ -114,9 +162,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Si connecté (et profil complet) et sur un écran auth/onboarding,
     // rediriger vers le feed sauf pour les écrans de vérification (email / téléphone)
     if (session && !needsPhoneVerification && isPublicRoute && !isVerificationRoute) {
-      router.replace('/tabs/feed');
+      navigateInTabs('/tabs/feed');
     }
-  }, [initialized, isLoading, session, user, router, segments]);
+  }, [initialized, isLoading, session, user, router, segments, pathname, isGuest]);
 
   // Notifications locales : nouveaux messages (hors écran de thread)
   const notifiedIdsRef = useRef<Set<string>>(new Set());
@@ -216,10 +264,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         style={{
           flex: 1,
           justifyContent: 'center',
-          alignItems: 'center'
+          alignItems: 'center',
+          backgroundColor: theme.colors.primary
         }}
       >
-        <ActivityIndicator />
+        <ActivityIndicator color={theme.colors.textPrimary} />
       </View>
     );
   }
@@ -229,17 +278,37 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       <View style={styles.termsOverlay}>
         <View style={styles.termsCard}>
           <Text variant="h2" style={styles.termsTitle}>
-            Conditions generales d'utilisation
+            {t('app.termsModal.title')}
           </Text>
           <ScrollView style={styles.termsScroll} contentContainerStyle={styles.termsScrollContent}>
             <Text variant="captionSm" color="textSecondary" style={styles.termsText}>
-              En utilisant Bloomi, vous vous engagez a respecter les autres utilisateurs, a ne pas
-              publier de contenu illegal, trompeur ou inapproprie, et a suivre nos regles de
-              securite et de moderation. Les contenus signales peuvent etre examines et supprimes.
+              {t('app.termsModal.body')}
             </Text>
+            <View style={styles.termsLinks}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  void Linking.openURL(TERMS_OF_USE_URL);
+                }}
+              >
+                <Text variant="captionSm" style={styles.termsLinkText}>
+                  {t('app.termsModal.readFullTerms')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  void Linking.openURL(PRIVACY_POLICY_URL);
+                }}
+              >
+                <Text variant="captionSm" style={styles.termsLinkText}>
+                  {t('app.termsModal.readPrivacy')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
           <Button
-            title="J'accepte"
+            title={t('app.termsModal.accept')}
             onPress={() => {
               void (async () => {
                 await AsyncStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
@@ -254,7 +323,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <GuestAuthPromptModal />
+      {children}
+    </>
+  );
 }
 
 export default function RootLayout() {
@@ -266,6 +340,12 @@ export default function RootLayout() {
     Poppins_700Bold
   });
   const router = useRouter();
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
 
   // Navigation au tap sur une notification (push/local)
   useEffect(() => {
@@ -319,6 +399,24 @@ export default function RootLayout() {
     };
   }, [router]);
 
+  // Retour Stripe : reprise à chaud (app déjà ouverte, sans repasser par index)
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+      const resumedFromBackground =
+        (prev === 'background' || prev === 'inactive') && next === 'active';
+      if (!resumedFromBackground) return;
+      void (async () => {
+        if (await consumeStripeConnectReturnPending()) {
+          navigateAfterStripeConnectReturn();
+        }
+      })();
+    });
+    return () => sub.remove();
+  }, []);
+
   // Gestion des deep links (bloomi://auth/callback...)
   useEffect(() => {
     const handleUrl = (event: { url: string }) => {
@@ -330,14 +428,15 @@ export default function RootLayout() {
         const host = parsed.host; // ex: "auth"
         const pathname = parsed.pathname; // ex: "/callback"
 
-        if (host === 'profile') {
-          router.replace('/tabs/profile/activate-seller-account');
+        if (host === 'profile' || isStripeConnectReturnUrl(url)) {
+          navigateAfterStripeConnectReturn();
           return;
         }
 
         if (host === 'auth' && pathname === '/callback') {
           const searchParams = parsed.searchParams;
           const token = searchParams.get('token') ?? undefined;
+          const tokenHash = searchParams.get('token_hash') ?? undefined;
           const type = searchParams.get('type') ?? undefined;
           const email = searchParams.get('email') ?? undefined;
 
@@ -346,6 +445,7 @@ export default function RootLayout() {
             params: {
               rawUrl: url,
               ...(token ? { token } : {}),
+              ...(tokenHash ? { token_hash: tokenHash } : {}),
               ...(type ? { type } : {}),
               ...(email ? { email } : {})
             }
@@ -363,6 +463,14 @@ export default function RootLayout() {
     (async () => {
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl) {
+        if (isStripeConnectReturnUrl(initialUrl)) {
+          navigateAfterStripeConnectReturn();
+          return;
+        }
+        if (isAuthCallbackUrl(initialUrl)) {
+          handleUrl({ url: initialUrl });
+          return;
+        }
         handleUrl({ url: initialUrl });
       }
     })();
@@ -372,20 +480,9 @@ export default function RootLayout() {
     };
   }, [router]);
 
-  // Bloquer le rendu tant que les polices ne sont pas chargées
+  // Garder le splash natif (vert + logo) jusqu’au chargement des polices
   if (!fontsLoaded) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#FFFFFF'
-        }}
-      >
-        <ActivityIndicator size="large" color="#111827" />
-      </View>
-    );
+    return null;
   }
 
   // Si erreur de chargement des polices, continuer quand même (fallback sur système)
@@ -395,7 +492,7 @@ export default function RootLayout() {
 
   return (
     <StripeProvider
-      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}
+      publishableKey={STRIPE_PUBLISHABLE_KEY ?? ''}
       merchantIdentifier="merchant.com.jupouch.bloomiapp"
     >
       <SafeAreaProvider>
@@ -435,6 +532,16 @@ const styles = StyleSheet.create({
   },
   termsText: {
     lineHeight: 20
+  },
+  termsLinks: {
+    marginTop: 14,
+    gap: 10
+  },
+  termsLinkText: {
+    lineHeight: 20,
+    color: theme.colors.textPrimary,
+    textDecorationLine: 'underline',
+    fontFamily: theme.fontFamily.semiBold
   },
   termsAcceptButton: {
     marginTop: 14

@@ -2,9 +2,11 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { FloatingTabBar, getFixedTabBarHeight } from '../../components/navigation/FloatingTabBar';
 
 export default function TabsLayout() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tabBarSlotH = getFixedTabBarHeight(insets.bottom);
 
@@ -13,6 +15,11 @@ export default function TabsLayout() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        animation: 'none',
+        detachInactiveScreens: false,
+        sceneStyle: {
+          backgroundColor: '#FFFFFF'
+        },
         tabBarStyle: {
           position: 'absolute',
           left: 0,
@@ -31,27 +38,27 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="feed"
-        options={{ title: 'Feed' }}
+        options={{ title: t('navigation.home') }}
       />
-      <Tabs.Screen name="search" options={{ title: 'Search' }} />
+      <Tabs.Screen name="search" options={{ title: t('navigation.search') }} />
       <Tabs.Screen
         name="results/index"
         options={{
-          title: 'Results',
+          title: t('navigation.results'),
           href: null
         }}
       />
       <Tabs.Screen
         name="results/[id]"
         options={{
-          title: 'Result detail',
+          title: t('navigation.resultDetail'),
           href: null
         }}
       />
       <Tabs.Screen
         name="filters/index"
         options={{
-          title: 'Filters',
+          title: t('navigation.filters'),
           href: null
         }}
       />
@@ -69,21 +76,21 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="public-profile/index"
         options={{
-          title: 'Profile',
+          title: t('navigation.profile'),
           href: null
         }}
       />
       <Tabs.Screen
         name="sell"
-        options={{ title: 'Sell' }}
+        options={{ title: t('navigation.sell') }}
       />
       <Tabs.Screen
         name="messages/index"
-        options={{ title: 'Messages' }}
+        options={{ title: t('navigation.inbox') }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile' }}
+        options={{ title: t('navigation.profile') }}
       />
     </Tabs>
   );

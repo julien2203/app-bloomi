@@ -23,6 +23,8 @@ export type SellColor = {
 
 export type SellCategoryType = 'chaussures' | 'pantalons' | 'chemises' | 'vetements';
 
+export type ParcelSizeValue = 'small' | 'large' | 'xlarge';
+
 export type SellFormFieldKey =
   | 'category'
   | 'brand'
@@ -32,6 +34,8 @@ export type SellFormFieldKey =
   | 'color'
   | 'categoryGender'
   | 'categoryType'
+  | 'delivery_mode'
+  | 'parcel_size'
   | 'draftTitle'
   | 'draftDescription'
   | 'draftCity'
@@ -48,6 +52,8 @@ export type SellFormState = {
   size: SellSize | null;
   color: SellColor[];
   price?: number;
+  delivery_mode?: 'pickup' | 'shipping' | 'both';
+  parcel_size?: ParcelSizeValue;
   /** Champs locaux de l'écran Sell, persistés pour éviter les pertes au retour */
   draftTitle?: string;
   draftDescription?: string;
@@ -81,6 +87,8 @@ const defaultValues: SellFormState = {
   color: [],
   condition: undefined,
   price: undefined,
+  delivery_mode: 'both',
+  parcel_size: undefined,
   draftTitle: '',
   draftDescription: '',
   draftCity: '',
@@ -88,8 +96,16 @@ const defaultValues: SellFormState = {
   draftPhotos: []
 };
 
+function cloneDefaultValues(): SellFormState {
+  return {
+    ...defaultValues,
+    color: [],
+    draftPhotos: []
+  };
+}
+
 export const useSellFormStore = create<SellFormStore>((set) => ({
-  values: defaultValues,
+  values: cloneDefaultValues(),
   setField: (key, value) =>
     set((state) => ({
       values: {
@@ -97,6 +113,6 @@ export const useSellFormStore = create<SellFormStore>((set) => ({
         [key]: value as SellFieldValue
       } as SellFormState
     })),
-  resetForm: () => set({ values: defaultValues })
+  resetForm: () => set({ values: cloneDefaultValues() })
 }));
 

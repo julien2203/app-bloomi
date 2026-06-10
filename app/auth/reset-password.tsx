@@ -8,8 +8,10 @@ import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next';
 
 export default function ResetPasswordScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -19,12 +21,12 @@ export default function ResetPasswordScreen() {
     if (loading) return;
 
     if (!password || password.length < 8) {
-      Alert.alert('Mot de passe', 'Le mot de passe doit contenir au moins 8 caractères.');
+      Alert.alert(t('auth.password'), t('auth.resetPassword.minLength'));
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Mot de passe', 'Les mots de passe ne correspondent pas.');
+      Alert.alert(t('auth.password'), t('auth.resetPassword.noMatch'));
       return;
     }
 
@@ -32,11 +34,11 @@ export default function ResetPasswordScreen() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      Alert.alert('Mot de passe mis à jour', 'Votre mot de passe a bien été modifié.', [
-        { text: 'OK', onPress: () => router.replace('/auth/login') }
+      Alert.alert(t('auth.resetPassword.updatedTitle'), t('auth.resetPassword.updatedMessage'), [
+        { text: t('common.ok'), onPress: () => router.replace('/auth/login') }
       ]);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de mettre à jour votre mot de passe. Réessayez.');
+      Alert.alert(t('common.error'), t('auth.resetPassword.unableUpdate'));
       console.warn('Failed to update password:', error);
     } finally {
       setLoading(false);
@@ -66,13 +68,13 @@ export default function ResetPasswordScreen() {
         >
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             <View style={styles.content}>
-              <Text style={styles.title}>Nouveau mot de passe</Text>
+              <Text style={styles.title}>{t('auth.resetPassword.newPassword')}</Text>
               <Text style={styles.subtitle}>
-                Saisissez votre nouveau mot de passe pour finaliser la réinitialisation.
+                {t('auth.resetPassword.subtitle')}
               </Text>
 
               <TextField
-                label="Nouveau mot de passe"
+                label={t('auth.resetPassword.newPassword')}
                 value={password}
                 onChangeText={setPassword}
                 placeholder="********"
@@ -82,7 +84,7 @@ export default function ResetPasswordScreen() {
               />
 
               <TextField
-                label="Confirmer le mot de passe"
+                label={t('auth.resetPassword.confirmPassword')}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="********"
@@ -92,7 +94,7 @@ export default function ResetPasswordScreen() {
               />
 
               <Button
-                title="Mettre à jour le mot de passe"
+                title={t('auth.resetPassword.update')}
                 onPress={handleUpdatePassword}
                 variant="primary-green"
                 loading={loading}

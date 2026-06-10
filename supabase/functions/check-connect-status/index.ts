@@ -117,7 +117,38 @@ Deno.serve(async (req) => {
   const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
   try {
-    const account = await stripe.accounts.retrieve(connectAccountId);
+    let account: Stripe.Account;
+    try {
+      account = await stripe.accounts.retrieve(connectAccountId);
+    } catch (e) {
+      const msg = String((e as { message?: string })?.message ?? e).toLowerCase();
+      const stale =
+        (e as { code?: string })?.code === "resource_missing" ||
+        msg.includes("no such account") ||
+        msg.includes("test mode") ||
+        msg.includes("testmode") ||
+        msg.includes("live mode");
+
+      if (stale) {
+        await supabase
+          .from("profiles")
+          .update({
+            stripe_account_id: null,
+            stripe_seller_account_id: null,
+            stripe_connect_onboarding_completed: false,
+          })
+          .eq("id", userId);
+
+        return jsonResponse({
+          completed: false,
+          charges_enabled: false,
+          details_submitted: false,
+          stripe_account_id: null,
+          reset_stale_connect_account: true,
+        });
+      }
+      throw e;
+    }
 
     const chargesEnabled = Boolean(account.charges_enabled);
     const detailsSubmitted = Boolean(account.details_submitted);

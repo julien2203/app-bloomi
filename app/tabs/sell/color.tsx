@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { Screen } from '../../../components/ui/Screen';
@@ -10,6 +9,8 @@ import { Text } from '../../../components/ui/Text';
 import { useSellFormStore, type SellColor } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { getColors } from '../../../lib/api/filters';
+import { translateColorName } from '../../../lib/colorI18n';
+import { useTranslation } from 'react-i18next';
 
 type ColorRow = {
   id: number;
@@ -18,11 +19,12 @@ type ColorRow = {
 };
 
 export default function SellColorScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
   const [colors, setColors] = useState<ColorRow[]>([]);
-  const [selected, setSelected] = useState<SellColor[]>(values.color ?? []);
+  const [selected, setSelected] = useState<SellColor[]>([...(values.color ?? [])]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function SellColorScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Color
+            {t('sell.color')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -104,7 +106,7 @@ export default function SellColorScreen() {
                         style={styles.colorLabel}
                         numberOfLines={1}
                       >
-                        {item.name}
+                        {translateColorName(item.name, t)}
                       </Text>
                     </View>
                     <View
@@ -113,9 +115,7 @@ export default function SellColorScreen() {
                         isSelected && styles.checkboxChecked
                       ]}
                     >
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                      )}
+                      {isSelected ? <View style={styles.checkboxInner} /> : null}
                     </View>
                   </TouchableOpacity>
                 );
@@ -131,7 +131,7 @@ export default function SellColorScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleConfirm}
             variant="primary"
             disabled={selected.length === 0}
@@ -210,6 +210,12 @@ const styles = StyleSheet.create({
   checkboxChecked: {
     borderColor: '#C3EA4F',
     backgroundColor: '#C3EA4F'
+  },
+  checkboxInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 1,
+    backgroundColor: '#FFFFFF'
   },
   footer: {
     paddingHorizontal: theme.spacing.horizontalPadding,

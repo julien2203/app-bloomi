@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
 
   const { data: order, error: orderErr } = await supabase
     .from("orders")
-    .select("id, buyer_id, seller_id")
+    .select("id, buyer_id, seller_id, parcel_size")
     .eq("id", order_id)
     .maybeSingle();
 
@@ -174,9 +174,13 @@ Deno.serve(async (req) => {
 
   console.log("Sender:", JSON.stringify(sender), "Recipient:", JSON.stringify(recipient));
 
-  const weightRaw = body.weight;
-  const parsedWeight = typeof weightRaw === "number" ? weightRaw : Number(weightRaw ?? 500);
-  const weight = Number.isFinite(parsedWeight) && parsedWeight > 0 ? Math.round(parsedWeight) : 500;
+  const weightMap: Record<string, number> = {
+    small: 500,
+    large: 2000,
+    xlarge: 10000,
+  };
+  const parcelSize = String((order as { parcel_size?: string | null }).parcel_size ?? "small");
+  const weight = weightMap[parcelSize] ?? 500;
 
   const uid = authData.user.id;
   const buyerId = String((order as any).buyer_id ?? "");
@@ -212,7 +216,7 @@ Deno.serve(async (req) => {
         printAddresses: "RECIPIENT_AND_CUSTOMER",
         imageFileType: "PDF",
         imageResolution: 300,
-        printPreview: true,
+        printPreview: false,
       },
       item: {
         itemID: order_id.replace(/-/g, "").slice(0, 35),
@@ -262,7 +266,7 @@ Deno.serve(async (req) => {
       return jsonResponse(
         {
           error: "Erreur La Poste lors de la génération de l'étiquette",
-          details: labelJson,
+          details: JSON.stringify(labelJson),
           http_status: labelResp.status,
         },
         { status: 500 },
@@ -308,7 +312,12 @@ Deno.serve(async (req) => {
     return jsonResponse(
       {
         error: "Erreur generate-shipping-label",
-        details: e instanceof Error ? e.message : String(e),
+        details:
+          e instanceof Error
+            ? e.message
+            : typeof e === "object" && e !== null
+            ? JSON.stringify(e)
+            : String(e),
       },
       { status: 500 },
     );

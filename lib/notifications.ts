@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import i18n from './i18n';
 
 let configured = false;
 
@@ -41,7 +42,7 @@ export async function notifyNewMessage(params: {
   const Notifications = await import('expo-notifications');
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: params.title ?? 'New message',
+      title: params.title ?? i18n.t('notifications.newMessage'),
       body: params.body
     },
     trigger: null

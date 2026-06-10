@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export type FeedSort = 'recent' | 'price_asc' | 'price_desc' | 'relevance';
 
 export type FeedFilters = {
-  categoryId: string | null;
+  categoryIds: string[];
   brandIds: string[];
   sizeIds: string[];
   colorIds: string[];
@@ -24,7 +24,7 @@ interface FeedFiltersState {
 }
 
 const defaultFilters: FeedFilters = {
-  categoryId: null,
+  categoryIds: [],
   brandIds: [],
   sizeIds: [],
   colorIds: [],
@@ -35,8 +35,19 @@ const defaultFilters: FeedFilters = {
   sortBy: 'recent'
 };
 
+function cloneDefaultFilters(): FeedFilters {
+  return {
+    ...defaultFilters,
+    categoryIds: [],
+    brandIds: [],
+    sizeIds: [],
+    colorIds: [],
+    conditionIds: []
+  };
+}
+
 export const useFeedFiltersStore = create<FeedFiltersState>((set) => ({
-  filters: defaultFilters,
+  filters: cloneDefaultFilters(),
   setFilter: (key, value) =>
     set((state) => ({
       filters: {
@@ -49,6 +60,6 @@ export const useFeedFiltersStore = create<FeedFiltersState>((set) => ({
       const partial = typeof update === 'function' ? update(state.filters) : update;
       return { filters: { ...state.filters, ...partial } };
     }),
-  resetFilters: () => set({ filters: { ...defaultFilters } })
+  resetFilters: () => set({ filters: cloneDefaultFilters() })
 }));
 

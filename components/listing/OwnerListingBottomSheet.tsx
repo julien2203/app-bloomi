@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { theme } from '../../lib/theme';
 import { Text } from '../ui/Text';
+import { useTranslation } from 'react-i18next';
 
 type Step = 'actions' | 'delete';
 
@@ -38,6 +39,7 @@ export function OwnerListingBottomSheet({
   listingStatus,
   onRequestPermanentDeleteDraft
 }: OwnerListingBottomSheetProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('actions');
   const [deleting, setDeleting] = useState(false);
@@ -95,7 +97,7 @@ export function OwnerListingBottomSheet({
       onRequestClose={onClose}
     >
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('common.close')} />
 
         <View
           style={[
@@ -110,23 +112,23 @@ export function OwnerListingBottomSheet({
           {step === 'actions' ? (
             <>
               <Text variant="body" style={styles.sheetTitle}>
-                Manage listing
+                {t('profile.ownerSheet.manageListing')}
               </Text>
               <Text variant="captionSm" color="textSecondary" style={styles.sheetSubtitle}>
-                Edit or remove this item from your closet.
+                {t('profile.ownerSheet.editOrRemove')}
               </Text>
 
               <Pressable
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 onPress={handleEdit}
                 accessibilityRole="button"
-                accessibilityLabel="Edit listing"
+                accessibilityLabel={t('feed.listingDetail.editListing')}
               >
                 <View style={styles.rowIconWrap}>
                   <Feather name="edit-2" size={20} color={theme.colors.textPrimary} />
                 </View>
                 <Text variant="body" style={styles.rowLabel}>
-                  Edit listing
+                  {t('feed.listingDetail.editListing')}
                 </Text>
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </Pressable>
@@ -138,13 +140,13 @@ export function OwnerListingBottomSheet({
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   onPress={handleRequestPermanentDeleteDraft}
                   accessibilityRole="button"
-                  accessibilityLabel="Supprimer définitivement"
+                  accessibilityLabel={t('profile.ownerSheet.deletePermanently')}
                 >
                   <View style={[styles.rowIconWrap, styles.rowIconWrapDanger]}>
                     <Feather name="trash-2" size={20} color={theme.colors.danger} />
                   </View>
                   <Text variant="body" style={styles.rowLabelDanger}>
-                    Supprimer définitivement
+                    {t('profile.ownerSheet.deletePermanently')}
                   </Text>
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </Pressable>
@@ -153,13 +155,13 @@ export function OwnerListingBottomSheet({
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   onPress={() => setStep('delete')}
                   accessibilityRole="button"
-                  accessibilityLabel="Delete listing"
+                  accessibilityLabel={t('profile.ownerSheet.deleteListing')}
                 >
                   <View style={[styles.rowIconWrap, styles.rowIconWrapDanger]}>
                     <Feather name="trash-2" size={20} color={theme.colors.danger} />
                   </View>
                   <Text variant="body" style={styles.rowLabelDanger}>
-                    Delete listing
+                    {t('profile.ownerSheet.deleteListing')}
                   </Text>
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </Pressable>
@@ -171,7 +173,7 @@ export function OwnerListingBottomSheet({
                 accessibilityRole="button"
               >
                 <Text variant="body" style={styles.cancelPillText}>
-                  Cancel
+                  {t('common.cancel')}
                 </Text>
               </Pressable>
             </>
@@ -183,17 +185,17 @@ export function OwnerListingBottomSheet({
                 accessibilityRole="button"
               >
                 <Text variant="body" style={styles.cancelPillText}>
-                  Back
+                  {t('common.back')}
                 </Text>
               </Pressable>
             </View>
           ) : (
             <>
               <Text variant="body" style={styles.sheetTitle}>
-                Delete this listing?
+                {t('profile.ownerSheet.deleteListing')}
               </Text>
               <Text variant="captionSm" color="textSecondary" style={styles.deleteHint}>
-                This cannot be undone. Buyers will no longer see this item.
+                {t('profile.ownerSheet.deleteConfirmMessage')}
               </Text>
 
               {onDeactivateListing ? (
@@ -202,13 +204,13 @@ export function OwnerListingBottomSheet({
                   onPress={() => void handleDeactivateListing()}
                   disabled={deleting}
                   accessibilityRole="button"
-                  accessibilityLabel="Deactivate listing"
+                  accessibilityLabel={t('profile.ownerSheet.deactivate')}
                 >
                   <Text variant="body" style={styles.deactivateBtnText}>
-                    Désactiver l&apos;annonce
+                    {t('profile.ownerSheet.deactivate')}
                   </Text>
                   <Text variant="captionSm" color="textSecondary" style={styles.deactivateBtnHint}>
-                    Brouillon : retirée du fil, conservée pour l&apos;historique des commandes.
+                    {t('profile.ownerSheet.draftHint')}
                   </Text>
                 </Pressable>
               ) : null}
@@ -221,7 +223,7 @@ export function OwnerListingBottomSheet({
                   accessibilityRole="button"
                 >
                   <Text variant="body" style={styles.secondaryBtnText}>
-                    Back
+                    {t('common.back')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -234,7 +236,7 @@ export function OwnerListingBottomSheet({
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <Text variant="body" style={styles.dangerBtnText}>
-                      Delete
+                      {t('common.delete')}
                     </Text>
                   )}
                 </Pressable>

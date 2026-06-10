@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
@@ -17,6 +18,7 @@ import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 
 export default function AccountSettingsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
   const userId = user?.id ?? null;
@@ -83,7 +85,7 @@ export default function AccountSettingsScreen() {
       setGender(typeof profile?.gender === 'string' ? profile.gender : null);
       setBirthDate(profile?.birth_date ? safeParseDate(profile.birth_date) : null);
     } catch (e) {
-      Alert.alert('Error', formatErrorMessage(e, 'Unable to load account settings.'));
+      Alert.alert(t('common.error'), formatErrorMessage(e, t('profile.accountSettings.unableLoad')));
     } finally {
       setLoading(false);
     }
@@ -109,9 +111,9 @@ export default function AccountSettingsScreen() {
       if (error) throw error;
       setEmail(next);
       setEmailModalOpen(false);
-      Alert.alert('Email', 'Your email change request has been sent.');
+      Alert.alert(t('profile.accountSettings.email'), t('profile.accountSettings.emailSent'));
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Unable to update email.');
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : t('profile.accountSettings.unableEmail'));
     } finally {
       setEmailUpdating(false);
     }
@@ -161,7 +163,7 @@ export default function AccountSettingsScreen() {
 
       router.back();
     } catch (e) {
-      Alert.alert('Error', formatErrorMessage(e, 'Unable to save.'));
+      Alert.alert(t('common.error'), formatErrorMessage(e, t('profile.accountSettings.unableSave')));
     } finally {
       setSaving(false);
     }
@@ -174,9 +176,9 @@ export default function AccountSettingsScreen() {
         redirectTo: `bloomi://auth/callback?type=recovery&email=${encodeURIComponent(email)}`
       });
       if (error) throw error;
-      Alert.alert('Password', 'A password reset email has been sent.');
+      Alert.alert(t('profile.accountSettings.password'), t('profile.accountSettings.resetSent'));
     } catch (e) {
-      Alert.alert('Error', formatErrorMessage(e, 'Unable to send reset email.'));
+      Alert.alert(t('common.error'), formatErrorMessage(e, t('profile.accountSettings.unableReset')));
     }
   }, [email]);
 
@@ -190,8 +192,8 @@ export default function AccountSettingsScreen() {
       router.replace('/auth/login');
     } catch (e) {
       Alert.alert(
-        'Error',
-        formatErrorMessage(e, 'Unable to delete account. Please contact support.')
+        t('common.error'),
+        formatErrorMessage(e, t('profile.accountSettings.unableDelete'))
       );
     } finally {
       setDeleting(false);
@@ -205,7 +207,7 @@ export default function AccountSettingsScreen() {
       <View style={styles.header}>
         <HeaderBackButton onPress={() => router.back()} />
         <Text variant="body" style={styles.headerTitle}>
-          Account settings
+          {t('profile.accountSettings.title')}
         </Text>
         <Pressable
           onPress={handleSave}
@@ -221,7 +223,7 @@ export default function AccountSettingsScreen() {
             <ActivityIndicator size="small" color={theme.colors.lime} />
           ) : (
             <Text variant="body" style={styles.saveText}>
-              Save
+              {t('common.save')}
             </Text>
           )}
         </Pressable>
@@ -244,7 +246,7 @@ export default function AccountSettingsScreen() {
                 style={({ pressed }) => [styles.changeBtn, pressed && styles.changeBtnPressed]}
                 hitSlop={6}
               >
-                <Text style={styles.changeBtnText}>Change</Text>
+                <Text style={styles.changeBtnText}>{t('profile.accountSettings.change')}</Text>
               </Pressable>
             </Pressable>
 
@@ -259,18 +261,18 @@ export default function AccountSettingsScreen() {
                 style={({ pressed }) => [styles.changeBtn, pressed && styles.changeBtnPressed]}
                 hitSlop={6}
               >
-                <Text style={styles.changeBtnText}>Change</Text>
+                <Text style={styles.changeBtnText}>{t('profile.accountSettings.change')}</Text>
               </Pressable>
             </Pressable>
 
             <Text style={styles.disclaimer}>
-              En modifiant votre téléphone, vous devrez confirmer un code reçu par SMS.
+              {t('profile.accountSettings.phoneChangeDisclaimer')}
             </Text>
           </View>
 
           <View style={styles.block}>
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Full name</Text>
+              <Text style={styles.fieldLabel}>{t('auth.signUp.fullName')}</Text>
               <TextInput
                 value={fullName}
                 onChangeText={setFullName}
@@ -282,13 +284,13 @@ export default function AccountSettingsScreen() {
             </View>
 
             <Pressable onPress={() => setGenderModalOpen(true)} style={styles.field} hitSlop={6}>
-              <Text style={styles.fieldLabel}>Gender</Text>
+              <Text style={styles.fieldLabel}>{t('profile.accountSettings.other')}</Text>
               <Text style={styles.fieldValue}>{genderLabel(gender)}</Text>
               <View style={styles.fieldSeparator} />
             </Pressable>
 
             <Pressable onPress={handlePickBirthDate} style={styles.field} hitSlop={6}>
-              <Text style={styles.fieldLabel}>Date of birth</Text>
+              <Text style={styles.fieldLabel}>{t('profile.accountSettings.dateOfBirth')}</Text>
               <Text style={styles.fieldValue}>{birthDateLabel || '—'}</Text>
               <View style={styles.fieldSeparator} />
             </Pressable>
@@ -296,7 +298,7 @@ export default function AccountSettingsScreen() {
 
           <View style={styles.block}>
             <Pressable onPress={handleResetPassword} style={styles.actionRow} hitSlop={6}>
-              <Text style={styles.actionLabel}>Change password</Text>
+              <Text style={styles.actionLabel}>{t('profile.accountSettings.password')}</Text>
               <Text style={styles.actionChevron}>{'›'}</Text>
             </Pressable>
             <View style={styles.rowSeparator} />
@@ -305,7 +307,7 @@ export default function AccountSettingsScreen() {
               style={styles.actionRow}
               hitSlop={6}
             >
-              <Text style={styles.actionLabel}>Delete my account</Text>
+              <Text style={styles.actionLabel}>{t('profile.accountSettings.deleteAccount')}</Text>
               <Text style={styles.actionChevron}>{'›'}</Text>
             </Pressable>
           </View>
@@ -320,19 +322,19 @@ export default function AccountSettingsScreen() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setEmailModalOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => null}>
-            <Text style={styles.modalTitle}>Change email</Text>
+            <Text style={styles.modalTitle}>{t('profile.accountSettings.changeEmailTitle')}</Text>
             <TextInput
               value={emailDraft}
               onChangeText={setEmailDraft}
               autoCapitalize="none"
               keyboardType="email-address"
-              placeholder="email@example.com"
+              placeholder={t('profile.accountSettings.emailPlaceholder')}
               placeholderTextColor={theme.colors.sectionLabel}
               style={styles.modalInput}
             />
             <View style={styles.modalButtonsRow}>
               <Pressable onPress={() => setEmailModalOpen(false)} style={styles.modalBtn}>
-                <Text style={styles.modalBtnText}>Cancel</Text>
+                <Text style={styles.modalBtnText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 onPress={handleChangeEmail}
@@ -346,7 +348,7 @@ export default function AccountSettingsScreen() {
                 {emailUpdating ? (
                   <ActivityIndicator size="small" color={theme.colors.appleBlack} />
                 ) : (
-                  <Text style={styles.modalBtnTextPrimary}>Save</Text>
+                  <Text style={styles.modalBtnTextPrimary}>{t('common.save')}</Text>
                 )}
               </Pressable>
             </View>
@@ -362,12 +364,12 @@ export default function AccountSettingsScreen() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setGenderModalOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => null}>
-            <Text style={styles.modalTitle}>Gender</Text>
+            <Text style={styles.modalTitle}>{t('profile.accountSettings.other')}</Text>
             {[
-              { label: 'Male', value: 'Male' },
-              { label: 'Female', value: 'Female' },
-              { label: 'Other', value: 'Other' },
-              { label: 'Prefer not to say', value: 'Prefer not to say' }
+              { label: t('profile.accountSettings.male'), value: t('profile.accountSettings.male') },
+              { label: t('profile.accountSettings.female'), value: t('profile.accountSettings.female') },
+              { label: t('profile.accountSettings.other'), value: t('profile.accountSettings.other') },
+              { label: t('profile.accountSettings.preferNotSay'), value: t('profile.accountSettings.preferNotSay') }
             ].map((opt) => (
               <Pressable key={opt.value} onPress={() => handlePickGender(opt.value)} style={styles.pickerRow}>
                 <Text style={styles.pickerRowText}>{opt.label}</Text>
@@ -385,10 +387,9 @@ export default function AccountSettingsScreen() {
       >
         <Pressable style={styles.deleteConfirmOverlay} onPress={() => setDeleteModalOpen(false)}>
           <Pressable style={styles.deleteConfirmCard} onPress={() => null}>
-            <Text style={styles.deleteConfirmTitle}>Delete account</Text>
+            <Text style={styles.deleteConfirmTitle}>{t('profile.accountSettings.deleteAccount')}</Text>
             <Text style={styles.deleteConfirmMessage}>
-              Are you sure you want to delete your account? This action is permanent and cannot be
-              undone.
+              {t('profile.accountSettings.deleteConfirmMessage')}
             </Text>
             <View style={styles.deleteConfirmSeparator} />
             <View style={styles.deleteConfirmActionsRow}>
@@ -396,7 +397,7 @@ export default function AccountSettingsScreen() {
                 onPress={() => setDeleteModalOpen(false)}
                 style={styles.deleteConfirmCancelBtn}
               >
-                <Text style={styles.deleteConfirmCancelText}>Cancel</Text>
+                <Text style={styles.deleteConfirmCancelText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -411,7 +412,7 @@ export default function AccountSettingsScreen() {
                 {deleting ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.deleteConfirmDeleteText}>Delete</Text>
+                  <Text style={styles.deleteConfirmDeleteText}>{t('common.delete')}</Text>
                 )}
               </Pressable>
             </View>

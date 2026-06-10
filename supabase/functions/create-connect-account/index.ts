@@ -108,16 +108,76 @@ Deno.serve(async (req) => {
     trimId(row?.stripe_account_id) ?? trimId(row?.stripe_seller_account_id);
 
   const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
+  const isLiveKey = stripeSecretKey.startsWith("sk_live_");
+
+  const clearStoredConnectAccount = async () => {
+    connectAccountId = null;
+    await supabase
+      .from("profiles")
+      .update({
+        stripe_account_id: null,
+        stripe_seller_account_id: null,
+        stripe_connect_onboarding_completed: false,
+      })
+      .eq("id", userId);
+  };
+
+  const isStaleOrMissingConnectAccount = (e: unknown): boolean => {
+    const err = e as { code?: string; message?: string; type?: string };
+    const msg = String(err?.message ?? e ?? "").toLowerCase();
+    return (
+      err?.code === "resource_missing" ||
+      err?.type === "invalid_request_error" ||
+      msg.includes("no such account") ||
+      msg.includes("does not exist") ||
+      msg.includes("test mode") ||
+      msg.includes("testmode") ||
+      msg.includes("live mode") ||
+      msg.includes("mismatched")
+    );
+  };
 
   try {
+    if (connectAccountId) {
+      try {
+        await stripe.accounts.retrieve(connectAccountId);
+      } catch (e) {
+        console.log(
+          "Stale Connect account (often test→live key change), recreating:",
+          e instanceof Error ? e.message : String(e),
+        );
+        await clearStoredConnectAccount();
+      }
+    }
+
     if (!connectAccountId) {
       const account = await stripe.accounts.create({
         type: "express",
+        business_type: "individual",
         country: "CH",
         capabilities: {
           transfers: { requested: true },
+          card_payments: { requested: true },
         },
-      } as Stripe.AccountCreateParams);
+        business_profile: {
+          url: "https://bloomi.ch",
+          product_description:
+            "Secondhand fashion marketplace seller on Bloomi",
+          mcc: "5691",
+        },
+        individual: {
+          verification: {
+            document: {},
+          },
+        },
+        settings: {
+          payouts: {
+            schedule: {
+              interval: "manual",
+            },
+          },
+        },
+      });
 
       connectAccountId = account.id;
 
@@ -126,6 +186,7 @@ Deno.serve(async (req) => {
         .update({
           stripe_account_id: connectAccountId,
           stripe_seller_account_id: connectAccountId,
+          stripe_connect_onboarding_completed: false,
         })
         .eq("id", userId);
 
@@ -146,17 +207,21 @@ Deno.serve(async (req) => {
       refresh_url: ONBOARDING_REFRESH_URL,
       return_url: ONBOARDING_RETURN_URL,
       type: "account_onboarding",
+      collection_options: {
+        fields: "eventually_due",
+      },
     });
 
     return jsonResponse({ url: accountLink.url });
   } catch (e) {
-    console.log('Stripe error:', e instanceof Error ? e.message : String(e));
+    const details = e instanceof Error ? e.message : String(e);
+    console.log("Stripe error:", details, "live_key:", isLiveKey);
     return jsonResponse(
       {
-        error: 'Stripe error',
-        details: e instanceof Error ? e.message : String(e),
+        error: "Stripe error",
+        details,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 });

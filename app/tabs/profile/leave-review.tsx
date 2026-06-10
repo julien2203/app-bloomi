@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Button } from '../../../components/ui/Button';
 import { Text } from '../../../components/ui/Text';
@@ -28,6 +29,7 @@ type LeaveReviewParams = {
 };
 
 export default function LeaveReviewScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
   const params = useLocalSearchParams<LeaveReviewParams>();
@@ -58,15 +60,15 @@ export default function LeaveReviewScreen() {
 
   const onSubmit = useCallback(async () => {
     if (!user?.id) {
-      Alert.alert('Error', 'You must be signed in.');
+      Alert.alert(t('common.error'), t('profile.leaveReview.mustSignIn'));
       return;
     }
     if (!orderId || !reviewedId) {
-      Alert.alert('Error', 'Missing order information.');
+      Alert.alert(t('common.error'), t('profile.leaveReview.missingOrder'));
       return;
     }
     if (rating < 1 || rating > 5) {
-      Alert.alert('Rating required', 'Choose a rating between 1 and 5 stars.');
+      Alert.alert(t('profile.leaveReview.ratingRequired'), t('profile.leaveReview.ratingHint'));
       return;
     }
     if (submitting) return;
@@ -85,7 +87,7 @@ export default function LeaveReviewScreen() {
       if (error) {
         const msg =
           (error as any)?.code === '23505'
-            ? 'You have already left a review for this order.'
+            ? t('profile.leaveReview.alreadyReviewed')
             : error.message;
         throw new Error(msg);
       }
@@ -93,8 +95,8 @@ export default function LeaveReviewScreen() {
       if (reviewedId && reviewedId !== user.id) {
         void sendPushNotificationWithUserJwt({
           user_id: reviewedId,
-          title: "⭐ Quelqu'un t'a laissé un avis !",
-          body: "Découvre ce qu'on pense de toi sur Bloomi.",
+          titleKey: 'profile.leaveReview.someoneReviewed',
+          bodyKey: 'profile.leaveReview.reviewReceivedBody',
           notification_type: 'new_feedback',
           data: { order_id: orderId, reviewer_id: user.id }
         });
@@ -103,8 +105,8 @@ export default function LeaveReviewScreen() {
       router.replace('/tabs/profile/orders');
     } catch (e) {
       const message =
-        e instanceof Error && e.message ? e.message : 'Unable to submit review.';
-      Alert.alert('Error', message);
+        e instanceof Error && e.message ? e.message : t('profile.leaveReview.submitError');
+      Alert.alert(t('common.error'), message);
     } finally {
       setSubmitting(false);
     }
@@ -118,7 +120,7 @@ export default function LeaveReviewScreen() {
         <View style={styles.headerTopRow}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="h2" style={styles.title}>
-            Leave a review
+            {t('profile.leaveReview.title')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -137,7 +139,7 @@ export default function LeaveReviewScreen() {
             )}
             <View style={styles.userText}>
               <Text variant="captionSm" color="textSecondary">
-                You are rating
+                {t('profile.leaveReview.youAreRating')}
               </Text>
               <Text variant="h3" style={styles.name} numberOfLines={1}>
                 {reviewedName}
@@ -167,8 +169,8 @@ export default function LeaveReviewScreen() {
           </View>
 
           <TextField
-            label="Comment (optional)"
-            placeholder="Write a comment..."
+            label={t('profile.leaveReview.commentOptional')}
+            placeholder={t('profile.leaveReview.commentPlaceholder')}
             value={comment}
             onChangeText={setComment}
             multiline
@@ -178,13 +180,13 @@ export default function LeaveReviewScreen() {
 
           <View style={styles.actionsWrap}>
             <Button
-              title={submitting ? 'Sending…' : 'Submit review'}
+              title={submitting ? t('common.loading') : t('profile.leaveReview.submitReview')}
               onPress={onSubmit}
               disabled={!canSubmit || submitting}
               loading={submitting}
               variant="primary"
             />
-            <Button title="Skip" onPress={onSkip} variant="secondary" />
+            <Button title={t('profile.leaveReview.skip')} onPress={onSkip} variant="secondary" />
           </View>
         </View>
       </KeyboardAvoidingView>

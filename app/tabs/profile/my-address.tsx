@@ -17,10 +17,12 @@ import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { useAuthStore } from '../../../stores/authStore';
+import { useTranslation } from 'react-i18next';
 
 const PROFILE_COUNTRY_CH = 'CH';
 
 export default function MyAddressScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
 
@@ -50,7 +52,7 @@ export default function MyAddressScreen() {
         setCity(String((data as any).city ?? ''));
       }
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Unable to load your address.');
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : t('profile.unableLoad'));
     } finally {
       setLoadingProfile(false);
     }
@@ -66,7 +68,7 @@ export default function MyAddressScreen() {
     const pc = postalCode.trim();
     const ct = city.trim();
     if (!st || !pc || !ct) {
-      Alert.alert('Incomplete address', 'Please fill in street, postal code, and city.');
+      Alert.alert(t('profile.myAddress.incomplete'), t('profile.myAddress.incompleteMessage'));
       return;
     }
     setSaving(true);
@@ -81,14 +83,14 @@ export default function MyAddressScreen() {
         })
         .eq('id', user.id);
       if (error) throw error;
-      Alert.alert('Saved', 'Your address has been updated.');
+      Alert.alert(t('profile.myAddress.saved'), t('profile.myAddress.updated'));
       router.back();
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Unable to save.');
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : t('profile.accountSettings.unableSave'));
     } finally {
       setSaving(false);
     }
-  }, [city, postalCode, router, saving, street, user?.id]);
+  }, [city, postalCode, router, saving, street, t, user?.id]);
 
   return (
     <KeyboardAvoidingView
@@ -101,7 +103,7 @@ export default function MyAddressScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            My address
+            {t('profile.myAddress.title')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -118,11 +120,11 @@ export default function MyAddressScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
-              Street (with number)
+              {t('profile.myAddress.street')}
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Rhône street 10"
+              placeholder={t('profile.myAddress.streetExample')}
               placeholderTextColor={theme.colors.textSecondary}
               value={street}
               onChangeText={setStreet}
@@ -130,11 +132,11 @@ export default function MyAddressScreen() {
             />
 
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
-              Postal code
+              {t('profile.myAddress.postalCode')}
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex. 1200"
+              placeholder={t('profile.myAddress.postalExample')}
               placeholderTextColor={theme.colors.textSecondary}
               value={postalCode}
               onChangeText={setPostalCode}
@@ -142,11 +144,11 @@ export default function MyAddressScreen() {
             />
 
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
-              City
+              {t('profile.myAddress.city')}
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Geneva"
+              placeholder={t('profile.myAddress.cityExample')}
               placeholderTextColor={theme.colors.textSecondary}
               value={city}
               onChangeText={setCity}
@@ -154,17 +156,17 @@ export default function MyAddressScreen() {
             />
 
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
-              Country
+              {t('feed.checkout.country')}
             </Text>
             <View style={styles.countryReadonly}>
               <Text variant="body" color="textSecondary">
-                Switzerland — saved addresses here are limited to Switzerland.
+                {t('profile.myAddress.countryInfo')}
               </Text>
             </View>
 
             <View style={styles.saveWrap}>
               <Button
-                title={saving ? 'Saving…' : 'Save'}
+                title={saving ? t('profile.accountSettings.saving') : t('common.save')}
                 onPress={() => void save()}
                 disabled={saving}
                 loading={saving}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
@@ -17,15 +18,16 @@ type SortOption = {
   value: FeedSort;
 };
 
-const SORT_OPTIONS: SortOption[] = [
-  { label: 'Relevance', value: 'relevance' },
-  { label: 'Price: high to low', value: 'price_desc' },
-  { label: 'Price: low to high', value: 'price_asc' },
-  { label: 'Newest first', value: 'recent' }
-];
-
 export default function SortFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const SORT_OPTIONS: SortOption[] = [
+    { label: t('filters.sortRelevance'), value: 'relevance' },
+    { label: t('filters.sortPriceDesc'), value: 'price_desc' },
+    { label: t('filters.sortPriceAsc'), value: 'price_asc' },
+    { label: t('filters.sortRecent'), value: 'recent' }
+  ];
+
   const params = useLocalSearchParams<{ returnTo?: string }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
@@ -49,7 +51,7 @@ export default function SortFilterScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Sort by
+            {t('filters.sortBy')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -89,7 +91,7 @@ export default function SortFilterScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

@@ -6,20 +6,22 @@ import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
+import { useTranslation } from 'react-i18next';
 
 type GenderSegment = {
-  label: string;
-  gender: string; // valeur en base: 'femme', 'homme', 'enfant', 'bebe'
+  labelKey: string;
+  gender: string;
 };
 
 const GENDER_SEGMENTS: GenderSegment[] = [
-  { label: 'Women', gender: 'femme' },
-  { label: 'Men', gender: 'homme' },
-  { label: 'Kids', gender: 'enfant' },
-  { label: 'Baby', gender: 'bebe' }
+  { labelKey: 'filters.woman', gender: 'femme' },
+  { labelKey: 'filters.man', gender: 'homme' },
+  { labelKey: 'filters.kids', gender: 'enfant' },
+  { labelKey: 'filters.baby', gender: 'bebe' }
 ];
 
 export default function SellBrandGenderScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -42,7 +44,7 @@ export default function SellBrandGenderScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={handleBack} />
           <Text variant="body" style={styles.headerTitle}>
-            Brand
+            {t('filters.searchBrands')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -56,7 +58,7 @@ export default function SellBrandGenderScreen() {
               onPress={() => openGender(segment)}
             >
               <Text variant="body" style={styles.rowLabel}>
-                {segment.label}
+                {t(segment.labelKey)}
               </Text>
               <Text style={styles.chevron}>{'›'}</Text>
             </TouchableOpacity>

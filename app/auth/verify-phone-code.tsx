@@ -12,9 +12,11 @@ import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { Keypad } from '../../components/ui/Keypad';
 import { theme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 
 export default function VerifyPhoneCodeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { setMockSession } = useAuthStore();
   const [code, setCode] = useState('');
@@ -47,15 +49,13 @@ export default function VerifyPhoneCodeScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Verify your phone number</Text>
-            <Text style={styles.subtitle}>
-              We sent a text message to your phone number. Please enter the verification code below.
-            </Text>
+            <Text style={styles.title}>{t('auth.verifyPhoneCode.screenTitle')}</Text>
+            <Text style={styles.subtitle}>{t('auth.verifyPhoneCode.screenSubtitle')}</Text>
           </View>
 
           <View style={styles.inputContainer}>
             <TextField
-              label="Verification code"
+              label={t('auth.verifyPhoneCode.code')}
               value={code}
               onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
@@ -71,7 +71,7 @@ export default function VerifyPhoneCodeScreen() {
 
           <View style={styles.footer}>
             <Button
-              title="Verify"
+              title={t('auth.verifyPhoneCode.verify')}
               onPress={handleVerify}
               variant="primary-green"
               loading={loading}

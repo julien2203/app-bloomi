@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { Screen } from '../../../components/ui/Screen';
@@ -10,6 +9,7 @@ import { Text } from '../../../components/ui/Text';
 import { useSellFormStore } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { getSizes } from '../../../lib/api/filters';
+import { useTranslation } from 'react-i18next';
 
 type SizeRow = {
   id: number;
@@ -23,28 +23,33 @@ type SizeSection = {
   rows: SizeRow[];
 };
 
-function getSectionTitle(gender?: string | null, type?: string | null): string {
+function getSectionTitle(
+  gender: string | null | undefined,
+  type: string | null | undefined,
+  t: (key: string) => string
+): string {
   const g = gender ?? 'all';
-  const t = type ?? 'all';
+  const typeKey = type ?? 'all';
 
-  if (g === 'femme' && t === 'vetements') return "Woman's items";
-  if (g === 'femme' && t === 'chaussures') return "Woman's shoes";
+  if (g === 'femme' && typeKey === 'vetements') return t('filters.sizeSections.womanItems');
+  if (g === 'femme' && typeKey === 'chaussures') return t('filters.sizeSections.womanShoes');
 
-  if (g === 'homme' && t === 'vetements') return "Men's clothing";
-  if (g === 'homme' && t === 'pantalons') return "Men's pants & jeans";
-  if (g === 'homme' && t === 'chemises') return "Men's shirts (collar)";
-  if (g === 'homme' && t === 'chaussures') return "Men's shoes";
+  if (g === 'homme' && typeKey === 'vetements') return t('filters.sizeSections.menClothing');
+  if (g === 'homme' && typeKey === 'pantalons') return t('filters.sizeSections.menPants');
+  if (g === 'homme' && typeKey === 'chemises') return t('filters.sizeSections.menShirts');
+  if (g === 'homme' && typeKey === 'chaussures') return t('filters.sizeSections.menShoes');
 
-  if (g === 'enfant' && t === 'vetements') return 'Kids';
-  if (g === 'enfant' && t === 'chaussures') return 'Kids shoes';
+  if (g === 'enfant' && typeKey === 'vetements') return t('filters.sizeSections.kids');
+  if (g === 'enfant' && typeKey === 'chaussures') return t('filters.sizeSections.kidsShoes');
 
-  if (g === 'bebe' && t === 'vetements') return 'Baby';
-  if (g === 'bebe' && t === 'chaussures') return 'Baby shoes';
+  if (g === 'bebe' && typeKey === 'vetements') return t('filters.sizeSections.baby');
+  if (g === 'bebe' && typeKey === 'chaussures') return t('filters.sizeSections.babyShoes');
 
-  return 'Other';
+  return t('filters.other');
 }
 
 export default function SellSizeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
@@ -66,7 +71,7 @@ export default function SellSizeScreen() {
         (data as any[]).forEach((row) => {
           const rowGender = row.gender as string | null;
           const type = row.type as string | null;
-          const title = getSectionTitle(rowGender, type);
+          const title = getSectionTitle(rowGender, type, t);
 
           const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
           const count = rawCount < 0 ? 0 : rawCount;
@@ -94,19 +99,19 @@ export default function SellSizeScreen() {
           })
         );
 
-        const SECTION_ORDER = [
-          "Woman's items",
-          "Woman's shoes",
-          "Men's clothing",
-          "Men's pants & jeans",
-          "Men's shirts (collar)",
-          "Men's shoes",
-          'Kids',
-          'Kids shoes',
-          'Baby',
-          'Baby shoes',
-          'Other'
-        ];
+      const SECTION_ORDER = [
+        t('filters.sizeSections.womanItems'),
+        t('filters.sizeSections.womanShoes'),
+        t('filters.sizeSections.menClothing'),
+        t('filters.sizeSections.menPants'),
+        t('filters.sizeSections.menShirts'),
+        t('filters.sizeSections.menShoes'),
+        t('filters.sizeSections.kids'),
+        t('filters.sizeSections.kidsShoes'),
+        t('filters.sizeSections.baby'),
+        t('filters.sizeSections.babyShoes'),
+        t('filters.other')
+      ];
 
         builtSections.sort((a, b) => {
           const ia = SECTION_ORDER.indexOf(a.title ?? '');
@@ -126,7 +131,23 @@ export default function SellSizeScreen() {
     };
 
     void load();
-  }, [values.categoryGender, values.categoryType, values.category]);
+  }, [t, values.categoryGender, values.categoryType, values.category]);
+
+  useEffect(() => {
+    if (selectedId != null && selectedId > 0) return;
+    const label = values.size?.label?.trim();
+    if (!label || sections.length === 0) return;
+
+    for (const section of sections) {
+      const row = section.rows.find(
+        (r) => r.label.trim().toLowerCase() === label.toLowerCase()
+      );
+      if (row) {
+        setSelectedId(row.id);
+        break;
+      }
+    }
+  }, [sections, selectedId, values.size?.label]);
 
   const handleConfirm = () => {
     if (!selectedId) return;
@@ -155,7 +176,7 @@ export default function SellSizeScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Size
+            {t('sell.size')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -208,13 +229,11 @@ export default function SellSizeScreen() {
                         </View>
                         <View
                           style={[
-                            styles.checkbox,
-                            checked && styles.checkboxChecked
+                            styles.radioOuter,
+                            checked && styles.radioOuterSelected
                           ]}
                         >
-                          {checked && (
-                            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                          )}
+                          {checked ? <View style={styles.radioInner} /> : null}
                         </View>
                       </TouchableOpacity>
                     );
@@ -232,7 +251,7 @@ export default function SellSizeScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleConfirm}
             variant="primary"
             disabled={!selectedId}
@@ -309,18 +328,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#AAAAAA'
   },
-  checkbox: {
+  radioOuter: {
     width: 22,
     height: 22,
-    borderRadius: 6,
+    borderRadius: 11,
     borderWidth: 1.5,
     borderColor: '#CCCCCC',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center'
   },
-  checkboxChecked: {
-    borderColor: '#C3EA4F',
+  radioOuterSelected: {
+    borderColor: '#C3EA4F'
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#C3EA4F'
   },
   loadingContainer: {

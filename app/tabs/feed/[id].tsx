@@ -5,6 +5,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  InteractionManager,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -17,11 +18,15 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Feather } from '@expo/vector-icons';
 import {
+  cloneListingDetail,
   createOrGetThreadForListing,
   deactivateListingToDraft,
   deleteListing,
+  excludeBlockedSellers,
+  getBlockedSellerIdsForCurrentUser,
   getListingById,
   getListingLikesInfo,
   getPublishedListingsCountForSeller,
@@ -40,10 +45,24 @@ import { OwnerListingBottomSheet } from '../../../components/listing/OwnerListin
 import { ProductCard } from '../../../components/ProductCard';
 import { InfluencerBadge } from '../../../components/InfluencerBadge';
 import { useAuthStore } from '../../../stores/authStore';
+import { openGuestAuthPrompt } from '../../../lib/guestAuthPrompt';
 import { useLikesStore } from '../../../stores/likesStore';
 import { supabase } from '../../../lib/supabase';
 import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
 import * as Clipboard from 'expo-clipboard';
+import { SafetyChoiceSheet } from '../../../components/safety/SafetyChoiceSheet';
+import {
+  REPORT_REASON_KEYS,
+  reportReasonToDbValue,
+  type ReportReasonKey
+} from '../../../lib/reports';
+import { translateColorList } from '../../../lib/colorI18n';
+import { translateConditionLabel } from '../../../lib/conditionI18n';
+import { computeBuyerFinalPriceChf } from '../../../lib/formatBuyerPrice';
+import {
+  BuyerPriceBreakdownSheet,
+  BuyerPriceInfoButton
+} from '../../../components/pricing/BuyerPriceBreakdownSheet';
 
 /** Paliers de vues déjà notifiés pour un listing (évite les doublons si l’écran se remonte). */
 const listingViewMilestonesNotified = new Map<string, Set<number>>();
@@ -60,28 +79,46 @@ type PhotoItem = {
   created_at: string;
 };
 
-const BUYER_PROTECTION_RATE = 0.08;
 const RELATED_GRID_GAP = 8;
 const RELATED_GRID_PADDING_X = 16;
-const REPORT_REASONS = [
-  'Contenu inapproprie',
-  'Arnaque',
-  'Contenu illegal',
-  'Autre'
-] as const;
 
-const conditionLabelMap: Record<string, string> = {
-  new: 'New with tags',
-  like_new: 'New without tags',
-  good: 'Very good',
-  fair: 'Good',
-  poor: 'Satisfactory'
+type ListingReportUi =
+  | null
+  | { step: 'reasons' }
+  | { step: 'done'; title: string; message: string };
+
+type ShippingFeeInfo = {
+  fee_cents: number;
+  is_promo: boolean;
 };
 
+function deliveryModeIncludesShipping(mode: string | undefined): boolean {
+  const dm = String(mode ?? 'both').toLowerCase();
+  return dm === 'shipping' || dm === 'both';
+}
+
+function deliveryModeIncludesPickup(mode: string | undefined): boolean {
+  const dm = String(mode ?? 'both').toLowerCase();
+  return dm === 'pickup' || dm === 'both';
+}
+
 export default function ListingDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, cover_photo, from_offer_chat, from_notifications, from_notifications_origin } =
+    useLocalSearchParams<{
+      id: string;
+      cover_photo?: string;
+      from_offer_chat?: string;
+      from_notifications?: string;
+      from_notifications_origin?: string;
+    }>();
+
+  const coverPhotoParam =
+    typeof cover_photo === 'string' && cover_photo.trim().length > 0
+      ? cover_photo.trim()
+      : undefined;
   const { user } = useAuthStore();
   const likeOptimistic = useLikesStore((s) => s.likeOptimistic);
   const unlikeOptimistic = useLikesStore((s) => s.unlikeOptimistic);
@@ -113,12 +150,13 @@ export default function ListingDetailScreen() {
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [showBuyerProtectionInfo, setShowBuyerProtectionInfo] = useState(false);
   const [ownerSheetVisible, setOwnerSheetVisible] = useState(false);
-  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportUi, setReportUi] = useState<ListingReportUi>(null);
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [shippingFeeInfo, setShippingFeeInfo] = useState<ShippingFeeInfo | null>(null);
 
   const fetchListing = useCallback(async () => {
     if (!id) {
-      setError(new Error('ID manquant'));
+      setError(new Error('Missing ID'));
       setLoading(false);
       return;
     }
@@ -135,7 +173,7 @@ export default function ListingDetailScreen() {
         setError(new Error('Listing not found'));
         setListing(null);
       } else {
-        setListing(data);
+        setListing(cloneListingDetail(data));
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error'));
@@ -149,6 +187,35 @@ export default function ListingDetailScreen() {
     void fetchListing();
   }, [fetchListing]);
 
+  useEffect(() => {
+    if (!listing?.parcel_size || !deliveryModeIncludesShipping(listing.delivery_mode)) {
+      setShippingFeeInfo(null);
+      return;
+    }
+
+    let mounted = true;
+    setShippingFeeInfo(null);
+
+    void (async () => {
+      const { data, error } = await supabase.rpc('get_shipping_fee', {
+        p_parcel_size: listing.parcel_size
+      });
+      if (!mounted || error || !data) return;
+
+      const row = data as { fee_cents?: number; is_promo?: boolean };
+      if (typeof row.fee_cents !== 'number') return;
+
+      setShippingFeeInfo({
+        fee_cents: row.fee_cents,
+        is_promo: Boolean(row.is_promo)
+      });
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [listing?.id, listing?.parcel_size, listing?.delivery_mode]);
+
   const normalizePhotoUrl = useCallback((rawUrl: string) => {
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
     const { data } = supabase.storage.from('listings').getPublicUrl(rawUrl);
@@ -156,9 +223,10 @@ export default function ListingDetailScreen() {
   }, []);
 
   useEffect(() => {
-    const loadRelated = async () => {
-      if (!listing?.id) return;
+    if (!listing?.id) return;
 
+    const task = InteractionManager.runAfterInteractions(() => {
+      const loadRelated = async () => {
       setLoadingRelated(true);
       try {
         const otherPromise = supabase
@@ -170,93 +238,20 @@ export default function ListingDetailScreen() {
           .limit(6);
 
         const similarPromise = (async () => {
-          const { data: currentListingRow, error: currentListingErr } = await supabase
-            .from('listings')
-            .select('category_id')
-            .eq('id', listing.id)
-            .maybeSingle();
-          if (currentListingErr) return [] as any[];
-
-          const currentCategoryId = String((currentListingRow as any)?.category_id ?? '').trim();
-          if (!currentCategoryId) return [] as any[];
-
-          const excludedIds = new Set<string>([listing.id]);
-          const similarIds: string[] = [];
-
-          // 1) Strict same category_id
-          const { data: exactRows } = await supabase
-            .from('listings')
-            .select('id')
-            .eq('status', 'published')
-            .eq('category_id', currentCategoryId)
-            .neq('id', listing.id)
-            .neq('seller_id', listing.seller_id)
-            .order('created_at', { ascending: false })
-            .limit(6);
-
-          for (const row of (exactRows || []) as any[]) {
-            const lid = String(row.id ?? '').trim();
-            if (!lid || excludedIds.has(lid)) continue;
-            excludedIds.add(lid);
-            similarIds.push(lid);
-          }
-
-          // 2) Fallback with same parent_id if needed
-          if (similarIds.length < 6) {
-            const { data: currentCategoryRow } = await supabase
-              .from('categories')
-              .select('parent_id')
-              .eq('id', currentCategoryId)
-              .maybeSingle();
-
-            const parentId = String((currentCategoryRow as any)?.parent_id ?? '').trim();
-            if (parentId) {
-              const { data: siblingCategories } = await supabase
-                .from('categories')
-                .select('id')
-                .eq('parent_id', parentId);
-
-              const siblingCategoryIds = (siblingCategories || [])
-                .map((row: any) => String(row.id ?? '').trim())
-                .filter(Boolean);
-
-              if (siblingCategoryIds.length > 0) {
-                const { data: parentRows } = await supabase
-                  .from('listings')
-                  .select('id')
-                  .eq('status', 'published')
-                  .in('category_id', siblingCategoryIds as any)
-                  .neq('id', listing.id)
-                  .neq('seller_id', listing.seller_id)
-                  .order('created_at', { ascending: false })
-                  .limit(30);
-
-                for (const row of (parentRows || []) as any[]) {
-                  const lid = String(row.id ?? '').trim();
-                  if (!lid || excludedIds.has(lid)) continue;
-                  excludedIds.add(lid);
-                  similarIds.push(lid);
-                  if (similarIds.length >= 6) break;
-                }
-              }
+          const { data: similarRows, error: similarErr } = await supabase.rpc(
+            'get_similar_listings',
+            {
+              p_listing_id: listing.id,
+              p_limit: 6
             }
-          }
-
-          if (similarIds.length === 0) return [] as any[];
-
-          const { data: similarRows } = await supabase
-            .from('v_listing_detail')
-            .select('*')
-            .in('id', similarIds as any);
-
-          const rowsById = new Map<string, any>();
-          for (const row of (similarRows || []) as any[]) {
-            rowsById.set(String(row.id), row);
-          }
-          return similarIds.map((sid) => rowsById.get(sid)).filter(Boolean);
+          );
+          if (similarErr) return [] as any[];
+          return (similarRows || []) as any[];
         })();
 
         const [{ data: otherRows }, similarRows] = await Promise.all([otherPromise, similarPromise]);
+
+        const blockedIds = await getBlockedSellerIdsForCurrentUser();
 
         const normalizeListing = (row: any): ListingDetail => {
           const photos = Array.isArray(row?.photos) ? row.photos : [];
@@ -268,7 +263,8 @@ export default function ListingDetailScreen() {
         };
 
         const other = Array.isArray(otherRows) ? otherRows.map(normalizeListing) : [];
-        const similar = Array.isArray(similarRows) ? similarRows.map(normalizeListing) : [];
+        let similar = Array.isArray(similarRows) ? similarRows.map(normalizeListing) : [];
+        similar = excludeBlockedSellers(similar, blockedIds);
 
         setOtherItems(other);
         setSimilarItems(similar);
@@ -280,28 +276,35 @@ export default function ListingDetailScreen() {
       }
     };
 
-    void loadRelated();
+      void loadRelated();
+    });
+
+    return () => task.cancel();
   }, [listing?.id, listing?.seller_id, normalizePhotoUrl]);
 
-  // Likes: état initial (count + likedByMe)
+  // Likes: état initial (count + likedByMe) — après le rendu initial
   useEffect(() => {
+    if (!listing?.id) return;
     let mounted = true;
-    const loadLikes = async () => {
-      if (!listing?.id) return;
-      const { data } = await getListingLikesInfo(listing.id);
-      if (!mounted || !data) return;
-      setLikedByMe(data.likedByMe);
-      setLikesCount(data.likesCount);
-    };
-    void loadLikes();
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        const { data } = await getListingLikesInfo(listing.id);
+        if (!mounted || !data) return;
+        setLikedByMe(data.likedByMe);
+        setLikesCount(data.likesCount);
+      })();
+    });
     return () => {
       mounted = false;
+      task.cancel();
     };
   }, [listing?.id]);
 
-  // Views: incrémenter à chaque ouverture
+  // Views: incrémenter à chaque ouverture (priorité basse)
   useEffect(() => {
+    if (!listing?.id) return;
     let mounted = true;
+    const task = InteractionManager.runAfterInteractions(() => {
     const bumpViews = async () => {
       // On ne compte que les vues d'utilisateurs connectés (unique par user)
       if (!listing?.id) return;
@@ -341,8 +344,10 @@ export default function ListingDetailScreen() {
       }
     };
     void bumpViews();
+    });
     return () => {
       mounted = false;
+      task.cancel();
     };
   }, [listing?.id, user?.id]);
 
@@ -370,8 +375,9 @@ export default function ListingDetailScreen() {
       notified.add(m);
       void sendPushNotificationWithUserJwt({
         user_id: listing.seller_id,
-        title: '👀 Ça regarde beaucoup par ici…',
-        body: `Ton article a été vu ${m} fois !`,
+        titleKey: 'feed.listingDetail.viewsMilestoneTitle',
+        bodyKey: 'feed.listingDetail.viewsMilestoneBody',
+        bodyParams: { count: m },
         notification_type: 'new_items',
         data: { listing_id: listing.id, views_milestone: m }
       });
@@ -415,10 +421,22 @@ export default function ListingDetailScreen() {
     return '…';
   }, [listing?.seller_published_count, sellerCountFallback]);
 
-  const photos: PhotoItem[] = useMemo(
-    () => (listing?.photos ? (listing.photos as PhotoItem[]) : []),
-    [listing]
-  );
+  const photos: PhotoItem[] = useMemo(() => {
+    if (listing?.photos?.length) {
+      return listing.photos as PhotoItem[];
+    }
+    if (coverPhotoParam) {
+      return [
+        {
+          id: 'preview-cover',
+          url: coverPhotoParam,
+          order_index: 0,
+          created_at: ''
+        }
+      ];
+    }
+    return [];
+  }, [listing?.photos, coverPhotoParam]);
 
   const formattedPrice = useMemo(() => {
     if (!listing) return '';
@@ -427,14 +445,19 @@ export default function ListingDetailScreen() {
 
   const formattedProtectionPrice = useMemo(() => {
     if (!listing) return '';
-    const protectedPrice = listing.price * (1 + BUYER_PROTECTION_RATE);
-    return `${protectedPrice.toFixed(2)} CHF`;
+    return `${computeBuyerFinalPriceChf(listing.price).toFixed(2)} CHF`;
   }, [listing]);
 
   const conditionLabel = useMemo(() => {
     if (!listing?.condition) return undefined;
-    return conditionLabelMap[listing.condition] ?? listing.condition;
-  }, [listing]);
+    return translateConditionLabel(listing.condition, t);
+  }, [listing?.condition, t]);
+
+  const colorLabel = useMemo(() => {
+    if (!listing?.color) return undefined;
+    const translated = translateColorList(listing.color, t);
+    return translated || undefined;
+  }, [listing?.color, t]);
 
   const isListingReservedOrUnavailable = useMemo(() => {
     const status = String(listing?.status ?? '').toLowerCase();
@@ -452,15 +475,15 @@ export default function ListingDetailScreen() {
     const { error } = await deleteListing(listingId);
     if (error) {
       if (isListingDeleteBlockedByOrders(error)) {
-        Alert.alert('Suppression impossible', error, [
+        Alert.alert(t('feed.listingDetail.cannotDelete'), error, [
           { text: 'OK', style: 'cancel' },
           {
-            text: "Désactiver l'annonce",
+            text: t('feed.listingDetail.deactivateListing'),
             onPress: () => {
               void (async () => {
                 const { error: deactErr } = await deactivateListingToDraft(listingId);
                 if (deactErr) {
-                  Alert.alert('Erreur', deactErr);
+                  Alert.alert(t('common.error'), deactErr);
                   return;
                 }
                 setOwnerSheetVisible(false);
@@ -475,7 +498,7 @@ export default function ListingDetailScreen() {
         ]);
         throw new Error(error);
       }
-      Alert.alert('Error', error);
+      Alert.alert(t('common.error'), error);
       throw new Error(error);
     }
     if (router.canGoBack && router.canGoBack()) {
@@ -489,7 +512,7 @@ export default function ListingDetailScreen() {
     if (!listing?.id) return;
     const { error } = await deactivateListingToDraft(listing.id);
     if (error) {
-      Alert.alert('Erreur', error);
+      Alert.alert(t('common.error'), error);
       throw new Error(error);
     }
     setOwnerSheetVisible(false);
@@ -504,16 +527,19 @@ export default function ListingDetailScreen() {
     (listingId: string) => {
       setOwnerSheetVisible(false);
       setTimeout(() => {
-        Alert.alert('Cette action est irréversible.', 'Supprimer définitivement ?', [
-          { text: 'Annuler', style: 'cancel' },
+        Alert.alert(
+          t('feed.listingDetail.deletePermanentlyTitle'),
+          t('feed.listingDetail.deletePermanentlyMessage'),
+          [
+          { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Supprimer',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: () => {
               void (async () => {
                 const { error: delErr } = await deleteListing(listingId);
                 if (delErr) {
-                  Alert.alert('Suppression impossible', delErr);
+                  Alert.alert(t('feed.listingDetail.cannotDelete'), delErr);
                   return;
                 }
                 if (router.canGoBack && router.canGoBack()) {
@@ -541,6 +567,20 @@ export default function ListingDetailScreen() {
   }, [listing?.id, router]);
 
   const handleBack = () => {
+    if (from_notifications === '1') {
+      router.replace({
+        pathname: '/tabs/profile/notifications',
+        params:
+          from_notifications_origin === 'feed' || from_notifications_origin === 'profile'
+            ? { from: from_notifications_origin }
+            : undefined
+      });
+      return;
+    }
+    if (from_offer_chat === '1') {
+      router.replace('/tabs/feed');
+      return;
+    }
     // Sur certains cas (deep link / ouverture directe), il n'y a pas de route précédente
     // donc on renvoie explicitement vers le feed.
     if (router.canGoBack && router.canGoBack()) {
@@ -556,7 +596,7 @@ export default function ListingDetailScreen() {
     if (isOwner) return;
 
     if (!user) {
-      router.push('/auth/login');
+      openGuestAuthPrompt();
       return;
     }
 
@@ -589,7 +629,11 @@ export default function ListingDetailScreen() {
   };
 
   const handleMessageSeller = () => {
-    if (!listing || !user) return;
+    if (!listing) return;
+    if (!user) {
+      openGuestAuthPrompt();
+      return;
+    }
     if (user.id === listing.seller_id) return;
 
     void (async () => {
@@ -608,17 +652,17 @@ export default function ListingDetailScreen() {
 
   const openReportMenu = useCallback(() => {
     if (isOwner || !listing?.id) return;
-    setReportModalVisible(true);
+    setReportUi({ step: 'reasons' });
   }, [isOwner, listing?.id]);
 
   const submitReport = useCallback(
-    async (reason: (typeof REPORT_REASONS)[number]) => {
+    async (reason: ReportReasonKey) => {
       if (!listing?.id) return;
       const {
         data: { user: authedUser }
       } = await supabase.auth.getUser();
       if (!authedUser?.id) {
-        router.push('/auth/login');
+        openGuestAuthPrompt();
         return;
       }
 
@@ -627,17 +671,24 @@ export default function ListingDetailScreen() {
         const { error: reportError } = await supabase.from('reports').insert({
           reporter_id: authedUser.id,
           listing_id: listing.id,
-          reason
+          reason: reportReasonToDbValue(reason)
         });
         if (reportError) throw reportError;
-        setReportModalVisible(false);
-        Alert.alert('Merci', 'Votre signalement a bien ete envoye.');
+        setReportUi({
+          step: 'done',
+          title: t('feed.listingDetail.reportThanksTitle'),
+          message: t('feed.listingDetail.reportThanksMessage')
+        });
       } catch (e) {
         const message =
           e instanceof Error && e.message
             ? e.message
-            : "Impossible d'envoyer le signalement.";
-        Alert.alert('Erreur', message);
+            : 'Unable to send the report.';
+        setReportUi({
+          step: 'done',
+          title: t('feed.listingDetail.reportErrorTitle'),
+          message
+        });
       } finally {
         setSubmittingReport(false);
       }
@@ -647,6 +698,10 @@ export default function ListingDetailScreen() {
 
   const handleMakeOffer = () => {
     if (!listing) return;
+    if (!user) {
+      openGuestAuthPrompt();
+      return;
+    }
     router.push({
       pathname: '/tabs/feed/make-offer',
       params: { id: listing.id }
@@ -655,7 +710,11 @@ export default function ListingDetailScreen() {
 
   const handleBuyNow = () => {
     if (!listing) return;
-    if (user?.id && user.id === listing.seller_id) return;
+    if (!user) {
+      openGuestAuthPrompt();
+      return;
+    }
+    if (user.id === listing.seller_id) return;
 
     const coverPhoto = photos?.[0]?.url;
 
@@ -676,13 +735,13 @@ export default function ListingDetailScreen() {
     const deepLink = `bloomi://listing/${listing.id}`;
     try {
       await Share.share({
-        title: listing.title ?? 'Annonce Bloomi',
-        message: `${listing.title ?? 'Annonce Bloomi'}\n${deepLink}`,
+        title: listing.title ?? 'Bloomi listing',
+        message: `${listing.title ?? 'Bloomi listing'}\n${deepLink}`,
         url: deepLink
       });
     } catch {
       await Clipboard.setStringAsync(deepLink);
-      Alert.alert('Lien copie !');
+      Alert.alert(t('feed.listingDetail.linkCopied'));
     }
   }, [listing?.id, listing?.title]);
 
@@ -761,9 +820,9 @@ export default function ListingDetailScreen() {
             <Text variant="h2" style={styles.errorTitle}>
               {error?.message || 'Listing not found'}
             </Text>
-            <Button title="Retry" onPress={fetchListing} variant="primary" />
+            <Button title={t('common.retry')} onPress={fetchListing} variant="primary" />
             <Button
-              title="Back"
+              title={t('common.back')}
               onPress={handleBack}
               variant="secondary"
               style={styles.backButton}
@@ -782,7 +841,7 @@ export default function ListingDetailScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={handleBack} />
           <Text variant="body" style={styles.headerTitle}>
-            Detail product
+            {t('feed.listingDetail.title')}
           </Text>
           {isOwner ? (
             <TouchableOpacity
@@ -791,7 +850,7 @@ export default function ListingDetailScreen() {
               hitSlop={HIT_SLOP_COMFORTABLE}
               style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
               accessibilityRole="button"
-              accessibilityLabel="Listing menu"
+              accessibilityLabel={t('feed.listingDetail.listingMenu')}
             >
               <Text variant="body" style={styles.headerMenuDots}>
                 •••
@@ -804,7 +863,7 @@ export default function ListingDetailScreen() {
               hitSlop={HIT_SLOP_COMFORTABLE}
               style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
               accessibilityRole="button"
-              accessibilityLabel="Signaler cette annonce"
+              accessibilityLabel={t('feed.listingDetail.reportListing')}
             >
               <Text variant="body" style={styles.headerMenuDots}>
                 •••
@@ -837,9 +896,7 @@ export default function ListingDetailScreen() {
                   decelerationRate="fast"
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
-                  renderItem={({ item, index }) => {
-                    console.log('PHOTO ITEM:', item);
-                    return (
+                  renderItem={({ item, index }) => (
                       <TouchableOpacity
                         activeOpacity={0.9}
                         onPress={() => handleImagePress(index)}
@@ -854,14 +911,9 @@ export default function ListingDetailScreen() {
                             backgroundColor: '#F5F5F5'
                           }}
                           resizeMode="cover"
-                          onError={(e) =>
-                            console.log('IMAGE ERROR:', e.nativeEvent.error)
-                          }
-                          onLoad={() => console.log('IMAGE LOADED:', item.url)}
                         />
                       </TouchableOpacity>
-                    );
-                  }}
+                    )}
                   onMomentumScrollEnd={handleCarouselMomentumEnd}
                 />
 
@@ -936,40 +988,44 @@ export default function ListingDetailScreen() {
             </View>
             <View style={styles.fullBleedSeparator} />
 
-            <Text variant="h2" style={styles.mainPrice}>
+            <Text variant="h2" color="appleBlack" style={styles.mainPrice}>
               {formattedPrice}
             </Text>
+
+            {deliveryModeIncludesShipping(listing.delivery_mode) &&
+            listing.parcel_size &&
+            shippingFeeInfo ? (
+              <View style={styles.deliveryRow}>
+                <Text style={styles.deliveryText}>
+                  {t('feed.listingDetail.shipping', {
+                    price: (shippingFeeInfo.fee_cents / 100).toFixed(2)
+                  })}
+                </Text>
+                {shippingFeeInfo.is_promo ? (
+                  <View style={styles.shippingPromoBadge}>
+                    <Text style={styles.shippingPromoBadgeText}>
+                      {t('feed.listingDetail.shippingPromo')}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+            {deliveryModeIncludesPickup(listing.delivery_mode) ? (
+              <Text style={styles.deliveryText}>{t('feed.listingDetail.pickup')}</Text>
+            ) : null}
 
             <View style={styles.protectionRow}>
               <Text
                 variant="captionSm"
                 style={styles.protectionPrice}
               >
-                {formattedProtectionPrice} includes Buyer Protection
+                {t('feed.listingDetail.includesBuyerProtection', { price: formattedProtectionPrice })}
               </Text>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setShowBuyerProtectionInfo(true)}
-                style={styles.protectionInfoButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Feather name="info" size={14} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
+              <BuyerPriceInfoButton onPress={() => setShowBuyerProtectionInfo(true)} />
             </View>
           </View>
 
-          {/* Description */}
-          <View style={styles.descriptionBlock}>
-            <Text variant="captionSm" color="textSecondary" style={styles.sectionLabel}>
-              Item description
-            </Text>
-            <Text variant="body" color="textSecondary">
-              {listing.description ?? 'No description provided.'}
-            </Text>
-          </View>
-          <View style={styles.separator} />
-
-          {/* Seller block */}
+          {/* Seller block — juste sous le prix (même espacement que ligne → prix) */}
           <View style={styles.sellerBlock}>
             <TouchableOpacity
               activeOpacity={0.85}
@@ -983,10 +1039,7 @@ export default function ListingDetailScreen() {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               {listing.seller_avatar_url ? (
-                <Image
-                  source={{ uri: listing.seller_avatar_url }}
-                  style={styles.sellerAvatar}
-                />
+                <Image source={{ uri: listing.seller_avatar_url }} style={styles.sellerAvatar} />
               ) : (
                 <View style={styles.sellerAvatarPlaceholder}>
                   <Text variant="body" color="appleBlack">
@@ -1010,13 +1063,25 @@ export default function ListingDetailScreen() {
             </TouchableOpacity>
             {user?.id !== listing.seller_id && (
               <Button
-                title="Message seller"
+                title={t('feed.listingDetail.messageSeller')}
                 onPress={handleMessageSeller}
                 variant="primary"
                 style={styles.sellerButton}
                 textStyle={styles.sellerButtonText}
               />
             )}
+          </View>
+
+          <View style={styles.separator} />
+
+          {/* Description */}
+          <View style={styles.descriptionBlock}>
+            <Text variant="captionSm" color="textSecondary" style={styles.sectionLabel}>
+              {t('feed.listingDetail.itemDescription')}
+            </Text>
+            <Text variant="body" color="textSecondary">
+              {listing.description ?? t('feed.listingDetail.noDescription')}
+            </Text>
           </View>
 
           {/* Lower section */}
@@ -1038,7 +1103,7 @@ export default function ListingDetailScreen() {
                       color={likedByMe ? theme.colors.primary : theme.colors.textPrimary}
                     />
                     <Text variant="captionSm" color="textPrimary">
-                      Favorite
+                      {t('feed.listingDetail.favorite')}
                     </Text>
                   </TouchableOpacity>
                   <View style={styles.favoriteShareDivider} />
@@ -1057,21 +1122,21 @@ export default function ListingDetailScreen() {
                   color="#000"
                 />
                 <Text variant="captionSm" color="textPrimary">
-                  Share
+                  {t('feed.listingDetail.share')}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Details table */}
             <View style={styles.detailsList}>
-              <DetailRow label="Category" value={listing.category ?? '—'} />
-              <DetailRow label="Size" value={listing.size ?? '—'} />
-              <DetailRow label="Condition" value={conditionLabel ?? '—'} />
-              <DetailRow label="Color" value={listing.color ?? '—'} />
-              <DetailRow label="Views" value={viewsCount != null ? String(viewsCount) : '—'} />
-              <DetailRow label="Interested" value={String(likesCount)} />
+              <DetailRow label={t('feed.listingDetail.category')} value={listing.category ?? '—'} />
+              <DetailRow label={t('feed.listingDetail.size')} value={listing.size ?? '—'} />
+              <DetailRow label={t('feed.listingDetail.condition')} value={conditionLabel ?? '—'} />
+              <DetailRow label={t('feed.listingDetail.color')} value={colorLabel ?? '—'} />
+              <DetailRow label={t('feed.listingDetail.views')} value={viewsCount != null ? String(viewsCount) : '—'} />
+              <DetailRow label={t('feed.listingDetail.interested')} value={String(likesCount)} />
               <DetailRow
-                label="Uploaded"
+                label={t('feed.listingDetail.uploaded')}
                 value={formatUploadedDate(listing.published_at ?? listing.created_at)}
               />
             </View>
@@ -1094,7 +1159,7 @@ export default function ListingDetailScreen() {
                       : styles.relatedTabTextInactive
                   ]}
                 >
-                  Other listings
+                  {t('feed.listingDetail.otherListings')}
                 </Text>
                 {relatedTab === 'other' ? <View style={styles.relatedTabUnderline} /> : null}
               </TouchableOpacity>
@@ -1113,7 +1178,7 @@ export default function ListingDetailScreen() {
                       : styles.relatedTabTextInactive
                   ]}
                 >
-                  Similar items
+                  {t('feed.listingDetail.similarItems')}
                 </Text>
                 {relatedTab === 'similar' ? <View style={styles.relatedTabUnderline} /> : null}
               </TouchableOpacity>
@@ -1126,7 +1191,7 @@ export default function ListingDetailScreen() {
                 </View>
               ) : (relatedTab === 'other' ? otherItems : similarItems).length === 0 ? (
                 <Text variant="captionSm" color="textSecondary" style={styles.relatedEmpty}>
-                  No items to show.
+                  {t('feed.listingDetail.noRelatedItems')}
                 </Text>
               ) : (
                 (relatedTab === 'other' ? otherItems : similarItems).map((l) => {
@@ -1150,8 +1215,13 @@ export default function ListingDetailScreen() {
                       imageUrl={cover}
                       style={styles.relatedCard}
                       cardWidth={(SCREEN_WIDTH - RELATED_GRID_PADDING_X * 2 - RELATED_GRID_GAP) / 2}
-                      imageRatio={1}
-                      onPress={() => router.push(`/tabs/feed/${l.id}`)}
+                      imageRatio={1.3}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/tabs/feed/[id]',
+                          params: { id: l.id, ...(cover ? { cover_photo: cover } : {}) }
+                        })
+                      }
                     />
                   );
                 })
@@ -1184,7 +1254,7 @@ export default function ListingDetailScreen() {
         >
           {isOwner ? (
             <Button
-              title="Edit listing"
+              title={t('feed.listingDetail.editListing')}
               onPress={handleEditOwnListing}
               variant="google"
               style={styles.bottomButtonOwnerFull}
@@ -1192,7 +1262,11 @@ export default function ListingDetailScreen() {
           ) : (
             <>
               <Button
-                title={isListingReservedOrUnavailable ? 'Reserved' : 'Make an offer'}
+                title={
+                  isListingReservedOrUnavailable
+                    ? t('feed.listingDetail.reserved')
+                    : t('feed.listingDetail.makeOffer')
+                }
                 onPress={handleMakeOffer}
                 variant="secondary"
                 style={
@@ -1203,7 +1277,11 @@ export default function ListingDetailScreen() {
                 disabled={isListingReservedOrUnavailable}
               />
               <Button
-                title={isListingReservedOrUnavailable ? 'Reserved' : 'Buy now'}
+                title={
+                  isListingReservedOrUnavailable
+                    ? t('feed.listingDetail.reserved')
+                    : t('feed.listingDetail.buyNow')
+                }
                 onPress={handleBuyNow}
                 variant="google"
                 style={
@@ -1237,7 +1315,7 @@ export default function ListingDetailScreen() {
                 activeOpacity={0.8}
               >
                 <Text variant="body" color="appleBlack" style={styles.modalCloseText}>
-                  Close
+                  {t('common.close')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1252,7 +1330,7 @@ export default function ListingDetailScreen() {
               ) : (
                 <View style={styles.carouselPlaceholder}>
                   <Text variant="body" color="textSecondary">
-                    Pas d'image
+                    {t('common.noImage')}
                   </Text>
                 </View>
               )}
@@ -1286,77 +1364,45 @@ export default function ListingDetailScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* Buyer protection info modal */}
-        <Modal
+        <BuyerPriceBreakdownSheet
           visible={showBuyerProtectionInfo}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setShowBuyerProtectionInfo(false)}
-        >
-          <View style={styles.bpModalOverlay}>
-            <TouchableOpacity
-              style={styles.bpModalBackdropPressable}
-              activeOpacity={1}
-              onPress={() => setShowBuyerProtectionInfo(false)}
-            />
-            <View style={styles.bpModalCard}>
-              <Text variant="body" style={styles.bpModalTitle}>
-                Buyer Protection
-              </Text>
-              <Text variant="captionSm" color="textSecondary" style={styles.bpModalText}>
-                Buyer Protection is added for a fee to every purchase made with the "Buy now" button.
-                It includes our Refund Policy.
-              </Text>
-              <Button
-                title="Close"
-                onPress={() => setShowBuyerProtectionInfo(false)}
-                variant="primary"
-                style={styles.bpModalCloseButton}
-              />
-            </View>
-          </View>
-        </Modal>
+          itemPriceChf={listing?.price ?? 0}
+          onClose={() => setShowBuyerProtectionInfo(false)}
+        />
 
-        <Modal
-          visible={reportModalVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setReportModalVisible(false)}
-        >
-          <View style={styles.bpModalOverlay}>
-            <TouchableOpacity
-              style={styles.bpModalBackdropPressable}
-              activeOpacity={1}
-              onPress={() => setReportModalVisible(false)}
-            />
-            <View style={styles.bpModalCard}>
-              <Text variant="body" style={styles.bpModalTitle}>
-                Signaler cette annonce
-              </Text>
-              {REPORT_REASONS.map((reason) => (
-                <Button
-                  key={reason}
-                  title={reason}
-                  onPress={() => {
-                    if (!submittingReport) {
-                      void submitReport(reason);
-                    }
-                  }}
-                  variant="secondary"
-                  style={styles.reportReasonButton}
-                  disabled={submittingReport}
-                />
-              ))}
-              <Button
-                title="Annuler"
-                onPress={() => setReportModalVisible(false)}
-                variant="primary"
-                style={styles.bpModalCloseButton}
-                disabled={submittingReport}
-              />
-            </View>
-          </View>
-        </Modal>
+        {reportUi?.step === 'reasons' ? (
+          <SafetyChoiceSheet
+            visible
+            onClose={() => {
+              if (!submittingReport) setReportUi(null);
+            }}
+            title={t('feed.listingDetail.reportTitle')}
+            message={t('feed.listingDetail.reportMessage')}
+            actions={[
+              ...REPORT_REASON_KEYS.map((reason) => ({
+                label: t(`safety.reportReasons.${reason}`),
+                disabled: submittingReport,
+                onPress: () => {
+                  if (!submittingReport) void submitReport(reason);
+                }
+              })),
+              {
+                label: t('common.cancel'),
+                disabled: submittingReport,
+                onPress: () => setReportUi(null)
+              }
+            ]}
+          />
+        ) : null}
+        {reportUi?.step === 'done' ? (
+          <SafetyChoiceSheet
+            visible
+            onClose={() => setReportUi(null)}
+            title={reportUi.title}
+            message={reportUi.message}
+            actions={[{ label: t('common.ok'), onPress: () => setReportUi(null) }]}
+          />
+        ) : null}
       </SafeAreaView>
     </>
   );
@@ -1409,6 +1455,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: theme.spacing.gapSm
+  },
+  inlineLoadingRow: {
+    paddingVertical: theme.spacing.gapMd,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   errorTitle: {
     textAlign: 'center',
@@ -1498,8 +1549,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.screenPaddingX,
-    paddingTop: theme.spacing.gapLg,
-    paddingBottom: theme.spacing.gapMd
+    marginTop: theme.spacing.gapMd,
+    paddingBottom: 0
   },
   sellerInfo: {
     flexDirection: 'row',
@@ -1580,13 +1631,37 @@ const styles = StyleSheet.create({
   mainPrice: {
     ...theme.typography.h2,
     fontFamily: theme.fontFamily.bold,
-    color: '#171819',
     marginBottom: theme.spacing.gapSm
+  },
+  deliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 4,
+    marginBottom: 4
+  },
+  deliveryText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#666666'
+  },
+  shippingPromoBadge: {
+    backgroundColor: '#C3EA4F',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  shippingPromoBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: '#000000',
+    fontFamily: theme.fontFamily.semiBold
   },
   protectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.gapLg
+    marginBottom: 0
   },
   protectionPrice: {
     ...theme.typography.captionSm,
@@ -1636,7 +1711,8 @@ const styles = StyleSheet.create({
   },
   descriptionBlock: {
     paddingHorizontal: theme.spacing.screenPaddingX,
-    marginTop: 16,
+    marginTop: 0,
+    paddingTop: 0,
     paddingBottom: theme.spacing.gapLg
   },
   relatedSection: {
@@ -1702,7 +1778,8 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: theme.colors.border,
-    marginVertical: theme.spacing.gapMd
+    marginTop: theme.spacing.gapMd,
+    marginBottom: theme.spacing.gapMd
   },
   fullBleedSeparator: {
     height: 1,

@@ -18,6 +18,7 @@ import { theme } from '../../../lib/theme';
 import { useSellFormStore, type SellBrand } from '../../../lib/store/sellForm';
 import { getBrands } from '../../../lib/api/filters';
 import { supabase } from '../../../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 type BrandRow = {
   id: number;
@@ -25,31 +26,47 @@ type BrandRow = {
   count: number;
 };
 
-function formatGenderLabel(g?: string | null): string {
+function formatGenderLabel(g: string | null | undefined, t: (key: string) => string): string {
   switch ((g ?? '').toLowerCase()) {
     case 'femme':
-      return 'Women';
+      return t('filters.woman');
     case 'homme':
-      return 'Men';
+      return t('filters.men');
     case 'enfant':
-      return 'Kids';
+      return t('filters.kids');
     case 'bebe':
-      return 'Baby';
+      return t('filters.baby');
     default:
-      return g ? String(g) : '—';
+      return g ? String(g) : t('common.dash');
   }
 }
 
 export default function SellBrandScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
   const gender = values.categoryGender ?? values.category?.gender;
   const type = values.categoryType;
-  const headerTitle = 'Brand';
+  const headerTitle = t('sell.brand');
 
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [selected, setSelected] = useState<SellBrand | null>(values.brand ?? null);
+
+  useEffect(() => {
+    const current = values.brand;
+    if (!current?.name) return;
+    if (typeof current.id === 'number' && current.id > 0) {
+      setSelected(current);
+      return;
+    }
+    const byName = brands.find(
+      (b) => b.name.toLowerCase() === current.name.trim().toLowerCase()
+    );
+    if (byName) {
+      setSelected({ id: byName.id, name: byName.name });
+    }
+  }, [brands, values.brand]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +91,7 @@ export default function SellBrandScreen() {
 
       setBrands(mapped);
     } catch {
-      setError('Unable to load brands. Please try again.');
+      setError(t('filters.brandsLoadError'));
       setBrands([]);
     } finally {
       setLoading(false);
@@ -83,7 +100,7 @@ export default function SellBrandScreen() {
 
   useEffect(() => {
     void loadBrands();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const loadPopular = async () => {
@@ -163,10 +180,10 @@ export default function SellBrandScreen() {
     if (selected) {
       setField('brand', selected);
     }
-    // Éviter de dupliquer l'écran Sell dans la stack:
-    // - si on vient de Sell -> Brand : back suffit
-    // - sinon fallback vers Sell
-    const canGoBack = typeof (router as any).canGoBack === 'function' ? (router as any).canGoBack() : true;
+    const canGoBack =
+      typeof (router as { canGoBack?: () => boolean }).canGoBack === 'function'
+        ? (router as { canGoBack: () => boolean }).canGoBack()
+        : true;
     if (canGoBack) {
       router.back();
     } else {
@@ -189,7 +206,7 @@ export default function SellBrandScreen() {
           <View style={styles.searchInputWrapper}>
             <Ionicons name="search" size={18} color="#AAAAAA" style={styles.searchIcon} />
             <TextInput
-              placeholder="Search for brands"
+              placeholder={t('filters.searchBrands')}
               placeholderTextColor="#AAAAAA"
               style={styles.searchInput}
               value={search}
@@ -214,7 +231,7 @@ export default function SellBrandScreen() {
             </Text>
             <TouchableOpacity onPress={loadBrands} activeOpacity={0.7}>
               <Text variant="captionSm" color="primary">
-                Retry
+                {t('common.retry')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -233,14 +250,14 @@ export default function SellBrandScreen() {
           ) : hasNoResults ? (
             <View style={styles.emptyContainer}>
               <Text variant="body" color="textSecondary">
-                No brands found
+                {t('filters.noBrandsFound')}
               </Text>
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
               {search.trim().length === 0 && popularBrands.length > 0 && (
                 <Text variant="captionSm" style={styles.sectionTitle}>
-                  {`Popular for ${formatGenderLabel(gender)}`}
+                  {t('filters.popularForGender', { gender: formatGenderLabel(gender, t) })}
                 </Text>
               )}
 
@@ -267,8 +284,8 @@ export default function SellBrandScreen() {
                           {brand.count > 500 ? ' (500+)' : ` (${brand.count})`}
                         </Text>
                       </View>
-                      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                        {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                      <View style={[styles.radioOuter, checked && styles.radioOuterSelected]}>
+                        {checked ? <View style={styles.radioInner} /> : null}
                       </View>
                     </TouchableOpacity>
                   );
@@ -276,7 +293,7 @@ export default function SellBrandScreen() {
 
               {search.trim().length === 0 && (
                 <Text variant="captionSm" style={[styles.sectionTitle, { marginTop: popularBrands.length ? 16 : 0 }]}>
-                  All brands
+                  {t('filters.allBrands')}
                 </Text>
               )}
 
@@ -302,8 +319,8 @@ export default function SellBrandScreen() {
                         {brand.count > 500 ? ' (500+)' : ` (${brand.count})`}
                       </Text>
                     </View>
-                    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                      {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                    <View style={[styles.radioOuter, checked && styles.radioOuterSelected]}>
+                      {checked ? <View style={styles.radioInner} /> : null}
                     </View>
                   </TouchableOpacity>
                 );
@@ -319,7 +336,7 @@ export default function SellBrandScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleConfirm}
             variant="primary"
             style={styles.showResultButton}
@@ -439,18 +456,22 @@ const styles = StyleSheet.create({
     marginHorizontal: -20,
     paddingHorizontal: 20
   },
-  checkbox: {
+  radioOuter: {
     width: 22,
     height: 22,
-    borderRadius: 6,
+    borderRadius: 11,
     borderWidth: 1.5,
     borderColor: '#CCCCCC',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center'
   },
-  checkboxChecked: {
-    borderColor: '#C3EA4F',
+  radioOuterSelected: {
+    borderColor: '#C3EA4F'
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#C3EA4F'
   },
   checkboxDisabled: {

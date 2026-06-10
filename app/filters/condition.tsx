@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } fro
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
@@ -11,6 +12,7 @@ import { theme } from '../../lib/theme';
 import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getConditions } from '../../lib/api/filters';
+import { translateConditionDescription, translateConditionLabel } from '../../lib/conditionI18n';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 
 type ConditionRow = {
@@ -21,6 +23,7 @@ type ConditionRow = {
 };
 
 export default function ConditionFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{
     returnTo?: string;
@@ -32,7 +35,7 @@ export default function ConditionFilterScreen() {
   const { filters, setFilter } = useFiltersScreenStore();
 
   const [conditions, setConditions] = useState<ConditionRow[]>([]);
-  const [selected, setSelected] = useState<string[]>(filters.conditionIds ?? []);
+  const [selected, setSelected] = useState<string[]>([...(filters.conditionIds ?? [])]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,7 +70,7 @@ export default function ConditionFilterScreen() {
 
       setConditions(mapped);
     } catch {
-      setError('Unable to load conditions. Please try again.');
+      setError(t('filters.conditionLoadError'));
       setConditions([]);
     } finally {
       setLoading(false);
@@ -76,7 +79,7 @@ export default function ConditionFilterScreen() {
 
   useEffect(() => {
     void loadConditions();
-  }, []);
+  }, [t]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
@@ -84,7 +87,7 @@ export default function ConditionFilterScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Condition
+            {t('filters.condition')}
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -93,7 +96,7 @@ export default function ConditionFilterScreen() {
             style={styles.clearAllHit}
           >
             <Text variant="body" style={styles.clearAllText}>
-              Clear all
+              {t('filters.clearAll')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -105,7 +108,7 @@ export default function ConditionFilterScreen() {
             </Text>
             <TouchableOpacity onPress={loadConditions} activeOpacity={0.7}>
               <Text variant="captionSm" color="primary">
-                Retry
+                {t('common.retry')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -137,17 +140,20 @@ export default function ConditionFilterScreen() {
                   >
                     <View style={styles.textContainer}>
                       <Text variant="body" style={styles.conditionTitle}>
-                        {cond.name}
+                        {translateConditionLabel(cond.value, t)}
                       </Text>
-                      {cond.description.length > 0 && (
-                        <Text
-                          variant="captionSm"
-                          style={styles.description}
-                          numberOfLines={2}
-                        >
-                          {cond.description}
-                        </Text>
-                      )}
+                      {(() => {
+                        const desc = translateConditionDescription(cond.value, t);
+                        return desc.length > 0 ? (
+                          <Text
+                            variant="captionSm"
+                            style={styles.description}
+                            numberOfLines={2}
+                          >
+                            {desc}
+                          </Text>
+                        ) : null;
+                      })()}
                     </View>
                     <View
                       style={[
@@ -173,7 +179,7 @@ export default function ConditionFilterScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

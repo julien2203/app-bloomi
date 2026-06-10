@@ -68,12 +68,12 @@ export async function getListingDetailById(listingId: string) {
     throw error;
   }
 
-  // Parser les photos JSON si nécessaire
-  if (data && typeof data.photos === 'string') {
-    data.photos = JSON.parse(data.photos);
-  }
+  if (!data) return data;
 
-  return data;
+  const photos =
+    typeof data.photos === 'string' ? JSON.parse(data.photos) : data.photos;
+
+  return { ...data, photos };
 }
 
 // ============================================
@@ -135,6 +135,26 @@ export async function getInboxThreads(params?: {
   unreadOnly?: boolean;
 }) {
   const { page = 1, pageSize = 50, unreadOnly = false } = params || {};
+  const base = await getInboxThreadsBase({ page, pageSize, unreadOnly });
+  const withUnread =
+    base.userId && base.data.length > 0
+      ? await attachUnreadFlagsToThreads(base.data as any, base.userId)
+      : base.data;
+
+  return {
+    data: withUnread,
+    hasMore: base.hasMore,
+    page: base.page,
+    pageSize: base.pageSize
+  };
+}
+
+export async function getInboxThreadsBase(params?: {
+  page?: number;
+  pageSize?: number;
+  unreadOnly?: boolean;
+}) {
+  const { page = 1, pageSize = 50, unreadOnly = false } = params || {};
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -172,17 +192,21 @@ export async function getInboxThreads(params?: {
     };
   });
 
-  const withUnread =
-    user?.id && enrichedData.length > 0
-      ? await attachUnreadFlagsToThreads(enrichedData, user.id)
-      : enrichedData;
-
   return {
-    data: withUnread,
+    data: enrichedData,
     hasMore: (data?.length || 0) === pageSize,
     page,
-    pageSize
+    pageSize,
+    userId: user?.id ?? null
   };
+}
+
+export async function attachUnreadFlagsForInboxThreads(
+  threads: ThreadListItem[],
+  userId: string
+): Promise<ThreadListItem[]> {
+  if (!userId || threads.length === 0) return threads;
+  return (await attachUnreadFlagsToThreads(threads as any, userId)) as ThreadListItem[];
 }
 
 // ============================================
@@ -238,7 +262,7 @@ export async function getThreadMessages(params: {
   }
 
   // Inverser l'ordre pour afficher du plus ancien au plus récent
-  const sortedData = (data || []).reverse();
+  const sortedData = [...(data || [])].reverse();
 
   return {
     data: sortedData,

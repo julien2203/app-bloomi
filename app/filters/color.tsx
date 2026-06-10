@@ -11,7 +11,9 @@ import { theme } from '../../lib/theme';
 import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getColors } from '../../lib/api/filters';
+import { translateColorName } from '../../lib/colorI18n';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { useTranslation } from 'react-i18next';
 
 type ColorRow = {
   id: number;
@@ -21,6 +23,7 @@ type ColorRow = {
 };
 
 export default function ColorFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{
     returnTo?: string;
@@ -32,7 +35,7 @@ export default function ColorFilterScreen() {
   const { filters, setFilter } = useFiltersScreenStore();
 
   const [colors, setColors] = useState<ColorRow[]>([]);
-  const [selectedColorIds, setSelectedColorIds] = useState<string[]>(filters.colorIds ?? []);
+  const [selectedColorIds, setSelectedColorIds] = useState<string[]>([...(filters.colorIds ?? [])]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +85,7 @@ export default function ColorFilterScreen() {
 
       setColors([...enabled, ...disabled]);
     } catch {
-      setError('Unable to load colors. Please try again.');
+      setError(t('filters.colorsLoadError'));
       setColors([]);
     } finally {
       setLoading(false);
@@ -91,7 +94,7 @@ export default function ColorFilterScreen() {
 
   useEffect(() => {
     void loadColors();
-  }, [filters.categoryId, filters.sizeIds, filters.brandIds, filters.conditionIds, filters.priceMin, filters.priceMax]);
+  }, [filters.categoryIds, filters.sizeIds, filters.brandIds, filters.conditionIds, filters.priceMin, filters.priceMax]);
 
   const hasNoResults = !loading && colors.length === 0;
 
@@ -101,7 +104,7 @@ export default function ColorFilterScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Color
+            {t('filters.color')}
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -110,7 +113,7 @@ export default function ColorFilterScreen() {
             style={styles.clearAllHit}
           >
             <Text variant="body" style={styles.clearAllText}>
-              Clear all
+              {t('filters.clearAll')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -122,7 +125,7 @@ export default function ColorFilterScreen() {
             </Text>
             <TouchableOpacity onPress={loadColors} activeOpacity={0.7}>
               <Text variant="captionSm" color="primary">
-                Retry
+                {t('common.retry')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -141,7 +144,7 @@ export default function ColorFilterScreen() {
           ) : hasNoResults ? (
             <View style={styles.emptyContainer}>
               <Text variant="body" color="textSecondary">
-                No colors found
+                {t('filters.noColorsFound')}
               </Text>
             </View>
           ) : (
@@ -165,7 +168,7 @@ export default function ColorFilterScreen() {
                           disabled && styles.rowLabelDisabled
                         ]}
                       >
-                        {color.name}
+                        {translateColorName(color.name, t)}
                       </Text>
                       <Text
                         variant="body"
@@ -202,7 +205,7 @@ export default function ColorFilterScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

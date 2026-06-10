@@ -1,5 +1,9 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  fetchRecipientLanguage,
+  orderCancelledPushText,
+} from "../_shared/pushNotificationI18n.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -326,13 +330,15 @@ Deno.serve(async (req) => {
 
   // Best-effort: notifier l'acheteur (ne doit pas casser le flow principal)
   try {
+    const buyerLang = await fetchRecipientLanguage(supabase, row.buyer_id);
+    const cancelCopy = orderCancelledPushText(buyerLang);
     await sendNotification({
       supabaseUrl,
       supabaseServiceRoleKey,
       user_id: row.buyer_id,
-      title: "✅ Commande annulée",
-      body: "Votre commande a été annulée et vous serez remboursé.",
-      data: { order_id: row.id },
+      title: cancelCopy.title,
+      body: cancelCopy.body,
+      data: { order_id: row.id, notification_type: "new_items" },
     });
   } catch (e) {
     console.warn("Erreur envoi notification acheteur:", e);

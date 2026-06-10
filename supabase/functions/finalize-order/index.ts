@@ -5,6 +5,14 @@ import {
   findOrCreateThreadForOrderChat,
   insertThreadSystemMessage,
 } from "../_shared/orderChatSystemMessage.ts";
+import {
+  fetchRecipientLanguage,
+  shipReminderPushText,
+} from "../_shared/pushNotificationI18n.ts";
+import {
+  parsePaymentIntentFeeMetadata,
+  paymentIntentFeesToOrderSnapshot,
+} from "../_shared/fees.ts";
 
 type DeliveryMode = "pickup" | "shipping" | "both";
 
@@ -136,8 +144,6 @@ Deno.serve(async (req) => {
     const piBuyerId = (pi.metadata?.buyer_id ?? "").toString();
     const piSellerId = (pi.metadata?.seller_id ?? "").toString();
     const piListingId = (pi.metadata?.listing_id ?? "").toString();
-    const piCommissionCents = Number((pi.metadata?.commission_cents ?? "0").toString());
-
     if (!piBuyerId || !piSellerId || !piListingId) {
       return jsonResponse(
         { error: "PaymentIntent metadata incomplet (buyer_id/seller_id/listing_id)" },
@@ -199,12 +205,25 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const coverPhotoUrl = (photoRow as any)?.url ? String((photoRow as any).url) : null;
 
-    // Montants: Stripe PI amount = total payé (prix + commission)
-    const totalCents = pi.amount;
-    const commissionCents = Number.isFinite(piCommissionCents) && piCommissionCents > 0 ? piCommissionCents : null;
-    const sellerAmountCents = commissionCents != null ? Math.max(0, totalCents - commissionCents) : null;
+    const parsedFees = parsePaymentIntentFeeMetadata(
+      pi.metadata as Record<string, string | undefined>,
+    );
+    let sellerAmountChf: number | null = null;
+    let feeSnapshot: ReturnType<typeof paymentIntentFeesToOrderSnapshot> | null = null;
 
-    const sellerAmountChf = sellerAmountCents != null ? sellerAmountCents / 100 : null;
+    if (parsedFees) {
+      feeSnapshot = paymentIntentFeesToOrderSnapshot(parsedFees);
+      sellerAmountChf = feeSnapshot.sellerPayoutChf;
+    } else {
+      // Rétrocompatibilité : anciens PaymentIntent sans seller_payout_cents
+      const totalCents = pi.amount;
+      const piCommissionCents = Number((pi.metadata?.commission_cents ?? "0").toString());
+      const commissionCents =
+        Number.isFinite(piCommissionCents) && piCommissionCents > 0 ? piCommissionCents : null;
+      const sellerAmountCents =
+        commissionCents != null ? Math.max(0, totalCents - commissionCents) : null;
+      sellerAmountChf = sellerAmountCents != null ? sellerAmountCents / 100 : null;
+    }
 
     // delivery_mode / shipping address viennent de la création du PI (pas stockés dans Stripe par défaut)
     // => fallback: delivery_mode = both (comme avant) si non disponible.
@@ -215,6 +234,11 @@ Deno.serve(async (req) => {
     const metaShipCity = String(pi.metadata?.shipping_city ?? "").trim() || null;
     const metaShipPostal = String(pi.metadata?.shipping_postal_code ?? "").trim() || null;
     const metaShipCountry = String(pi.metadata?.shipping_country ?? "").trim().toUpperCase() || null;
+
+    const shippingFeeCents = parseInt((pi.metadata?.shipping_fee_cents ?? "0").toString(), 10);
+    const isPromoShipping = pi.metadata?.is_promo_shipping === "true";
+    const rawParcelSize = (pi.metadata?.parcel_size ?? "").toString().trim();
+    const parcelSize = rawParcelSize || null;
 
     // Insère la commande (pending) avec l'ID Stripe.
     const { data: created, error: orderInsertError } = await supabase
@@ -230,10 +254,18 @@ Deno.serve(async (req) => {
         listing_price: listingPrice ?? null,
         listing_cover_photo_url: coverPhotoUrl,
         seller_amount: sellerAmountChf,
+        seller_commission_chf: feeSnapshot?.sellerCommissionChf ?? null,
+        seller_fee_rate: feeSnapshot?.sellerFeeRate ?? null,
+        buyer_protection_chf: feeSnapshot?.buyerProtectionChf ?? null,
+        buyer_banking_fee_chf: feeSnapshot?.buyerBankingFeeChf ?? null,
+        seller_profile_type: feeSnapshot?.sellerProfileType ?? null,
         shipping_address: metaShipAddr,
         shipping_city: metaShipCity,
         shipping_postal_code: metaShipPostal,
         shipping_country: metaShipCountry,
+        shipping_fee_chf: (Number.isFinite(shippingFeeCents) ? shippingFeeCents : 0) / 100,
+        is_promo_shipping: isPromoShipping,
+        parcel_size: parcelSize,
       })
       .select("id")
       .single();
@@ -281,18 +313,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    const { error: counterErr } = await supabaseAdmin.rpc("increment_completed_orders");
+    if (counterErr) {
+      console.warn("increment_completed_orders failed:", counterErr.message);
+    }
+
     // Best-effort: notify seller after order is created (payment authorized + listing reserved)
     try {
+      const sellerLang = await fetchRecipientLanguage(supabaseAdmin, String(piSellerId));
+      const shipCopy = shipReminderPushText(sellerLang);
       await sendNotificationSilent({
         supabaseUrl,
         supabaseServiceRoleKey,
         user_id: String(piSellerId),
-        title: "📦 Pense à expédier ton colis 📬",
-        body: "Tu as une nouvelle vente ! Prépare ton colis.",
+        title: shipCopy.title,
+        body: shipCopy.body,
         data: {
           order_id: createdOrderId,
           listing_id: String(piListingId),
           buyer_id: String(piBuyerId),
+          notification_type: "new_items",
         },
       });
     } catch {
@@ -309,7 +349,7 @@ Deno.serve(async (req) => {
         await insertThreadSystemMessage(
           supabaseAdmin,
           threadId,
-          "🛍️ Commande créée — Le paiement est sécurisé. Le vendeur va préparer ton colis.",
+          "🛍️ Order placed — Payment is secure. The seller will prepare your parcel.",
         );
       }
     } catch {

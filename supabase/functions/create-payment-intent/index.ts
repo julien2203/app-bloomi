@@ -7,6 +7,10 @@ import "@supabase/functions-js/edge-runtime.d.ts"
 
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  buildPaymentIntentFeeBreakdown,
+  paymentIntentFeeMetadataToStrings,
+} from "../_shared/fees.ts";
 
 type DeliveryMode = "pickup" | "shipping" | "both";
 
@@ -66,12 +70,18 @@ Deno.serve(async (req) => {
     seller_id,
     amount,
     delivery_mode,
+    parcel_size: body_parcel_size,
     shipping_address,
     shipping_city: body_shipping_city,
     shipping_postal_code: body_shipping_postal_code,
     shipping_country: body_shipping_country,
     offer_message_id: body_offer_message_id,
   } = (body ?? {}) as Record<string, unknown>;
+
+  const parcelSize =
+    typeof body_parcel_size === "string" && body_parcel_size.trim() !== ""
+      ? body_parcel_size.trim()
+      : null;
 
   const offerMessageId =
     typeof body_offer_message_id === "string" && body_offer_message_id.trim() !== ""
@@ -114,11 +124,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "buyer_id ne correspond pas à l'utilisateur authentifié" }, { status: 403 });
   }
 
-  let amountCents: number;
-  let commissionCents: number;
+  let itemAmountCents: number;
   try {
-    amountCents = toCents(amount);
-    commissionCents = Math.round(amountCents * 0.10);
+    itemAmountCents = toCents(amount);
   } catch (e) {
     return jsonResponse({ error: e instanceof Error ? e.message : "amount invalide" }, { status: 400 });
   }
@@ -203,7 +211,7 @@ Deno.serve(async (req) => {
       const rawAmt = om.offer_amount;
       const offerAmtNum =
         typeof rawAmt === "number" ? rawAmt : typeof rawAmt === "string" ? Number(rawAmt) : NaN;
-      if (!Number.isFinite(offerAmtNum) || Math.round(offerAmtNum * 100) !== amountCents) {
+      if (!Number.isFinite(offerAmtNum) || Math.round(offerAmtNum * 100) !== itemAmountCents) {
         return jsonResponse(
           { error: "Le montant ne correspond pas à l'offre acceptée" },
           { status: 400 },
@@ -240,35 +248,53 @@ Deno.serve(async (req) => {
       }
     }
 
-    const listingTitle = String((listingRow as any)?.title ?? "");
-    const listingPriceRaw = (listingRow as any)?.price as number | string | null | undefined;
-    const listingPrice =
-      typeof listingPriceRaw === "number"
-        ? listingPriceRaw
-        : typeof listingPriceRaw === "string"
-        ? Number(listingPriceRaw)
-        : null;
-
-    const { data: photoRow } = await supabaseAdmin
-      .from("listing_photos")
-      .select("url, order_index")
-      .eq("listing_id", String(listing_id))
-      .order("order_index", { ascending: true })
-      .limit(1)
+    const { data: sellerProfileRow } = await supabaseAdmin
+      .from("profiles")
+      .select("is_influencer, company_name, ide_number")
+      .eq("id", String(seller_id))
       .maybeSingle();
-    const coverPhotoUrl = (photoRow as any)?.url ? String((photoRow as any).url) : null;
+
+    let shippingFeeCents = 0;
+    let isPromoShipping = false;
+
+    if (dm === "shipping" && parcelSize) {
+      const { data: feeData, error: feeErr } = await supabaseAdmin.rpc("get_shipping_fee", {
+        p_parcel_size: parcelSize,
+      });
+      if (feeErr) {
+        return jsonResponse(
+          { error: "Impossible de calculer les frais de port", details: feeErr.message },
+          { status: 500 },
+        );
+      }
+      const fee = feeData as { fee_cents?: number; is_promo?: boolean } | null;
+      shippingFeeCents = typeof fee?.fee_cents === "number" ? fee.fee_cents : 0;
+      isPromoShipping = Boolean(fee?.is_promo);
+    }
+
+    const feeBreakdown = buildPaymentIntentFeeBreakdown({
+      itemAmountCents,
+      sellerProfile: (sellerProfileRow ?? {}) as {
+        is_influencer?: boolean | null;
+        company_name?: string | null;
+        ide_number?: string | null;
+      },
+      shippingFeeCents,
+    });
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
+      amount: feeBreakdown.totalCents,
       currency: "chf",
       capture_method: "manual",
       payment_method_types: ["card"],
       metadata: {
-        listing_id: String(listing_id),
-        buyer_id: String(buyer_id),
-        seller_id: String(seller_id),
-        commission_cents: String(commissionCents),
+        ...paymentIntentFeeMetadataToStrings(feeBreakdown),
+        is_promo_shipping: String(isPromoShipping),
+        parcel_size: parcelSize ?? "",
         delivery_mode: dm,
+        listing_id: String(listing_id),
+        seller_id: String(seller_id),
+        buyer_id: String(buyer_id),
         ...(offerMessageId ? { offer_message_id: offerMessageId } : {}),
         ...(dm === "shipping"
           ? {
@@ -283,6 +309,16 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       client_secret: paymentIntent.client_secret,
+      total_cents: feeBreakdown.totalCents,
+      item_amount_cents: feeBreakdown.itemAmountCents,
+      buyer_protection_cents: feeBreakdown.buyerProtectionCents,
+      buyer_banking_fee_cents: feeBreakdown.buyerBankingFeeCents,
+      seller_commission_cents: feeBreakdown.sellerCommissionCents,
+      seller_payout_cents: feeBreakdown.sellerPayoutCents,
+      seller_fee_rate: feeBreakdown.sellerFeeRate,
+      seller_profile_type: feeBreakdown.sellerProfileType,
+      shipping_fee_cents: feeBreakdown.shippingFeeCents,
+      is_promo_shipping: isPromoShipping,
     });
   } catch (e) {
     return jsonResponse(

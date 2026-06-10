@@ -14,8 +14,10 @@ import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,12 +45,12 @@ export default function ForgotPasswordScreen() {
         <StatusBar style="dark" />
         <SafeAreaView style={styles.container}>
           <View style={styles.content}>
-            <Text style={styles.title}>Check your email</Text>
+            <Text style={styles.title}>{t('auth.forgotPassword.checkEmail')}</Text>
             <Text style={styles.message}>
-              We've sent a password reset link to {email}
+              {t('auth.forgotPassword.sentMessage', { email })}
             </Text>
             <Button
-              title="Back to login"
+              title={t('auth.forgotPassword.backToLogin')}
               onPress={() => router.push('/auth/login')}
               variant="primary-green"
               style={styles.button}
@@ -76,16 +78,16 @@ export default function ForgotPasswordScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.content}>
-              <Text style={styles.title}>Forgot password?</Text>
+              <Text style={styles.title}>{t('auth.forgotPassword.title')}</Text>
               <Text style={styles.subtitle}>
-                Enter your email address and we'll send you a link to reset your password.
+                {t('auth.forgotPassword.subtitle')}
               </Text>
 
               <TextField
-                label="Email"
+                label={t('auth.email')}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="your@email.com"
+                placeholder={t('auth.emailPlaceholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -93,7 +95,7 @@ export default function ForgotPasswordScreen() {
               />
 
               <Button
-                title="Send reset link"
+                title={t('auth.forgotPassword.sendLink')}
                 onPress={handleSendResetLink}
                 variant="primary-green"
                 loading={loading}

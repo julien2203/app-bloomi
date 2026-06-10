@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   Dimensions,
   FlatList,
@@ -21,8 +22,14 @@ import { Text } from '../ui/Text';
 import { theme } from '../../lib/theme';
 import { AppIcon } from '../ui/AppIcon';
 import { ProductCard } from '../ProductCard';
+import { getCardImagePriority, LIST_IMAGE_PERF_PROPS } from '../../lib/cardImagePriority';
 import { supabase } from '../../lib/supabase';
-import type { FeedListing } from '../../lib/api';
+import {
+  cloneFeedListings,
+  excludeBlockedSellers,
+  getBlockedSellerIdsForCurrentUser,
+  type FeedListing
+} from '../../lib/api';
 import { type FeedFilters, useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { useSearchFiltersStore } from '../../lib/store/searchFilters';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
@@ -34,6 +41,9 @@ import {
   filtersScreenPath,
   type FiltersStackBase
 } from '../../lib/navigation/filterRoutes';
+import { subscribeBlockedUsersRevision } from '../../lib/store/blockedUsersSync';
+import { useTranslation } from 'react-i18next';
+import { translateCategoryLabel } from '../../lib/categoryI18n';
 
 export type ResultsSection = 'sponsored' | 'trending' | 'influencer' | 'all' | 'search';
 
@@ -122,6 +132,7 @@ export function UniversalResultsScreen(props: {
   /** Incrémenté par le tab Search à chaque focus : force un reload aligné sur le store Zustand */
   searchFocusReloadNonce?: number;
 }) {
+  const { t } = useTranslation();
   const {
     title,
     section,
@@ -138,6 +149,7 @@ export function UniversalResultsScreen(props: {
   const { filters, setFilter, resetFilters } = standaloneSearch ? searchStore : feedStore;
   const fixedTabBarReserveSpace = getFixedTabBarHeight(insets.bottom);
   const isSearchTabScreen = standaloneSearch && section === 'search';
+  const listingDetailPathBase = isSearchTabScreen ? '/tabs/search' : '/tabs/feed';
 
   /** Même rangée de pills que l’onglet Search (Clear + genre + taille, etc.) pour les écrans Results « View all » (sponsored, trending, …). */
   const searchStyleFilters = useMemo(
@@ -165,28 +177,31 @@ export function UniversalResultsScreen(props: {
   const [nearbyModalOpen, setNearbyModalOpen] = useState(false);
   const [nearbyDraftKm, setNearbyDraftKm] = useState<number | null>(filters.nearbyKm ?? null);
   const [nearbyConfirming, setNearbyConfirming] = useState(false);
+  const skeletonOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(1)).current;
 
   /** Genre DB (`categories.gender`) pour la catégorie sélectionnée — pills actives sur Search */
   const [resolvedCategoryGenderDb, setResolvedCategoryGenderDb] = useState<string | null>(null);
   /** Libellés candidats pour `v_feed_listings.category` (nom + slug catégorie). */
   const [resolvedCategoryLabels, setResolvedCategoryLabels] = useState<string[]>([]);
+  const [resolvedSelectedCategoryNames, setResolvedSelectedCategoryNames] = useState<string[]>([]);
 
   const headerTitle = useMemo(() => {
     if (typeof title === 'string' && title.trim()) return title;
     switch (section) {
       case 'sponsored':
-        return 'Sponsored';
+        return t('feed.tabs.sponsored');
       case 'trending':
-        return 'Trending';
+        return t('feed.tabs.trending');
       case 'influencer':
-        return 'Influencers';
+        return t('feed.tabs.influencers');
       case 'all':
-        return 'All items';
+        return t('feed.tabs.allItems');
       case 'search':
       default:
-        return 'Search';
+        return t('navigation.search');
     }
-  }, [section, title]);
+  }, [section, t, title]);
 
   const effectiveFilters = filters;
 
@@ -284,37 +299,61 @@ export function UniversalResultsScreen(props: {
   ]);
 
   useEffect(() => {
-    const cid = filters.categoryId;
-    if (!cid) {
+    const categoryIds = filters.categoryIds ?? [];
+    if (categoryIds.length === 0) {
       setResolvedCategoryGenderDb(null);
       setResolvedCategoryLabels([]);
+      setResolvedSelectedCategoryNames([]);
       return;
     }
     let cancelled = false;
     void (async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('gender, name, slug')
-        .eq('id', cid)
-        .maybeSingle();
+        .select('id, gender, name, slug')
+        .in('id', categoryIds as any);
       if (cancelled) return;
-      if (error || !data) {
+      if (error || !data || data.length === 0) {
         setResolvedCategoryGenderDb(null);
         setResolvedCategoryLabels([]);
+        setResolvedSelectedCategoryNames([]);
         return;
       }
-      const row = data as { gender?: string | null; name?: string | null; slug?: string | null };
-      const g = row.gender;
-      setResolvedCategoryGenderDb(typeof g === 'string' && g.length > 0 ? g : null);
-      const cands = [row.name, row.slug]
+      const rows = data as Array<{
+        id: string | number;
+        gender?: string | null;
+        name?: string | null;
+        slug?: string | null;
+      }>;
+      const byId = new Map<string, (typeof rows)[number]>();
+      for (const row of rows) byId.set(String(row.id), row);
+      const orderedRows = categoryIds
+        .map((id) => byId.get(String(id)))
+        .filter((row): row is (typeof rows)[number] => Boolean(row));
+      const genders = new Set(
+        orderedRows
+          .map((row) => (typeof row.gender === 'string' ? row.gender : null))
+          .filter((g): g is string => Boolean(g && g.length > 0))
+      );
+      setResolvedCategoryGenderDb(genders.size === 1 ? Array.from(genders)[0] : null);
+      const cands = orderedRows.flatMap((row) => [row.name, row.slug])
         .map((x) => (x != null ? String(x).trim() : ''))
         .filter(Boolean);
       setResolvedCategoryLabels([...new Set(cands)]);
+      setResolvedSelectedCategoryNames(
+        orderedRows
+          .map((row) => {
+            const name = row.name != null ? String(row.name).trim() : '';
+            if (!name) return '';
+            return translateCategoryLabel({ name, slug: row.slug }, t);
+          })
+          .filter(Boolean)
+      );
     })();
     return () => {
       cancelled = true;
     };
-  }, [filters.categoryId]);
+  }, [filters.categoryIds, t]);
 
   const loadInfluencerIds = useCallback(async () => {
     if (section !== 'influencer') return;
@@ -395,8 +434,11 @@ export function UniversalResultsScreen(props: {
         : useFeedFiltersStore.getState().filters;
       let queryBuilder = qb;
 
-      if (f.categoryId && resolvedCategoryLabels.length > 0) {
-        queryBuilder = queryBuilder.in('category', resolvedCategoryLabels);
+      if (f.categoryIds && f.categoryIds.length > 0) {
+        queryBuilder = queryBuilder.in(
+          'category_id',
+          f.categoryIds.map((id) => Number(id))
+        );
       }
       if (f.conditionIds && f.conditionIds.length > 0) {
         queryBuilder = queryBuilder.in('condition', f.conditionIds);
@@ -454,6 +496,10 @@ export function UniversalResultsScreen(props: {
       else setLoadingMore(true);
 
       try {
+        const blockedIds = await getBlockedSellerIdsForCurrentUser();
+        const stripBlocked = (items: ResultsListing[]) =>
+          cloneFeedListings(excludeBlockedSellers(items, blockedIds)) as ResultsListing[];
+
         const from = page * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
@@ -465,7 +511,7 @@ export function UniversalResultsScreen(props: {
         console.log('[Results] active filters', {
           section,
           query: query.trim(),
-          categoryId: liveFilters.categoryId ?? null,
+          categoryIds: liveFilters.categoryIds ?? [],
           conditionIds: liveFilters.conditionIds ?? [],
           priceMin: liveFilters.priceMin ?? null,
           priceMax: liveFilters.priceMax ?? null,
@@ -500,6 +546,10 @@ export function UniversalResultsScreen(props: {
             p_offset: from,
             p_section: section,
             p_query: query.trim() ? query.trim() : null,
+            p_category_id:
+              liveFilters.categoryIds && liveFilters.categoryIds.length === 1
+                ? Number(liveFilters.categoryIds[0])
+                : null,
             p_category: resolvedCategoryLabels[0] ?? null,
             p_conditions: (liveFilters.conditionIds.length ? liveFilters.conditionIds : null) as any,
             p_price_min: liveFilters.priceMin ?? null,
@@ -520,7 +570,13 @@ export function UniversalResultsScreen(props: {
             return;
           }
 
-          const newItems = (data || []) as ResultsListing[];
+          let newItems = (data || []) as ResultsListing[];
+          if (liveFilters.categoryIds && liveFilters.categoryIds.length > 0) {
+            const allowedCategoryIds = new Set(liveFilters.categoryIds.map((id) => Number(id)));
+            newItems = newItems.filter((row) =>
+              allowedCategoryIds.has(Number((row as any).category_id))
+            );
+          }
           // eslint-disable-next-line no-console
           console.log('[Results] loadPage nearby ok', {
             section,
@@ -529,6 +585,7 @@ export function UniversalResultsScreen(props: {
             replace,
             returned: newItems.length
           });
+          newItems = stripBlocked(newItems);
           setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
           pageRef.current = page;
           setHasMore(newItems.length === PAGE_SIZE);
@@ -566,7 +623,8 @@ export function UniversalResultsScreen(props: {
               }
               return;
             }
-            const newItems = (data || []) as ResultsListing[];
+            let newItems = (data || []) as ResultsListing[];
+            newItems = stripBlocked(newItems);
             console.log('[Results] loadPage ok', { section, query: query.trim(), page, replace, returned: newItems.length, count });
             setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
             pageRef.current = page;
@@ -605,7 +663,8 @@ export function UniversalResultsScreen(props: {
               }
               return;
             }
-            const newItems = (data || []) as ResultsListing[];
+            let newItems = (data || []) as ResultsListing[];
+            newItems = stripBlocked(newItems);
             console.log('[Results] loadPage ok', { section, query: query.trim(), page, replace, returned: newItems.length, count });
             setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
             pageRef.current = page;
@@ -647,7 +706,8 @@ export function UniversalResultsScreen(props: {
             restItems = (restData || []) as ResultsListing[];
           }
 
-          const newItems = [...likedSlice, ...restItems];
+          let newItems = [...likedSlice, ...restItems];
+          newItems = stripBlocked(newItems);
           console.log('[Results] loadPage ok', {
             section,
             query: query.trim(),
@@ -708,7 +768,8 @@ export function UniversalResultsScreen(props: {
           return;
         }
 
-        const newItems = (data || []) as ResultsListing[];
+        let newItems = (data || []) as ResultsListing[];
+        newItems = stripBlocked(newItems);
         // eslint-disable-next-line no-console
         console.log('[Results] loadPage ok', {
           section,
@@ -747,6 +808,12 @@ export function UniversalResultsScreen(props: {
     pageRef.current = 0;
     void loadPage(0, true);
   }, [loadPage]);
+
+  useEffect(() => {
+    return subscribeBlockedUsersRevision(() => {
+      triggerReload();
+    });
+  }, [triggerReload]);
 
   const skipFirstSearchFocusReload = useRef(true);
   useFocusEffect(
@@ -817,15 +884,27 @@ export function UniversalResultsScreen(props: {
 
   const resultLabel = useMemo(() => {
     if (resultCount == null) return '';
-    if (searchStyleFilters) {
-      if (resultCount >= 500) return '500+ résultats';
-      if (resultCount === 1) return '1 résultat';
-      return `${resultCount} résultats`;
-    }
-    if (resultCount >= 500) return '500+ results';
-    if (resultCount === 1) return '1 result';
-    return `${resultCount} results`;
-  }, [resultCount, searchStyleFilters]);
+    if (resultCount >= 500) return t('filters.results500Plus');
+    if (resultCount === 1) return t('filters.oneResult');
+    return t('filters.resultsCount', { count: resultCount });
+  }, [resultCount, t]);
+
+  const showSkeletonOverlay = loading && results.length === 0;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(skeletonOpacity, {
+        toValue: showSkeletonOverlay ? 1 : 0,
+        duration: 180,
+        useNativeDriver: true
+      }),
+      Animated.timing(contentOpacity, {
+        toValue: showSkeletonOverlay ? 0 : 1,
+        duration: 180,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, [contentOpacity, showSkeletonOverlay, skeletonOpacity]);
 
   /** Onglet Search + `standaloneSearch` : filtres sur la pile Search ; sinon (ex. Results) route tab `filters`. */
   const filtersRouteBase = useMemo<FiltersStackBase>(() => {
@@ -844,18 +923,18 @@ export function UniversalResultsScreen(props: {
       setNearbyConfirming(true);
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Localisation', 'Activez la localisation pour utiliser ce filtre');
+        Alert.alert(t('filters.locationTitle'), t('filters.locationEnable'));
         return;
       }
       await Location.getCurrentPositionAsync({});
       setFilter('nearbyKm', km);
       setNearbyModalOpen(false);
     } catch {
-      Alert.alert('Localisation', 'Activez la localisation pour utiliser ce filtre');
+      Alert.alert(t('filters.locationTitle'), t('filters.locationEnable'));
     } finally {
       setNearbyConfirming(false);
     }
-  }, [nearbyDraftKm, setFilter]);
+  }, [nearbyDraftKm, setFilter, t]);
 
   const handlePressFilter = (type: ResultsFilterPill) => {
     const resultsParams = {
@@ -930,7 +1009,7 @@ export function UniversalResultsScreen(props: {
   };
 
   const isAnyFilterActive =
-    Boolean(effectiveFilters.categoryId) ||
+    Boolean(effectiveFilters.categoryIds && effectiveFilters.categoryIds.length) ||
     Boolean(effectiveFilters.conditionIds && effectiveFilters.conditionIds.length) ||
     Boolean(effectiveFilters.priceMin != null) ||
     Boolean(effectiveFilters.priceMax != null) ||
@@ -944,13 +1023,25 @@ export function UniversalResultsScreen(props: {
       case 'Clear':
         return isAnyFilterActive;
       case 'Women':
-        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Women;
+        return (
+          (effectiveFilters.categoryIds?.length ?? 0) > 0 &&
+          resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Women
+        );
       case 'Men':
-        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Men;
+        return (
+          (effectiveFilters.categoryIds?.length ?? 0) > 0 &&
+          resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Men
+        );
       case 'Kids':
-        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Kids;
+        return (
+          (effectiveFilters.categoryIds?.length ?? 0) > 0 &&
+          resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Kids
+        );
       case 'Baby':
-        return resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Baby;
+        return (
+          (effectiveFilters.categoryIds?.length ?? 0) > 0 &&
+          resolvedCategoryGenderDb === SEARCH_CATEGORY_DB_GENDER.Baby
+        );
       case 'Filter':
         return isAnyFilterActive;
       case 'Nearby':
@@ -988,6 +1079,47 @@ export function UniversalResultsScreen(props: {
           ] as const)
         : (['Filter', 'Nearby', 'Size', 'Brand', 'Condition', 'Color', 'Price'] as const),
     [isSearchTabScreen, searchStyleFilters]
+  );
+
+  const filterPillLabel = useMemo(() => {
+    const count = effectiveFilters.categoryIds?.length ?? 0;
+    if (count === 0) return t('filters.filter');
+    if (count === 1) return resolvedSelectedCategoryNames[0] || t('filters.category');
+    return t('filters.categoriesCount', { count });
+  }, [effectiveFilters.categoryIds, resolvedSelectedCategoryNames, t]);
+
+  const getFilterPillText = useCallback(
+    (item: ResultsFilterPill): string => {
+      switch (item) {
+        case 'Women':
+          return t('filters.woman');
+        case 'Men':
+          return t('filters.men');
+        case 'Kids':
+          return t('filters.kids');
+        case 'Baby':
+          return t('filters.baby');
+        case 'Size':
+          return t('filters.size');
+        case 'Brand':
+          return t('filters.brand');
+        case 'Condition':
+          return t('filters.condition');
+        case 'Color':
+          return t('filters.color');
+        case 'Price':
+          return t('filters.price');
+        case 'Filter':
+          return filterPillLabel;
+        case 'Nearby':
+          return effectiveFilters.nearbyKm != null ? `${effectiveFilters.nearbyKm} km` : t('filters.nearby');
+        case 'Clear':
+          return t('common.clearAll');
+        default:
+          return String(item);
+      }
+    },
+    [effectiveFilters.nearbyKm, filterPillLabel, t]
   );
 
   const listingSellerIds = useMemo(() => {
@@ -1121,7 +1253,7 @@ export function UniversalResultsScreen(props: {
     return out;
   }, [results, showcases, shouldInjectShowcases]);
 
-  const renderMixedItem = ({ item }: { item: MixedItem }) => {
+  const renderMixedItem = ({ item, index }: { item: MixedItem; index: number }) => {
     if (item.type === 'showcase') {
       return (
         <View style={styles.showcaseRow}>
@@ -1144,7 +1276,6 @@ export function UniversalResultsScreen(props: {
           listingId={item.data.id}
           sellerId={item.data.seller_id}
           sellerName={item.data.seller_display_name ?? undefined}
-          sellerAvatarUrl={item.data.seller_avatar_url ?? undefined}
           sellerIsInfluencer={Boolean(item.data.seller_is_influencer)}
           title={item.data.title}
           price={item.data.price}
@@ -1155,7 +1286,8 @@ export function UniversalResultsScreen(props: {
           imageUrl={item.data.cover_photo_url}
           onPress={() => router.push(`/tabs/feed/${item.data.id}`)}
           cardWidth={GRID_CARD_WIDTH}
-          imageRatio={1}
+          imageRatio={1.3}
+          imagePriority={getCardImagePriority(index)}
         />
       </View>
     );
@@ -1193,7 +1325,7 @@ export function UniversalResultsScreen(props: {
             </View>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search for items or members"
+              placeholder={t('filters.searchPlaceholder')}
               placeholderTextColor="#AAAAAA"
               value={query}
               onChangeText={setQuery}
@@ -1207,7 +1339,7 @@ export function UniversalResultsScreen(props: {
                 hitSlop={HIT_SLOP_COMFORTABLE}
                 style={styles.searchTrailingIconButton}
                 accessibilityRole="button"
-                accessibilityLabel="Effacer la recherche"
+                accessibilityLabel={t('filters.clearSearch')}
               >
                 <Text style={styles.clearText}>×</Text>
               </TouchableOpacity>
@@ -1221,6 +1353,7 @@ export function UniversalResultsScreen(props: {
             data={[...filterPills]}
             keyExtractor={(item) => item}
             horizontal
+            removeClippedSubviews={false}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filtersContent}
             renderItem={({ item }) => {
@@ -1239,19 +1372,19 @@ export function UniversalResultsScreen(props: {
                 >
                   {item === 'Clear' ? (
                     <Text style={[styles.filterText, clearDisabled && styles.filterTextDisabled]}>
-                      Tout effacer
+                      {getFilterPillText(item as ResultsFilterPill)}
                     </Text>
                   ) : item === 'Filter' ? (
                     <View style={styles.filterIconRow}>
                       <Text style={styles.filterIconText}>≡</Text>
-                      <Text style={styles.filterText}>Filter</Text>
+                      <Text style={styles.filterText}>{getFilterPillText(item as ResultsFilterPill)}</Text>
                     </View>
                   ) : item === 'Nearby' ? (
                     <Text style={styles.filterText}>
-                      {effectiveFilters.nearbyKm != null ? `${effectiveFilters.nearbyKm} km` : 'Nearby'}
+                      {getFilterPillText(item as ResultsFilterPill)}
                     </Text>
                   ) : (
-                    <Text style={styles.filterText}>{item}</Text>
+                    <Text style={styles.filterText}>{getFilterPillText(item as ResultsFilterPill)}</Text>
                   )}
                 </TouchableOpacity>
               );
@@ -1268,7 +1401,7 @@ export function UniversalResultsScreen(props: {
         >
           <Pressable style={styles.modalOverlay} onPress={() => setNearbyModalOpen(false)}>
             <Pressable style={styles.modalCard} onPress={() => null}>
-              <Text style={styles.modalTitle}>Nearby</Text>
+              <Text style={styles.modalTitle}>{t('filters.nearby')}</Text>
               {([5, 10, 25, 50, 100] as const).map((km) => {
                 const selected = nearbyDraftKm === km;
                 return (
@@ -1294,7 +1427,7 @@ export function UniversalResultsScreen(props: {
                   disabled={nearbyConfirming}
                   style={[styles.modalBtn, nearbyConfirming && styles.modalBtnDisabled]}
                 >
-                  <Text style={styles.modalBtnText}>Reset</Text>
+                  <Text style={styles.modalBtnText}>{t('common.reset')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -1305,7 +1438,7 @@ export function UniversalResultsScreen(props: {
                   {nearbyConfirming ? (
                     <ActivityIndicator size="small" color={theme.colors.appleBlack} />
                   ) : (
-                    <Text style={styles.modalBtnTextPrimary}>Apply</Text>
+                    <Text style={styles.modalBtnTextPrimary}>{t('common.apply')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1314,56 +1447,66 @@ export function UniversalResultsScreen(props: {
         </Modal>
         ) : null}
 
-        {/* Result count */}
-        {resultLabel && !loading ? (
-          <Text variant="body" style={styles.resultCountText}>
-            {resultLabel}
-          </Text>
-        ) : null}
-
-        {/* Results grid */}
-        {loading ? (
-          <View style={styles.skeletonContainer}>
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              // eslint-disable-next-line react/no-array-index-key
-              <View key={i} style={styles.skeletonBox} />
-            ))}
-          </View>
-        ) : results.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <AppIcon name="searchOutline" size={48} color="#AAAAAA" />
-            <Text style={[styles.emptyTitle, searchStyleFilters && styles.emptyTitleStandalone]}>
-              {searchStyleFilters ? 'Aucun résultat' : 'No results found'}
+        <View style={styles.resultCountSlot}>
+          {resultLabel && !loading ? (
+            <Text variant="body" style={styles.resultCountText}>
+              {resultLabel}
             </Text>
-            {!searchStyleFilters ? (
-              <Text style={styles.emptySubtitle}>Try different keywords or filters</Text>
-            ) : null}
-          </View>
-        ) : (
-          <FlatList
-            key="results-grid-2"
-            data={mixedData}
-            keyExtractor={keyExtractor}
-            numColumns={2}
-            renderItem={renderMixedItem as any}
-            contentContainerStyle={[
-              styles.listContent,
-              searchStyleFilters && styles.listContentTabSearch,
-              isSearchTabScreen ? { paddingBottom: fixedTabBarReserveSpace + 8 } : null
-            ]}
-            columnWrapperStyle={styles.listRow}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              loadingMore ? (
-                <View style={styles.footerLoading}>
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                </View>
-              ) : null
-            }
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+          ) : null}
+        </View>
+
+        <View style={styles.resultsStage}>
+          <Animated.View style={[styles.resultsLayer, { opacity: contentOpacity }]}>
+            {results.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <AppIcon name="searchOutline" size={48} color="#AAAAAA" />
+                <Text style={[styles.emptyTitle, searchStyleFilters && styles.emptyTitleStandalone]}>
+                  {searchStyleFilters ? t('filters.noResults') : t('filters.noResultsFound')}
+                </Text>
+                {!searchStyleFilters ? (
+                  <Text style={styles.emptySubtitle}>{t('filters.noResultsHint')}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <FlatList
+                key="results-grid-2"
+                data={mixedData}
+                keyExtractor={keyExtractor}
+                numColumns={2}
+                {...LIST_IMAGE_PERF_PROPS}
+                renderItem={renderMixedItem as any}
+                contentContainerStyle={[
+                  styles.listContent,
+                  searchStyleFilters && styles.listContentTabSearch,
+                  isSearchTabScreen ? { paddingBottom: fixedTabBarReserveSpace + 8 } : null
+                ]}
+                columnWrapperStyle={styles.listRow}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  loadingMore ? (
+                    <View style={styles.footerLoading}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    </View>
+                  ) : null
+                }
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.skeletonOverlay, { opacity: skeletonOpacity }]}
+          >
+            <View style={styles.skeletonContainer}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                // eslint-disable-next-line react/no-array-index-key
+                <View key={i} style={styles.skeletonBox} />
+              ))}
+            </View>
+          </Animated.View>
+        </View>
       </View>
     </Screen>
   );
@@ -1376,13 +1519,14 @@ function SellerShowcaseCard({
   showcase: SellerShowcase;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const badge = showcase.is_influencer
-    ? 'Influenceur'
+    ? t('feed.tabs.influencers')
     : showcase.company_name && showcase.company_name.trim().length > 0
-      ? 'Pro'
-      : 'Particulier';
+      ? t('auth.sellerType.professional')
+      : t('auth.sellerType.individual');
 
-  const title = (showcase.display_name ?? '').trim() || 'Seller';
+  const title = (showcase.display_name ?? '').trim() || t('common.seller');
 
   const thumbs =
     showcase.thumbs.length > 0
@@ -1409,7 +1553,9 @@ function SellerShowcaseCard({
             <View style={styles.showcaseBadge}>
               <Text style={styles.showcaseBadgeText}>{badge}</Text>
             </View>
-            <Text style={styles.showcaseCountText}>{`${showcase.active_count} articles actifs`}</Text>
+            <Text style={styles.showcaseCountText}>
+              {t('filters.activeListings', { count: showcase.active_count })}
+            </Text>
           </View>
         </View>
       </View>
@@ -1594,10 +1740,24 @@ const styles = StyleSheet.create({
   },
   resultCountText: {
     paddingHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
     fontSize: 14,
     color: theme.colors.textPrimary
+  },
+  resultCountSlot: {
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingTop: 12,
+    paddingBottom: 8
+  },
+  resultsStage: {
+    flex: 1,
+    position: 'relative'
+  },
+  resultsLayer: {
+    flex: 1
+  },
+  skeletonOverlay: {
+    ...StyleSheet.absoluteFillObject
   },
   listContent: {
     paddingHorizontal: 16,

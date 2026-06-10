@@ -3,10 +3,14 @@
  */
 
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '../lib/theme';
 import type { FeedListing } from '../lib/api';
+import { useTranslation } from 'react-i18next';
+import { ListingCoverImage } from './ui/ListingCoverImage';
+
+const IMAGE_HEIGHT = 200;
 
 interface ListingCardProps {
   listing: FeedListing;
@@ -14,7 +18,9 @@ interface ListingCardProps {
 }
 
 export function ListingCard({ listing, onPress }: ListingCardProps) {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
 
   const formatPrice = (price: number): string => {
     return new Intl.NumberFormat('fr-CH', {
@@ -40,15 +46,16 @@ export function ListingCard({ listing, onPress }: ListingCardProps) {
     >
       {listing.cover_photo_url ? (
         <View style={[styles.imageContainer, styles.imageFrame]}>
-          <Image
-            source={{ uri: listing.cover_photo_url }}
-            style={styles.image}
-            resizeMode="cover"
+          <ListingCoverImage
+            uri={listing.cover_photo_url}
+            widthDp={windowWidth}
+            heightDp={IMAGE_HEIGHT}
+            recyclingKey={listing.id}
           />
         </View>
       ) : (
         <View style={styles.imageContainer}>
-          <Text style={styles.imagePlaceholderText}>Pas d'image</Text>
+          <Text style={styles.imagePlaceholderText}>{t('common.noImage')}</Text>
         </View>
       )}
 
@@ -82,7 +89,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: 200,
+    height: IMAGE_HEIGHT,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center'
@@ -90,10 +97,6 @@ const styles = StyleSheet.create({
   imageFrame: {
     overflow: 'hidden',
     backgroundColor: '#F5F5F5'
-  },
-  image: {
-    width: '100%',
-    height: '100%'
   },
   imagePlaceholderText: {
     ...theme.typography.caption,

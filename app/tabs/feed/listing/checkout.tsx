@@ -15,13 +15,21 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStripe } from '@stripe/stripe-react-native';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../../../lib/supabase';
-import { SUPABASE_URL } from '../../../../lib/env';
+import { isStripePublishableKeyConfigured, SUPABASE_URL } from '../../../../lib/env';
 import { theme } from '../../../../lib/theme';
 import { Button } from '../../../../components/ui/Button';
 import { Text } from '../../../../components/ui/Text';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { useAuthStore } from '../../../../stores/authStore';
+import { openGuestAuthPrompt } from '../../../../lib/guestAuthPrompt';
+import { computeBuyerFees } from '../../../../lib/fees';
+import { formatChf, formatPercent } from '../../../../lib/formatBuyerPrice';
+import {
+  BuyerPriceBreakdownSheet,
+  BuyerPriceInfoButton
+} from '../../../../components/pricing/BuyerPriceBreakdownSheet';
 
 type CheckoutParams = {
   listing_id: string;
@@ -41,14 +49,7 @@ type SavedProfileAddress = {
   country: string;
 };
 
-const COUNTRY_OPTIONS = [
-  { code: 'CH', label: 'Switzerland (CH)' },
-  { code: 'FR', label: 'France (FR)' },
-  { code: 'DE', label: 'Germany (DE)' },
-  { code: 'IT', label: 'Italy (IT)' }
-] as const;
-
-type CountryCode = (typeof COUNTRY_OPTIONS)[number]['code'];
+type CountryCode = 'CH' | 'FR' | 'DE' | 'IT';
 
 function isSavedAddressComplete(a: SavedProfileAddress | null): a is SavedProfileAddress {
   if (!a) return false;
@@ -58,6 +59,17 @@ function isSavedAddressComplete(a: SavedProfileAddress | null): a is SavedProfil
 }
 
 export default function CheckoutScreen() {
+  const { t } = useTranslation();
+  const countryOptions = React.useMemo(
+    () =>
+      [
+        { code: 'CH' as const, label: t('feed.checkout.countryCH') },
+        { code: 'FR' as const, label: t('feed.checkout.countryFR') },
+        { code: 'DE' as const, label: t('feed.checkout.countryDE') },
+        { code: 'IT' as const, label: t('feed.checkout.countryIT') }
+      ] as const,
+    [t]
+  );
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -91,19 +103,99 @@ export default function CheckoutScreen() {
   const userChoseCustomShippingRef = useRef(false);
 
   const [paying, setPaying] = useState(false);
+  const guestCheckoutPromptedRef = useRef(false);
 
-  const buyerProtectionCommission = useMemo(() => amountNum * 0.1, [amountNum]);
-  const total = useMemo(() => amountNum + buyerProtectionCommission, [amountNum, buyerProtectionCommission]);
+  const [parcelSize, setParcelSize] = useState<string | null>(null);
+  const [shippingFeeCents, setShippingFeeCents] = useState<number | null>(null);
+  const [isPromoShipping, setIsPromoShipping] = useState(false);
+  const [loadingShippingFee, setLoadingShippingFee] = useState(false);
+  const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
 
-  const formattedPrice = useMemo(() => `${amountNum.toFixed(2)} CHF`, [amountNum]);
-  const formattedCommission = useMemo(
-    () => `${buyerProtectionCommission.toFixed(2)} CHF`,
-    [buyerProtectionCommission]
+  useEffect(() => {
+    if (user?.id) {
+      guestCheckoutPromptedRef.current = false;
+      return;
+    }
+    if (guestCheckoutPromptedRef.current) return;
+    guestCheckoutPromptedRef.current = true;
+    openGuestAuthPrompt();
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/tabs/feed');
+    }
+  }, [user?.id, router]);
+
+  useEffect(() => {
+    if (!listingId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('listings')
+        .select('parcel_size')
+        .eq('id', listingId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const ps = (data as { parcel_size?: string | null }).parcel_size;
+      if (ps) setParcelSize(String(ps));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId]);
+
+  useEffect(() => {
+    if (!parcelSize) {
+      setShippingFeeCents(null);
+      setIsPromoShipping(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingShippingFee(true);
+    setShippingFeeCents(null);
+    setIsPromoShipping(false);
+
+    void (async () => {
+      const { data, error } = await supabase.rpc('get_shipping_fee', {
+        p_parcel_size: parcelSize
+      });
+      if (cancelled) return;
+      setLoadingShippingFee(false);
+      if (error || !data) return;
+
+      const row = data as { fee_cents?: number; is_promo?: boolean };
+      if (typeof row.fee_cents !== 'number') return;
+      setShippingFeeCents(row.fee_cents);
+      setIsPromoShipping(Boolean(row.is_promo));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [parcelSize]);
+
+  const buyerFees = useMemo(() => computeBuyerFees(amountNum), [amountNum]);
+  const shippingFeeChf = useMemo(() => {
+    if (deliveryMode !== 'shipping' || shippingFeeCents == null) return 0;
+    return shippingFeeCents / 100;
+  }, [deliveryMode, shippingFeeCents]);
+  const total = useMemo(
+    () => buyerFees.finalPriceChf + shippingFeeChf,
+    [buyerFees.finalPriceChf, shippingFeeChf]
+  );
+
+  const formattedPrice = useMemo(() => formatChf(amountNum), [amountNum]);
+  const formattedCommission = useMemo(() => formatChf(buyerFees.protectionChf), [buyerFees.protectionChf]);
+  const formattedBankingFee = useMemo(() => formatChf(buyerFees.bankingChf), [buyerFees.bankingChf]);
+  const formattedShippingFee = useMemo(
+    () => `${shippingFeeChf.toFixed(2)} CHF`,
+    [shippingFeeChf]
   );
   const formattedTotal = useMemo(() => `${total.toFixed(2)} CHF`, [total]);
 
   const countryLabel = useMemo(() => {
-    return COUNTRY_OPTIONS.find((c) => c.code === country)?.label ?? 'Switzerland (CH)';
+    return countryOptions.find((c) => c.code === country)?.label ?? t('feed.checkout.countryCH');
   }, [country]);
 
   const applySavedAddressToForm = useCallback((a: SavedProfileAddress) => {
@@ -111,7 +203,7 @@ export default function CheckoutScreen() {
     setPostalCode(a.postal_code.trim());
     setCity(a.city.trim());
     const c = String(a.country ?? 'CH').toUpperCase();
-    setCountry(COUNTRY_OPTIONS.some((o) => o.code === c) ? (c as CountryCode) : 'CH');
+    setCountry(countryOptions.some((o) => o.code === c) ? (c as CountryCode) : 'CH');
   }, []);
 
   useEffect(() => {
@@ -192,26 +284,34 @@ export default function CheckoutScreen() {
     if (paying) return;
 
     if (!user?.id) {
-      Alert.alert('Error', 'You must be signed in to pay');
+      Alert.alert(t('common.error'), t('feed.checkout.mustSignIn'));
       router.push('/auth/login');
       return;
     }
 
     if (!listingId || !sellerId) {
-      Alert.alert('Error', 'Order parameters are missing');
+      Alert.alert(t('common.error'), t('feed.checkout.missingParams'));
       return;
     }
 
     if (amountNum <= 0) {
-      Alert.alert('Error', 'Invalid amount');
+      Alert.alert(t('common.error'), t('feed.checkout.invalidAmount'));
       return;
     }
 
     if (deliveryMode === 'shipping') {
       if (!street.trim() || !city.trim() || !postalCode.trim() || !country.trim()) {
-        Alert.alert('Incomplete address', 'Please fill in street, city, postal code, and country');
+        Alert.alert(t('feed.checkout.incompleteAddress'), t('feed.checkout.incompleteAddressMessage'));
         return;
       }
+    }
+
+    if (!isStripePublishableKeyConfigured()) {
+      Alert.alert(
+        t('feed.checkout.stripeNotConfigured'),
+        t('feed.checkout.stripeNotConfiguredMessage')
+      );
+      return;
     }
 
     setPaying(true);
@@ -219,7 +319,7 @@ export default function CheckoutScreen() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        Alert.alert('Error', 'Session expired. Please sign in again');
+        Alert.alert(t('common.error'), t('feed.checkout.sessionExpired'));
         return;
       }
 
@@ -235,6 +335,7 @@ export default function CheckoutScreen() {
           seller_id: sellerId,
           amount: amountNum,
           delivery_mode: deliveryMode,
+          ...(parcelSize ? { parcel_size: parcelSize } : {}),
           shipping_address:
             deliveryMode === 'shipping' ? street.trim() : null,
           shipping_city: deliveryMode === 'shipping' ? city.trim() : null,
@@ -307,7 +408,7 @@ export default function CheckoutScreen() {
         params: { order_id: orderId }
       });
     } catch (e) {
-      Alert.alert('Payment failed', e instanceof Error ? e.message : 'Unknown error');
+      Alert.alert(t('feed.checkout.paymentFailed'), e instanceof Error ? e.message : 'Unknown error');
     } finally {
       setPaying(false);
     }
@@ -322,7 +423,7 @@ export default function CheckoutScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Checkout
+            {t('feed.checkout.title')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -349,7 +450,7 @@ export default function CheckoutScreen() {
             <View style={styles.moneyBlock}>
               <View style={styles.moneyRow}>
                 <Text variant="body" color="textSecondary">
-                  Price
+                  {t('feed.checkout.itemPrice')}
                 </Text>
                 <Text variant="body" color="textPrimary">
                   {formattedPrice}
@@ -357,17 +458,55 @@ export default function CheckoutScreen() {
               </View>
               <View style={styles.moneyRow}>
                 <Text variant="body" color="textSecondary">
-                  Buyer Protection (+10%)
+                  {t('feed.checkout.buyerProtection', {
+                    percent: formatPercent(buyerFees.protectionRate)
+                  })}
                 </Text>
                 <Text variant="body" color="textPrimary">
-                  {formattedCommission}
+                  +{formattedCommission}
                 </Text>
               </View>
-              <View style={[styles.moneyRow, styles.moneyRowTotal]}>
-                <Text variant="body" color="textPrimary">
-                  Total
+              <View style={styles.moneyRow}>
+                <Text variant="body" color="textSecondary">
+                  {t('feed.checkout.bankingFee', {
+                    percent: formatPercent(buyerFees.bankingRate)
+                  })}
                 </Text>
-                <Text variant="body" color="primary">
+                <Text variant="body" color="textPrimary">
+                  +{formattedBankingFee}
+                </Text>
+              </View>
+              {deliveryMode === 'shipping' ? (
+                <View style={styles.moneyRow}>
+                  <View style={styles.shippingFeeLabelCol}>
+                    <Text variant="body" color="textSecondary">
+                      {t('feed.checkout.shippingFee')}
+                    </Text>
+                    {isPromoShipping ? (
+                      <View style={styles.shippingPromoBadge}>
+                        <Text style={styles.shippingPromoBadgeText}>
+                          {t('feed.checkout.shippingPromo')}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {loadingShippingFee ? (
+                    <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                  ) : (
+                    <Text variant="body" color="textPrimary">
+                      +{formattedShippingFee}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+              <View style={[styles.moneyRow, styles.moneyRowTotal]}>
+                <View style={styles.totalLabelRow}>
+                  <Text variant="body" style={styles.totalLabel}>
+                    {t('feed.checkout.total')}
+                  </Text>
+                  <BuyerPriceInfoButton onPress={() => setShowPriceBreakdown(true)} />
+                </View>
+                <Text variant="body" style={styles.totalAmount}>
                   {formattedTotal}
                 </Text>
               </View>
@@ -376,7 +515,7 @@ export default function CheckoutScreen() {
 
           <View style={styles.section}>
             <Text variant="captionSm" color="textSecondary" style={styles.sectionTitle}>
-              Delivery method
+              {t('feed.checkout.deliveryMethod')}
             </Text>
 
             <View style={styles.toggleRow}>
@@ -390,7 +529,7 @@ export default function CheckoutScreen() {
                   color={deliveryMode === 'pickup' ? 'appleBlack' : 'textSecondary'}
                   style={styles.toggleText}
                 >
-                  Local pickup
+                  {t('feed.checkout.localPickup')}
                 </Text>
               </TouchableOpacity>
 
@@ -404,7 +543,7 @@ export default function CheckoutScreen() {
                   color={deliveryMode === 'shipping' ? 'appleBlack' : 'textSecondary'}
                   style={styles.toggleText}
                 >
-                  Shipping
+                  {t('feed.checkout.shipping')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -413,7 +552,7 @@ export default function CheckoutScreen() {
           {deliveryMode === 'shipping' && (
             <View style={styles.section}>
               <Text variant="captionSm" color="textSecondary" style={styles.sectionTitle}>
-                Shipping address
+                {t('feed.orderConfirmation.shippingTo')}
               </Text>
 
               {savedProfileAddress && isSavedAddressComplete(savedProfileAddress) ? (
@@ -436,10 +575,10 @@ export default function CheckoutScreen() {
                         color={shippingAddressMode === 'profile' ? 'appleBlack' : 'textSecondary'}
                         style={styles.shippingModeTitle}
                       >
-                        Saved address
+                        {t('feed.checkout.savedAddress')}
                       </Text>
                       <Text variant="captionSm" color="textSecondary" style={styles.shippingModeHint}>
-                        From your Bloomi profile
+                        {t('feed.checkout.fromProfile')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -458,10 +597,10 @@ export default function CheckoutScreen() {
                         color={shippingAddressMode === 'custom' ? 'appleBlack' : 'textSecondary'}
                         style={styles.shippingModeTitle}
                       >
-                        Different address
+                        {t('feed.checkout.differentAddress')}
                       </Text>
                       <Text variant="captionSm" color="textSecondary" style={styles.shippingModeHint}>
-                        Enter manually
+                        {t('feed.checkout.enterManually')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -475,7 +614,7 @@ export default function CheckoutScreen() {
                         {savedProfileAddress.postal_code.trim()} {savedProfileAddress.city.trim()}
                       </Text>
                       <Text variant="captionSm" color="textSecondary" style={styles.savedAddressCountry}>
-                        {COUNTRY_OPTIONS.find(
+                        {countryOptions.find(
                           (c) => c.code === String(savedProfileAddress.country).toUpperCase()
                         )?.label ?? savedProfileAddress.country}
                       </Text>
@@ -484,21 +623,21 @@ export default function CheckoutScreen() {
                     <>
                       <TextInput
                         style={styles.input}
-                        placeholder="Street"
+                        placeholder={t('feed.checkout.street')}
                         placeholderTextColor={theme.colors.textSecondary}
                         value={street}
                         onChangeText={setStreet}
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="City"
+                        placeholder={t('feed.checkout.city')}
                         placeholderTextColor={theme.colors.textSecondary}
                         value={city}
                         onChangeText={setCity}
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="Postal code"
+                        placeholder={t('feed.checkout.postalCode')}
                         placeholderTextColor={theme.colors.textSecondary}
                         value={postalCode}
                         onChangeText={setPostalCode}
@@ -517,26 +656,25 @@ export default function CheckoutScreen() {
               ) : (
                 <>
                   <Text variant="captionSm" color="textSecondary" style={styles.noSavedHint}>
-                    No complete address on your profile. Enter the shipping address below, or add one in
-                    Profile → Settings → My address.
+                    {t('feed.checkout.noSavedAddressHint')}
                   </Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Street"
+                    placeholder={t('feed.checkout.street')}
                     placeholderTextColor={theme.colors.textSecondary}
                     value={street}
                     onChangeText={setStreet}
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="City"
+                    placeholder={t('feed.checkout.city')}
                     placeholderTextColor={theme.colors.textSecondary}
                     value={city}
                     onChangeText={setCity}
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Postal code"
+                    placeholder={t('feed.checkout.postalCode')}
                     placeholderTextColor={theme.colors.textSecondary}
                     value={postalCode}
                     onChangeText={setPostalCode}
@@ -568,8 +706,8 @@ export default function CheckoutScreen() {
               onPress={() => setShowCountryPicker(false)}
             />
             <View style={styles.countryModalCard}>
-              <Text style={styles.countryModalTitle}>Country</Text>
-              {COUNTRY_OPTIONS.map((opt) => {
+              <Text style={styles.countryModalTitle}>{t('feed.checkout.country')}</Text>
+              {countryOptions.map((opt) => {
                 const selected = opt.code === country;
                 return (
                   <TouchableOpacity
@@ -590,7 +728,7 @@ export default function CheckoutScreen() {
               })}
               <View style={styles.countryModalFooter}>
                 <Button
-                  title="Close"
+                  title={t('common.close')}
                   onPress={() => setShowCountryPicker(false)}
                   variant="google"
                 />
@@ -599,9 +737,15 @@ export default function CheckoutScreen() {
           </View>
         </Modal>
 
+        <BuyerPriceBreakdownSheet
+          visible={showPriceBreakdown}
+          itemPriceChf={amountNum}
+          onClose={() => setShowPriceBreakdown(false)}
+        />
+
         <View style={[styles.ctaContainer, { paddingBottom: insets.bottom + 80 }]}>
           <Button
-            title={paying ? 'Processing…' : 'Pay'}
+            title={paying ? t('common.loading') : t('feed.checkout.pay')}
             onPress={handlePay}
             variant="primary"
             disabled={paying}
@@ -677,8 +821,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: theme.spacing.gapSm
   },
+  totalLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
   moneyRowTotal: {
-    marginBottom: 0
+    marginBottom: 0,
+    marginTop: theme.spacing.gapSm,
+    paddingTop: theme.spacing.gapSm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border
+  },
+  shippingFeeLabelCol: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 4,
+    marginRight: theme.spacing.gapSm
+  },
+  shippingPromoBadge: {
+    backgroundColor: '#C3EA4F',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  shippingPromoBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: '#000000',
+    fontFamily: theme.fontFamily.semiBold
+  },
+  totalLabel: {
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.textPrimary
+  },
+  totalAmount: {
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.textPrimary
   },
   section: {
     borderWidth: 1,

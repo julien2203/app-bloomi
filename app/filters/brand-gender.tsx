@@ -9,20 +9,15 @@ import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
+import { useTranslation } from 'react-i18next';
 
 type GenderSegment = {
   label: string;
   gender: string; // valeur en base: 'femme', 'homme', 'enfant', 'bebe'
 };
 
-const GENDER_SEGMENTS: GenderSegment[] = [
-  { label: 'Women', gender: 'femme' },
-  { label: 'Men', gender: 'homme' },
-  { label: 'Kids', gender: 'enfant' },
-  { label: 'Baby', gender: 'bebe' }
-];
-
 export default function BrandGenderScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
@@ -50,19 +45,26 @@ export default function BrandGenderScreen() {
     navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
+  const genderSegments: GenderSegment[] = [
+    { label: t('filters.woman'), gender: 'femme' },
+    { label: t('filters.men'), gender: 'homme' },
+    { label: t('filters.kids'), gender: 'enfant' },
+    { label: t('filters.baby'), gender: 'bebe' }
+  ];
+
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Brand
+            {t('filters.brand')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
 
         <View style={styles.content}>
-          {GENDER_SEGMENTS.map((segment) => (
+          {genderSegments.map((segment) => (
             <TouchableOpacity
               key={segment.gender}
               style={styles.row}
@@ -84,7 +86,7 @@ export default function BrandGenderScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

@@ -12,6 +12,7 @@ import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getCategoryFilterContext, getSizes } from '../../lib/api/filters';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { useTranslation } from 'react-i18next';
 
 type SizeRow = {
   id: number;
@@ -25,28 +26,33 @@ type SizeSection = {
   rows: SizeRow[];
 };
 
-function getSectionTitle(gender?: string | null, type?: string | null): string {
+function getSectionTitle(
+  gender: string | null | undefined,
+  type: string | null | undefined,
+  t: (key: string) => string
+): string {
   const g = gender ?? 'all';
-  const t = type ?? 'all';
+  const typeKey = type ?? 'all';
 
-  if (g === 'femme' && t === 'vetements') return "Woman's items";
-  if (g === 'femme' && t === 'chaussures') return "Woman's shoes";
+  if (g === 'femme' && typeKey === 'vetements') return t('filters.sizeSections.womanItems');
+  if (g === 'femme' && typeKey === 'chaussures') return t('filters.sizeSections.womanShoes');
 
-  if (g === 'homme' && t === 'vetements') return "Men's clothing";
-  if (g === 'homme' && t === 'pantalons') return "Men's pants & jeans";
-  if (g === 'homme' && t === 'chemises') return "Men's shirts (collar)";
-  if (g === 'homme' && t === 'chaussures') return "Men's shoes";
+  if (g === 'homme' && typeKey === 'vetements') return t('filters.sizeSections.menClothing');
+  if (g === 'homme' && typeKey === 'pantalons') return t('filters.sizeSections.menPants');
+  if (g === 'homme' && typeKey === 'chemises') return t('filters.sizeSections.menShirts');
+  if (g === 'homme' && typeKey === 'chaussures') return t('filters.sizeSections.menShoes');
 
-  if (g === 'enfant' && t === 'vetements') return "Kids";
-  if (g === 'enfant' && t === 'chaussures') return "Kids shoes";
+  if (g === 'enfant' && typeKey === 'vetements') return t('filters.sizeSections.kids');
+  if (g === 'enfant' && typeKey === 'chaussures') return t('filters.sizeSections.kidsShoes');
 
-  if (g === 'bebe' && t === 'vetements') return 'Baby';
-  if (g === 'bebe' && t === 'chaussures') return 'Baby shoes';
+  if (g === 'bebe' && typeKey === 'vetements') return t('filters.sizeSections.baby');
+  if (g === 'bebe' && typeKey === 'chaussures') return t('filters.sizeSections.babyShoes');
 
-  return 'Other';
+  return t('filters.other');
 }
 
 export default function SizeFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{
     returnTo?: string;
@@ -57,7 +63,7 @@ export default function SizeFilterScreen() {
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
   const [sections, setSections] = useState<SizeSection[]>([]);
-  const [selectedSizes, setSelectedSizes] = useState<string[]>(filters.sizeIds ?? []);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([...(filters.sizeIds ?? [])]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +92,7 @@ export default function SizeFilterScreen() {
       let type: string | undefined;
       let categoryIdForCounts: string | undefined;
 
-      const categoryId = filters.categoryId;
+      const categoryId = filters.categoryIds?.[0];
       if (categoryId) {
         categoryIdForCounts = String(categoryId);
         const ctx = await getCategoryFilterContext(categoryId);
@@ -103,7 +109,7 @@ export default function SizeFilterScreen() {
       (data as any[]).forEach((row) => {
         const gender = row.gender as string | null;
         const type = row.type as string | null;
-        const title = getSectionTitle(gender, type);
+        const title = getSectionTitle(gender, type, t);
 
         // Si aucun count n'est fourni, considérer 0 par défaut (non cliquable)
         const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
@@ -133,17 +139,17 @@ export default function SizeFilterScreen() {
       );
 
       const SECTION_ORDER = [
-        "Woman's items",
-        "Woman's shoes",
-        "Men's clothing",
-        "Men's pants & jeans",
-        "Men's shirts (collar)",
-        "Men's shoes",
-        'Kids',
-        'Kids shoes',
-        'Baby',
-        'Baby shoes',
-        'Other'
+        t('filters.sizeSections.womanItems'),
+        t('filters.sizeSections.womanShoes'),
+        t('filters.sizeSections.menClothing'),
+        t('filters.sizeSections.menPants'),
+        t('filters.sizeSections.menShirts'),
+        t('filters.sizeSections.menShoes'),
+        t('filters.sizeSections.kids'),
+        t('filters.sizeSections.kidsShoes'),
+        t('filters.sizeSections.baby'),
+        t('filters.sizeSections.babyShoes'),
+        t('filters.other')
       ];
 
       builtSections.sort((a, b) => {
@@ -158,7 +164,7 @@ export default function SizeFilterScreen() {
 
       setSections(builtSections);
     } catch (e) {
-      setError('Unable to load sizes. Please try again.');
+      setError(t('filters.sizesLoadError'));
       setSections([]);
     } finally {
       setLoading(false);
@@ -168,7 +174,7 @@ export default function SizeFilterScreen() {
   useEffect(() => {
     void loadSizes();
     // Recharger lorsque d'autres filtres changent pour mettre à jour les counts
-  }, [filters.brandIds, filters.categoryId, filters.colorIds, filters.conditionIds, filters.priceMin, filters.priceMax]);
+  }, [filters.brandIds, filters.categoryIds, filters.colorIds, filters.conditionIds, filters.priceMin, filters.priceMax]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
@@ -176,7 +182,7 @@ export default function SizeFilterScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Size
+            {t('filters.size')}
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -185,7 +191,7 @@ export default function SizeFilterScreen() {
             style={styles.clearAllHit}
           >
             <Text variant="body" style={styles.clearAllText}>
-              Clear all
+              {t('filters.clearAll')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -197,7 +203,7 @@ export default function SizeFilterScreen() {
             </Text>
             <TouchableOpacity onPress={loadSizes} activeOpacity={0.7}>
               <Text variant="captionSm" color="primary">
-                Retry
+                {t('common.retry')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -289,7 +295,7 @@ export default function SizeFilterScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

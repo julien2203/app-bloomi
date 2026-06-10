@@ -19,7 +19,7 @@ export async function verifyDevTestCode(phone: string): Promise<{
   if (!DEV_OTP_MODE) {
     return {
       success: false,
-      error: 'Le mode de test n\'est disponible qu\'en développement'
+      error: 'Test mode is only available in development'
     };
   }
 
@@ -38,14 +38,14 @@ export async function verifyDevTestCode(phone: string): Promise<{
       // Si Supabase n'accepte pas le code de test, on retourne une erreur explicative
       return {
         success: false,
-        error: `Code de test non accepté. Vérifiez que le numéro ${phone} est configuré comme numéro de test dans Supabase (Auth > Phone Auth > Test Phone Numbers) et que le code de test est "${DEV_TEST_CODE}".`
+        error: `Test code not accepted. Make sure ${phone} is configured as a test number in Supabase (Auth > Phone Auth > Test Phone Numbers) and the test code is "${DEV_TEST_CODE}".`
       };
     }
 
     if (!data.session) {
       return {
         success: false,
-        error: 'Impossible de créer une session de test'
+        error: 'Unable to create a test session'
       };
     }
 
@@ -53,7 +53,7 @@ export async function verifyDevTestCode(phone: string): Promise<{
   } catch (e) {
     return {
       success: false,
-      error: 'Une erreur est survenue lors de l\'authentification de test'
+      error: 'Something went wrong during test authentication'
     };
   }
 }

@@ -22,11 +22,15 @@ import { StatusBar } from 'expo-status-bar';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../stores/authStore';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
+import { useTranslation } from 'react-i18next';
 
 export default function SignUpScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const enterGuestMode = useAuthStore((s) => s.enterGuestMode);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -39,9 +43,9 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const userTypeOptions = [
-    { label: 'Selling', value: 'selling' },
-    { label: 'Buying', value: 'buying' },
-    { label: 'Both', value: 'both' }
+    { label: t('auth.signUp.selling'), value: 'selling' },
+    { label: t('auth.signUp.buying'), value: 'buying' },
+    { label: t('auth.signUp.both'), value: 'both' }
   ];
 
   const handleSignUp = async () => {
@@ -94,7 +98,7 @@ export default function SignUpScreen() {
         {/* Header */}
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
-          <Text style={styles.headerTitle}>Sign up</Text>
+          <Text style={styles.headerTitle}>{t('auth.signUp.title')}</Text>
           {/* espace pour équilibrer le header */}
           <View style={{ width: 20 }} />
         </View>
@@ -111,7 +115,7 @@ export default function SignUpScreen() {
             <View style={styles.content}>
               {/* Full name */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Full name</Text>
+                <Text style={styles.fieldLabel}>{t('auth.signUp.fullName')}</Text>
                 <View style={styles.fieldInputWrapper}>
                   <TextInput
                     style={styles.fieldInput}
@@ -126,7 +130,7 @@ export default function SignUpScreen() {
 
               {/* Username */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Username</Text>
+                <Text style={styles.fieldLabel}>{t('auth.signUp.username')}</Text>
                 <View style={styles.fieldInputWrapper}>
                   <TextInput
                     style={styles.fieldInput}
@@ -142,7 +146,7 @@ export default function SignUpScreen() {
 
               {/* Email */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Email</Text>
+                <Text style={styles.fieldLabel}>{t('auth.signUp.email')}</Text>
                 <View style={styles.fieldInputWrapper}>
                   <TextInput
                     style={styles.fieldInput}
@@ -159,7 +163,7 @@ export default function SignUpScreen() {
 
               {/* Password */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Password</Text>
+                <Text style={styles.fieldLabel}>{t('auth.signUp.password')}</Text>
                 <View style={styles.fieldInputWrapper}>
                   <TextInput
                     style={styles.fieldInput}
@@ -184,7 +188,7 @@ export default function SignUpScreen() {
 
               {/* Interest pills */}
               <View style={styles.interestSection}>
-                <Text style={styles.interestLabel}>What are you more interest in?</Text>
+                <Text style={styles.interestLabel}>{t('auth.signUp.interestLabel')}</Text>
                 <View style={styles.interestPillsRow}>
                   {userTypeOptions.map((option) => {
                     const isActive = userType === option.value;
@@ -221,10 +225,7 @@ export default function SignUpScreen() {
                   >
                     {mailingChecked && <Text style={styles.checkboxCheck}>✓</Text>}
                   </View>
-                  <Text style={styles.checkboxText}>
-                    I'd like to receive personalized offers and be the first to know about the
-                    latest Bloomi update via email.
-                  </Text>
+                  <Text style={styles.checkboxText}>{t('auth.signUp.marketingOptIn')}</Text>
                 </TouchableOpacity>
 
                 {/* Row 2 */}
@@ -242,19 +243,19 @@ export default function SignUpScreen() {
                     {termsChecked && <Text style={styles.checkboxCheck}>✓</Text>}
                   </View>
                   <Text style={styles.checkboxText}>
-                    By clicking sign up, I hereby agree and consent to Bloomi&apos;s{' '}
+                    {t('auth.signUp.termsPrefix')}{' '}
                     <Text
                       style={styles.checkboxLink}
                       onPress={() => Linking.openURL('https://bloomi.app/terms')}
                     >
-                      Term &amp; Conditions
+                      {t('auth.signUp.termsLink')}
                     </Text>{' '}
-                    and{' '}
+                    {t('auth.signUp.termsAnd')}{' '}
                     <Text
                       style={styles.checkboxLink}
                       onPress={() => Linking.openURL('https://bloomi.app/privacy')}
                     >
-                      Privacy Policy
+                      {t('common.privacyPolicy')}
                     </Text>
                     .
                   </Text>
@@ -269,7 +270,7 @@ export default function SignUpScreen() {
 
               {/* Sign up button */}
               <Button
-                title="Sign up"
+                title={t('auth.signUp.submit')}
                 onPress={handleSignUp}
                 variant="primary-green"
                 disabled={!canSubmit || loading}
@@ -284,15 +285,28 @@ export default function SignUpScreen() {
               {/* Login link */}
               <View style={styles.loginLink}>
                 <Text style={styles.loginLinkText}>
-                  Already have an account?{' '}
+                  {`${t('auth.signUp.alreadyAccount')} `}
                   <Text
                     style={styles.loginLinkButton}
                     onPress={() => router.push('/auth/login')}
                   >
-                    Log in
+                    {t('auth.signUp.logInLink')}
                   </Text>
                 </Text>
               </View>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  void (async () => {
+                    await enterGuestMode();
+                    router.replace('/tabs/feed');
+                  })();
+                }}
+                style={styles.guestLink}
+              >
+                <Text style={styles.guestLinkText}>{t('auth.signUp.browseWithoutAccount')}</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -478,5 +492,15 @@ const styles = StyleSheet.create({
   loginLinkButton: {
     color: theme.colors.primary,
     fontWeight: '600'
+  },
+  guestLink: {
+    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 8
+  },
+  guestLinkText: {
+    ...theme.typography.body,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'underline'
   }
 });

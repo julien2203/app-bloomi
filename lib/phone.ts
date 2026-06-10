@@ -24,7 +24,7 @@ export function normalizePhoneToE164(input: string): NormalizedPhoneResult {
   const raw = input.trim();
 
   if (!raw) {
-    return { ok: false, error: 'Veuillez saisir un numéro de téléphone.' };
+    return { ok: false, error: 'Please enter a phone number.' };
   }
 
   // Supprimer les espaces, tirets, parenthèses
@@ -45,14 +45,14 @@ export function normalizePhoneToE164(input: string): NormalizedPhoneResult {
     return {
       ok: false,
       error:
-        'Veuillez saisir le numéro au format international, par exemple +41..., +33..., +49... ou +39....'
+        'Please enter the number in international format, for example +41…, +33…, +49…, or +39….'
     };
   } else {
     // Cas non pris en charge
     return {
       ok: false,
       error:
-        'Seuls les numéros suisses (+41), français (+33), allemands (+49) et italiens (+39) sont acceptés.'
+        'Only Swiss (+41), French (+33), German (+49), and Italian (+39) numbers are accepted.'
     };
   }
 
@@ -76,7 +76,7 @@ export function normalizePhoneToE164(input: string): NormalizedPhoneResult {
     return {
       ok: false,
       error:
-        'Seuls les numéros suisses (+41), français (+33), allemands (+49) et italiens (+39) sont acceptés.'
+        'Only Swiss (+41), French (+33), German (+49), and Italian (+39) numbers are accepted.'
     };
   }
 
@@ -84,7 +84,7 @@ export function normalizePhoneToE164(input: string): NormalizedPhoneResult {
   if (!/^\d{6,12}$/.test(nationalNumber)) {
     return {
       ok: false,
-      error: 'Le numéro de téléphone semble invalide pour le pays sélectionné.'
+      error: 'The phone number looks invalid for the selected country.'
     };
   }
 

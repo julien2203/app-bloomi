@@ -1,23 +1,31 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { theme } from '../../../lib/theme';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { useTranslation } from 'react-i18next';
 
-const GENDERS = ['Woman', 'Men', 'Kids', 'Baby'] as const;
+const GENDERS = ['woman', 'men', 'kids', 'baby'] as const;
 
 export default function SellCategoryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const params = useLocalSearchParams<{ return_to?: string; edit_id?: string }>();
   const insets = useSafeAreaInsets();
 
   const handleOpenGender = (gender: (typeof GENDERS)[number]) => {
+    const labelToValue = { woman: 'Woman', men: 'Men', kids: 'Kids', baby: 'Baby' } as const;
     router.push({
       pathname: '/tabs/sell/category-gender',
-      params: { gender }
+      params: {
+        gender: labelToValue[gender],
+        ...(typeof params.return_to === 'string' ? { return_to: params.return_to } : {}),
+        ...(typeof params.edit_id === 'string' ? { edit_id: params.edit_id } : {})
+      }
     });
   };
 
@@ -31,7 +39,7 @@ export default function SellCategoryScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Category
+            {t('sell.category')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -45,7 +53,7 @@ export default function SellCategoryScreen() {
               onPress={() => handleOpenGender(gender)}
             >
               <Text variant="body" style={styles.rowLabel}>
-                {gender}
+                {t(`filters.${gender}`)}
               </Text>
               <Text style={styles.chevron}>{'›'}</Text>
             </TouchableOpacity>
@@ -59,7 +67,7 @@ export default function SellCategoryScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

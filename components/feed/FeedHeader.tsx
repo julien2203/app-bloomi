@@ -10,6 +10,9 @@ import { IconBox } from '../ui/IconBox';
 import { theme } from '../../lib/theme';
 import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
+import { useAuthStore } from '../../stores/authStore';
+import { openGuestAuthPrompt } from '../../lib/guestAuthPrompt';
+import { useTranslation } from 'react-i18next';
 
 type FeedHeaderProps = {
   searchText: string;
@@ -24,7 +27,17 @@ export function FeedHeader({
   onSubmitSearch,
   unreadNotificationsCount
 }: FeedHeaderProps) {
+  const { t } = useTranslation();
   const router = useRouter();
+  const session = useAuthStore((s) => s.session);
+
+  const requireAccount = (go: () => void) => {
+    if (!session?.user) {
+      openGuestAuthPrompt();
+      return;
+    }
+    go();
+  };
   const topIconBoxSize = {
     heart: 27,
     cart: 30,
@@ -41,32 +54,47 @@ export function FeedHeader({
         />
         <View style={styles.headerActions}>
           <TouchableOpacity
-            onPress={() => router.push('/tabs/profile/favorites')}
+            onPress={() =>
+              requireAccount(() => {
+                router.push('/tabs/profile/favorites');
+              })
+            }
             activeOpacity={0.7}
             style={styles.headerIconHit}
             hitSlop={HIT_SLOP_EXTRA}
             accessibilityRole="button"
-            accessibilityLabel="Favoris"
+            accessibilityLabel={t('feed.header.favorites')}
           >
             <IconBox Svg={CoeurIcon} boxSize={topIconBoxSize.heart} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => router.push('/tabs/profile/orders')}
+            onPress={() =>
+              requireAccount(() => {
+                router.push('/tabs/profile/orders');
+              })
+            }
             activeOpacity={0.7}
             style={styles.headerIconHit}
             hitSlop={HIT_SLOP_EXTRA}
             accessibilityRole="button"
-            accessibilityLabel="Panier"
+            accessibilityLabel={t('feed.header.orders')}
           >
             <IconBox Svg={CartIcon} boxSize={topIconBoxSize.cart} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => router.push('/tabs/profile/notifications' as any)}
+            onPress={() =>
+              requireAccount(() => {
+                router.push({
+                  pathname: '/tabs/profile/notifications' as any,
+                  params: { from: 'feed' }
+                });
+              })
+            }
             activeOpacity={0.7}
             style={styles.headerIconHit}
             hitSlop={HIT_SLOP_EXTRA}
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={t('feed.header.notifications')}
           >
             <View style={styles.bellWrap}>
               <IconBox Svg={NotificationIcon} boxSize={topIconBoxSize.notification} />
@@ -83,7 +111,7 @@ export function FeedHeader({
             <IconBox Svg={SearchIcon} boxSize={16} />
           </View>
           <TextInput
-            placeholder="Rechercher un article, une marque..."
+            placeholder={t('feed.header.searchPlaceholder')}
             placeholderTextColor="#AAAAAA"
             style={styles.searchInput}
             value={searchText}
@@ -100,8 +128,10 @@ export function FeedHeader({
               {
                 // Sécurité: le feed ne doit jamais rester filtré par ce bouton.
                 useFeedFiltersStore.getState().resetFilters();
+                // Filtres au niveau onglets (pas la pile Search) : évite un modal
+                // slide_from_bottom qui reste sur l’onglet Search et se referme au tap Search.
                 router.push({
-                  pathname: '/tabs/search/filters' as any,
+                  pathname: '/tabs/filters/index' as any,
                   params: {
                     returnTo: 'search',
                     scope: 'search',
@@ -112,7 +142,7 @@ export function FeedHeader({
               }
             }
             accessibilityRole="button"
-            accessibilityLabel="Ouvrir les filtres"
+            accessibilityLabel={t('feed.header.openFilters')}
           >
             <Feather name="menu" size={18} color="#000000" />
           </TouchableOpacity>
@@ -178,7 +208,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#C3EA4F',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center'
   },

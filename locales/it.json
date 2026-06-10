@@ -1,0 +1,929 @@
+{
+  "common": {
+    "save": "Salva",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "back": "Indietro",
+    "loading": "Caricamento...",
+    "close": "Chiudi",
+    "retry": "Riprova",
+    "error": "Errore",
+    "success": "Successo",
+    "ok": "OK",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "share": "Condividi",
+    "or": "o",
+    "notNow": "Non ora",
+    "continue": "Continua",
+    "confirmReceipt": "Conferma",
+    "all": "Tutto",
+    "seller": "Venditore",
+    "buyer": "Acquirente",
+    "listing": "Annuncio",
+    "chf": "CHF",
+    "na": "N/A",
+    "dash": "—",
+    "noImage": "Nessuna immagine",
+    "seeAll": "Vedi tutto",
+    "clearAll": "Cancella tutto",
+    "apply": "Applicare",
+    "reset": "Reimposta",
+    "gotIt": "Capito",
+    "privacyPolicy": "Informativa sulla privacy",
+    "termsOfService": "Termini di servizio",
+    "termsAndConditions": "Termini e condizioni",
+    "bloomiUser": "Utente Bloomi",
+    "bloomiListing": "Annuncio Bloomi"
+  },
+  "navigation": {
+    "home": "Home",
+    "search": "Cerca",
+    "sell": "Vendi",
+    "inbox": "Posta in arrivo",
+    "profile": "Profilo",
+    "feed": "Feed",
+    "results": "Risultati",
+    "resultDetail": "Dettaglio risultato",
+    "filters": "Filtri",
+    "messages": "Messaggi",
+    "backToHome": "Torna alla home"
+  },
+  "auth": {
+    "login": {
+      "title": "Accedi",
+      "email": "Email",
+      "password": "Password",
+      "emailPlaceholder": "your@email.com",
+      "passwordPlaceholder": "Inserisca la Sua password",
+      "forgotPassword": "Password dimenticata?",
+      "submit": "Accedi",
+      "continueApple": "Continua con Apple",
+      "continueGoogle": "Continua con Google",
+      "continueFacebook": "Continua con Facebook",
+      "noAccount": "Non ha un account?",
+      "signUpLink": "Registrati",
+      "unableSignIn": "Impossibile accedere. La preghiamo di riprovare.",
+      "somethingWrong": "Si è verificato un errore durante l'accesso.",
+      "facebookUnavailable": "L'accesso con Facebook non è ancora disponibile."
+    },
+    "signUp": {
+      "title": "Registrati",
+      "fullName": "Nome completo",
+      "username": "Nome utente",
+      "email": "Email",
+      "password": "Password",
+      "interestLabel": "Cosa La interessa di più?",
+      "selling": "Vendite",
+      "buying": "Acquisti",
+      "both": "Entrambi",
+      "marketingOptIn": "Desidero ricevere offerte personalizzate ed essere tra i primi a conoscere gli ultimi aggiornamenti Bloomi via e-mail.",
+      "termsPrefix": "Facendo clic su Registrati, accetto e acconsento ai",
+      "termsLink": "Termini e condizioni",
+      "termsAnd": "e",
+      "alreadyAccount": "Ha già un account?",
+      "logInLink": "Accedi",
+      "submit": "Registrati",
+      "somethingWrong": "Si è verificato un errore durante la registrazione. La preghiamo di riprovare."
+    },
+    "sellerType": {
+      "title": "Registrati",
+      "sellingAs": "Vende come",
+      "individual": "Privato",
+      "professional": "Professionale",
+      "companyName": "Nome azienda",
+      "ideNumber": "Numero IDE (CHE-XXX.XXX.XXX)",
+      "businessAddress": "Indirizzo commerciale",
+      "websiteOptional": "Sito web o Instagram (facoltativo)",
+      "idePlaceholder": "CHE-123.456.789",
+      "socialPlaceholder": "https:// or @username",
+      "influencerQuestion": "È un influencer o creatore di contenuti?",
+      "influencerYes": "Sì, sono un influencer",
+      "influencerNo": "No",
+      "influencerHint": "La Sua richiesta sarà esaminata dal nostro team",
+      "fillRequired": "Compili tutti i campi obbligatori.",
+      "ideFormat": "Il numero UID deve essere nel formato CHE-XXX.XXX.XXX."
+    },
+    "verifyEmail": {
+      "title": "Verificare la Sua e-mail",
+      "logOut": "Disconnetti",
+      "headline": "Verifichi la Sua e-mail per proteggere il Suo account",
+      "subtitle": "La verifica del Suo indirizzo e-mail Le permette di recuperare la password in sicurezza, proteggere il Suo account e ricevere messaggi sicuri da noi.",
+      "openEmail": "Aprire la mia app e-mail",
+      "emailMissing": "Indirizzo e-mail mancante.",
+      "resent": "È stata inviata una nuova e-mail di conferma.",
+      "unableResend": "Impossibile reinviare l'e-mail al momento.",
+      "defaultEmail": "il Suo indirizzo e-mail"
+    },
+    "verifyEmailIllustration": {
+      "title": "Verificare la Sua e-mail",
+      "getCode": "Ricevere il mio codice di verifica",
+      "logOut": "Disconnetti",
+      "privacy": "Privacy",
+      "terms": "Termini"
+    },
+    "forgotPassword": {
+      "title": "Password dimenticata?",
+      "email": "Email",
+      "emailPlaceholder": "your@email.com",
+      "sendLink": "Inviare il link di reimpostazione",
+      "backToLogin": "Torna al login",
+      "checkEmail": "Controlli la Sua e-mail"
+    },
+    "resetPassword": {
+      "newPassword": "Nuova password",
+      "confirmPassword": "Confermare la password",
+      "password": "Password",
+      "update": "Aggiornare la password",
+      "updated": "Password aggiornata",
+      "changedMessage": "La Sua password è stata modificata.",
+      "minLength": "La password deve contenere almeno 8 caratteri.",
+      "mismatch": "Le password non corrispondono.",
+      "unableUpdate": "Impossibile aggiornare la password. La preghiamo di riprovare."
+    },
+    "verifyPhone": {
+      "backToSignIn": "Torna all'accesso",
+      "sendCode": "Inviare il codice",
+      "verify": "Verifica"
+    },
+    "verifyPhoneInfo": {
+      "phoneNumber": "Numero di telefono",
+      "title": "Verificare il numero di telefono"
+    },
+    "verifyPhoneCode": {
+      "code": "Codice di verifica",
+      "verify": "Verifica"
+    },
+    "verify": {
+      "code": "Codice a 6 cifre",
+      "verify": "Verifica"
+    },
+    "guestPrompt": {
+      "title": "Crei un account per continuare",
+      "subtitle": "Si registri o acceda per usare questa funzione.",
+      "signUp": "Registrati",
+      "logIn": "Accedi"
+    },
+    "checkEmail": {
+      "title": "Controlli la Sua e-mail",
+      "gotIt": "Capito"
+    }
+  },
+  "onboarding": {
+    "step1": {
+      "title": "Venda i Suoi capi usati completamente gratis",
+      "subtitle": "La verifica del Suo indirizzo e-mail Le permette di recuperare la password in sicurezza e proteggere il Suo account.",
+      "signUpCta": "Registrarsi su Bloomi",
+      "alreadyAccount": "Ha già un account?",
+      "logIn": "Accedi",
+      "legalPrefix": "Continuando, accetta i",
+      "terms": "Termini di servizio",
+      "legalAnd": "e confermare di aver letto i nostri",
+      "privacy": "Informativa sulla privacy"
+    },
+    "step2": {
+      "signIn": "Accedi",
+      "signUpEmail": "Registrarsi con e-mail",
+      "continueApple": "Continua con Apple",
+      "continueGoogle": "Continua con Google",
+      "continueFacebook": "Continua con Facebook",
+      "facebookSoon": "L'accesso con Facebook arriverà presto.",
+      "socialError": "Si è verificato un errore durante l'accesso social.",
+      "unableSignIn": "Impossibile completare l'accesso. La preghiamo di riprovare."
+    },
+    "step3": {
+      "title": "Il Suo marketplace La aspetta",
+      "signUpTitle": "Iscriversi a Bloomi",
+      "signIn": "Accedi",
+      "continueApple": "Continua con Apple",
+      "continueGoogle": "Continua con Google",
+      "continueFacebook": "Continua con Facebook",
+      "facebookSoon": "L'accesso con Facebook arriverà presto.",
+      "socialError": "Si è verificato un errore durante l'accesso social.",
+      "unableSignIn": "Impossibile completare l'accesso. La preghiamo di riprovare."
+    }
+  },
+  "filters": {
+    "category": "Categoria",
+    "size": "Taglia",
+    "color": "Colore",
+    "price": "Prezzo",
+    "sortBy": "Ordina per",
+    "showResult": "Mostra risultato",
+    "showResults": "Mostra risultati",
+    "clearAll": "Cancella tutto",
+    "retry": "Riprova",
+    "searchBrands": "Cercare brand",
+    "woman": "Donna",
+    "man": "Uomo",
+    "men": "Uomo",
+    "kids": "Bambini",
+    "baby": "Neonato",
+    "babyClothing": "Abbigliamento neonato",
+    "allWomen": "Tutti gli articoli donna",
+    "allMen": "Tutti gli articoli uomo",
+    "allKids": "Tutti gli articoli per bambini",
+    "allBaby": "Tutti gli articoli per neonati",
+    "priceFrom": "Prezzo da",
+    "priceTo": "A",
+    "lessThan50": "Meno di 50CHF",
+    "range50to100": "50CHF - 100CHF",
+    "moreThan100": "+ 100CHF",
+    "sortRelevance": "Rilevanza",
+    "sortPriceDesc": "Prezzo: dal più alto",
+    "sortPriceAsc": "Prezzo: dal più basso",
+    "sortRecent": "Più recenti prima",
+    "nearby": "Nelle vicinanze",
+    "locationTitle": "Posizione",
+    "locationEnable": "Attivi la posizione per usare questo filtro",
+    "km": "{{count}} km",
+    "searchPlaceholder": "Cercare articoli o membri",
+    "clearSearch": "Cancella ricerca",
+    "filter": "Filtra",
+    "oneResult": "1 risultato",
+    "resultsCount": "{{count}} risultati",
+    "results500Plus": "500+ risultati",
+    "noResults": "Nessun risultato",
+    "noResultsFound": "Nessun risultato trovato",
+    "noResultsHint": "Provi parole chiave o filtri diversi",
+    "activeListings": "{{count}} annunci attivi"
+  },
+  "feed": {
+    "tabs": {
+      "allItems": "Tutti gli articoli",
+      "trending": "Di tendenza",
+      "influencers": "Influencer",
+      "sponsored": "Sponsorizzato"
+    },
+    "header": {
+      "searchPlaceholder": "Cercare un articolo, un brand...",
+      "favorites": "Preferiti",
+      "notifications": "Notifiche",
+      "orders": "Ordini",
+      "openFilters": "Aprire i filtri"
+    },
+    "hero": {
+      "headline1": "Seconda mano",
+      "headline2": "Prima scelta",
+      "cta": "Vendi ora"
+    },
+    "pricing": {
+      "priceIncl": "incl.",
+      "breakdownTitle": "Dettaglio prezzo",
+      "itemPrice": "Prezzo articolo",
+      "buyerProtection": "Protezione acquirente ({{percent}}%)",
+      "bankingFee": "Commissione di servizio ({{percent}}%)",
+      "finalPrice": "Prezzo finale",
+      "serviceGuarantee": "Questo prezzo include l'assistenza clienti via e-mail a contact@bloomi.ch e una garanzia di consegna: consegnato o rimborsato."
+    },
+    "listingDetail": {
+      "title": "Dettaglio prodotto",
+      "loading": "Caricamento...",
+      "notFound": "Annuncio non trovato",
+      "listingMenu": "Menu annuncio",
+      "reportListing": "Segnalare questo annuncio",
+      "includesBuyerProtection": "{{price}} include la Protezione acquirente",
+      "shipping": "Spedizione: {{price}} CHF",
+      "pickup": "Consegna a mano",
+      "shippingPromo": "Offerta di lancio 🎉",
+      "buyerProtection": "Protezione acquirente",
+      "buyerProtectionInfo": "La Protezione acquirente viene aggiunta a pagamento a ogni acquisto effettuato con il pulsante «Acquista ora». Include la nostra politica di rimborso.",
+      "messageSeller": "Contattare il venditore",
+      "itemDescription": "Descrizione articolo",
+      "noDescription": "Nessuna descrizione fornita.",
+      "favorite": "Preferito",
+      "share": "Condividi",
+      "category": "Categoria",
+      "size": "Taglia",
+      "condition": "Condizione",
+      "color": "Colore",
+      "views": "Visualizzazioni",
+      "interested": "Interessato",
+      "uploaded": "Caricato",
+      "otherListings": "Altri annunci",
+      "similarItems": "Articoli simili",
+      "noRelatedItems": "Nessun articolo da mostrare.",
+      "makeOffer": "Fare un'offerta",
+      "buyNow": "Acquista ora",
+      "reserved": "Riservato",
+      "editListing": "Modificare l'annuncio",
+      "linkCopied": "Link copiato!",
+      "oneItem": "1 articolo",
+      "itemsCount": "{{count}} articoli",
+      "justNow": "Proprio ora",
+      "minutesAgo": "{{count}} min fa",
+      "hoursAgo_one": "{{count}} ora fa",
+      "hoursAgo_other": "{{count}} ore fa",
+      "daysAgo_one": "{{count}} giorno fa",
+      "daysAgo_other": "{{count}} giorni fa",
+      "weeksAgo_one": "{{count}} settimana fa",
+      "weeksAgo_other": "{{count}} settimane fa",
+      "monthsAgo_one": "{{count}} mese fa",
+      "monthsAgo_other": "{{count}} mesi fa",
+      "yearsAgo_one": "{{count}} anno fa",
+      "yearsAgo_other": "{{count}} anni fa",
+      "conditionNew": "Nuovo con etichette",
+      "conditionLikeNew": "Nuovo senza etichette",
+      "conditionGood": "Molto buono",
+      "conditionFair": "Buono",
+      "conditionPoor": "Soddisfacente",
+      "cannotDelete": "Impossibile eliminare",
+      "deactivateListing": "Disattivare l'annuncio",
+      "deletePermanentlyTitle": "Questa azione non può essere annullata.",
+      "deletePermanentlyMessage": "Eliminare definitivamente?",
+      "reportTitle": "Segnalare questo annuncio",
+      "reportMessage": "Ci indichi cosa non va, così il nostro team potrà esaminarlo.",
+      "reportThanksTitle": "Grazie per avercelo segnalato",
+      "reportThanksMessage": "Abbiamo ricevuto la Sua segnalazione e la esamineremo a breve.",
+      "reportErrorTitle": "Qualcosa è andato storto",
+      "reportErrorMessage": "Impossibile inviare la segnalazione.",
+      "viewsMilestoneTitle": "👀 Il Suo annuncio sta attirando attenzione",
+      "viewsMilestoneBody": "Il Suo annuncio è stato visualizzato {{count}} volte!"
+    },
+    "makeOffer": {
+      "nameYourPrice": "PROPONGA IL SUO PREZZO",
+      "to": "A",
+      "other": "Altro",
+      "otherUpper": "ALTRO",
+      "off10": "-10 %",
+      "off20": "-20 %",
+      "sendOffer": "Inviare l'offerta",
+      "offerSent": "Offerta inviata",
+      "offerSentMessage": "La Sua offerta è stata inviata al venditore. Verrà reindirizzato alla conversazione.",
+      "viewConversation": "Vedere la conversazione",
+      "unableLoad": "Impossibile caricare l'annuncio.",
+      "unableSend": "Impossibile inviare l'offerta al momento."
+    },
+    "checkout": {
+      "title": "Checkout",
+      "price": "Prezzo",
+      "itemPrice": "Prezzo articolo",
+      "buyerProtection": "Protezione acquirente ({{percent}} %)",
+      "bankingFee": "Commissione di servizio ({{percent}} %)",
+      "shippingFee": "Spese di spedizione",
+      "shippingPromo": "Offerta di lancio 🎉",
+      "total": "Totale",
+      "deliveryMethod": "Metodo di consegna",
+      "localPickup": "Ritiro di persona",
+      "shipping": "Spedizione",
+      "fromProfile": "Dal Suo profilo Bloomi",
+      "savedAddress": "Indirizzo salvato",
+      "street": "Via",
+      "city": "Città",
+      "postalCode": "Codice postale",
+      "countryCH": "Svizzera (CH)",
+      "countryFR": "Francia (FR)",
+      "countryDE": "Germania (DE)",
+      "countryIT": "Italia (IT)",
+      "pay": "Pagare",
+      "mustSignIn": "Deve aver effettuato l'accesso per pagare",
+      "missingParams": "Parametri ordine mancanti",
+      "invalidAmount": "Importo non valido",
+      "incompleteAddress": "Indirizzo incompleto",
+      "incompleteAddressMessage": "Compili via, città, codice postale e paese",
+      "sessionExpired": "Sessione scaduta. Effettui di nuovo l'accesso",
+      "stripeNotConfigured": "Stripe non configurato",
+      "stripeNotConfiguredMessage": "The app is missing EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (pk_live_…). Add it to .env.local for local dev, or to EAS Secrets for store builds, then rebuild the app.",
+      "paymentFailed": "Pagamento non riuscito"
+    },
+    "orderConfirmation": {
+      "title": "Conferma ordine",
+      "paymentConfirmed": "Pagamento confermato",
+      "subtitle": "Il Suo pagamento è protetto. I fondi sono attualmente in sospeso.",
+      "loadingOrder": "Caricamento del Suo ordine…",
+      "loadError": "Impossibile caricare il Suo ordine.",
+      "yourItem": "Il Suo articolo",
+      "itemPrice": "Prezzo articolo",
+      "buyerProtection": "Protezione acquirente ({{percent}} %)",
+      "bankingFee": "Commissione di servizio ({{percent}} %)",
+      "totalPaid": "Totale pagato",
+      "tip": "Suggerimento",
+      "statusBase": "Pagamento sicuro — fondi in sospeso",
+      "whatsNext": "Prossimi passi",
+      "shippingParagraph": "Il venditore spedirà il Suo articolo. Una volta ricevuto, confermi la ricezione nei Suoi ordini per sbloccare il pagamento al venditore.",
+      "pickupParagraph": "Concordi un incontro con il venditore per un ritiro di persona. Dopo aver ricevuto l'articolo, confermi la ricezione nei Suoi ordini per sbloccare il pagamento.",
+      "shippingTo": "Spedizione verso",
+      "addressSaved": "Indirizzo salvato nel Suo ordine.",
+      "checkBeforeConfirm": "Controlli l'articolo prima di confermare la ricezione.",
+      "viewOrders": "Vedere i miei ordini",
+      "backToFeed": "Torna al feed"
+    }
+  },
+  "messages": {
+    "title": "Messaggi",
+    "emptyHint": "Le Sue chat con i venditori appariranno qui.",
+    "conversation": "Conversazione",
+    "placeholder": "Scrivere un messaggio qui...",
+    "loadError": "Impossibile caricare questa conversazione.",
+    "notFound": "Conversazione non trovata.",
+    "offer": "Offerta",
+    "pending": "In attesa",
+    "accepted": "Accettata",
+    "declined": "Rifiutata",
+    "accept": "Accettare",
+    "decline": "Rifiuta",
+    "orderCancelled": "Ordine annullato",
+    "purchased": "Acquistato",
+    "orderInProgress": "Ordine in corso",
+    "payNow": "💳 Pagare {{amount}} CHF ora",
+    "payNowA11y": "Pagare {{amount}} CHF ora",
+    "offerAcceptedTitle": "✅ Offerta accettata — si parte!",
+    "offerAcceptedBody": "Il venditore ha accettato la Sua offerta di {{amount}} CHF. Completi il Suo acquisto!",
+    "offerDeclinedTitle": "❌ Offerta rifiutata",
+    "offerDeclinedBody": "Il venditore non ha accettato la Sua offerta. Può fare una nuova offerta o acquistare al prezzo indicato.",
+    "offerDeclinedSystem": "Offerta rifiutata."
+  },
+  "sell": {
+    "category": "Categoria",
+    "size": "Taglia",
+    "color": "Colore",
+    "price": "Prezzo",
+    "title": "Titolo",
+    "confirm": "Conferma",
+    "uploadPhotos": "Caricare foto",
+    "photoTips": "Consigli fotografici",
+    "seePhotoTips": "Vedere i consigli fotografici.",
+    "addPhotos": "Aggiunga fino a 5 foto.",
+    "titlePlaceholder": "es. Maglione bianco COS",
+    "descriptionPlaceholder": "es. Indossato poche volte, taglia regolare",
+    "cityPlaceholder": "es. Ginevra",
+    "boostCloset": "Potenzi il Suo guardaroba",
+    "boostDuration": "Scegli la durata della promozione.",
+    "boostListing3d": "Articolo — 3 giorni",
+    "boostListing7d": "Articolo — 7 giorni",
+    "boostDressing3d": "Armadio — 3 giorni",
+    "boostDressing7d": "Armadio — 7 giorni",
+    "activateAccount": "Attivare il mio account",
+    "activateSeller": "Attivi il Suo account venditore",
+    "activateBeforePublish": "Prima di pubblicare un annuncio, attivi il Suo account venditore per ricevere i pagamenti.",
+    "gallery": "Galleria",
+    "camera": "Fotocamera",
+    "cameraFr": "Appareil photo",
+    "allowCamera": "Consentire l'accesso alla fotocamera nelle impostazioni del dispositivo.",
+    "permissionPhotos": "Abbiamo bisogno di accedere alle Sue foto per creare un annuncio.",
+    "incompleteForm": "Modulo incompleto",
+    "listingNotFoundBoost": "Annuncio non trovato per il boost.",
+    "skipStep": "Saltare questo passaggio",
+    "mustSignInCreate": "Deve aver effettuato l'accesso per creare un annuncio",
+    "mustSignInPay": "Deve aver effettuato l'accesso per pagare",
+    "conditionNew": "Nuovo con etichette",
+    "conditionLikeNew": "Nuovo senza etichette",
+    "conditionGood": "Buono",
+    "conditionFair": "Discreto",
+    "conditionPoor": "Scarso",
+    "parcelSize": {
+      "title": "Dimensione del pacco",
+      "small": "Pacco piccolo — fino a 2 kg — 9.00 CHF",
+      "large": "Pacco grande — fino a 10 kg — 12.00 CHF",
+      "xlarge": "Pacco molto grande — fino a 30 kg — 21.00 CHF",
+      "required": "Selezioni una dimensione del pacco per la spedizione."
+    }
+  },
+  "profile": {
+    "title": "Profilo",
+    "editProfile": "Modificare il profilo",
+    "loadingProfile": "Caricamento profilo...",
+    "unableLoad": "Impossibile caricare il profilo.",
+    "unableVacation": "Impossibile aggiornare la modalità vacanza.",
+    "favoriteItems": "Articoli preferiti",
+    "viewCloset": "Vedere il mio guardaroba",
+    "wallet": {
+      "available": "Disponibile",
+      "pendingFunds": "Fondi in sospeso",
+      "pendingHint": "I fondi in sospeso saranno disponibili entro 2–7 giorni, a seconda dei tempi di elaborazione Stripe.",
+      "transfer": "Trasferire",
+      "transferToBank": "Trasferire sul mio conto bancario",
+      "confirmPayout": "Confermare il pagamento",
+      "openStripe": "Aprire la dashboard Stripe",
+      "unableStripe": "Impossibile aprire la dashboard Stripe.",
+      "stripe": "Stripe",
+      "signIn": "Accedi"
+    },
+    "myOrders": "I miei ordini",
+    "notifications": "Notifiche",
+    "activateSeller": {
+      "checking": "Verifica dello stato del Suo account venditore…",
+      "notActivated": "Il Suo account venditore non è ancora attivato.",
+      "connectBank": "Collegare il mio conto bancario",
+      "openingStripe": "Apertura onboarding Stripe Connect…",
+      "activated": "Account venditore attivato con successo. Grazie!",
+      "openWallet": "Aprire il mio portafoglio",
+      "backToProfile": "Torna al profilo",
+      "checkError": "Si è verificato un errore durante la verifica del Suo stato."
+    },
+    "settings": "Impostazioni",
+    "legalInfo": "Informazioni legali",
+    "helpCenter": "Centro assistenza",
+    "vacationMode": "Modalità vacanza",
+    "signOut": "Disconnetti",
+    "signOutConfirm": "È sicuro di volersi disconnettere?",
+    "settingsScreen": {
+      "title": "Impostazioni",
+      "profileDetail": "Dettaglio profilo",
+      "myAddress": "Il mio indirizzo",
+      "accountSettings": "Impostazioni account",
+      "blockedUsers": "Utenti bloccati",
+      "payment": "Pagamento",
+      "languageRegion": "Lingua e regione",
+      "pushNotifications": "Notifiche push"
+    },
+    "personalization": {
+      "title": "Lingua e regione",
+      "appLanguage": "Lingua dell'app",
+      "english": "English",
+      "french": "Français",
+      "german": "Deutsch",
+      "italian": "Italiano"
+    },
+    "editProfileScreen": {
+      "title": "Modificare il profilo",
+      "aboutMe": "Su di me",
+      "profileUpdated": "Profilo aggiornato.",
+      "permissionPhotos": "Abbiamo bisogno di accedere alle Sue foto per cambiare il Suo avatar.",
+      "locationDenied": "Autorizzazione alla posizione negata.",
+      "unableLocation": "Impossibile ottenere la Sua posizione.",
+      "unableLocationOff": "Impossibile disattivare la posizione.",
+      "countriesOnly": "Bloomi è disponibile solo in Svizzera, Francia, Germania e Italia.",
+      "areaUnavailable": "Area non disponibile"
+    },
+    "accountSettings": {
+      "title": "Impostazioni account",
+      "email": "Email",
+      "password": "Password",
+      "dateOfBirth": "Data di nascita",
+      "female": "Donna",
+      "male": "Uomo",
+      "other": "Altro",
+      "preferNotSay": "Preferisco non dirlo",
+      "emailPlaceholder": "email@example.com",
+      "emailSent": "La Sua richiesta di modifica e-mail è stata inviata.",
+      "resetSent": "È stata inviata un'e-mail per reimpostare la password.",
+      "unableLoad": "Impossibile caricare le impostazioni account.",
+      "unableSave": "Impossibile salvare.",
+      "unableEmail": "Impossibile aggiornare l'e-mail.",
+      "unableReset": "Impossibile inviare l'e-mail di reimpostazione.",
+      "unableDelete": "Impossibile eliminare l'account. Contatti l'assistenza.",
+      "deleteAccount": "Eliminare l'account"
+    },
+    "myAddress": {
+      "title": "Il mio indirizzo",
+      "street": "Via",
+      "city": "Città",
+      "postalCode": "Codice postale",
+      "postalExample": "Es. 1200",
+      "streetExample": "es. Via del Rodano 10",
+      "cityExample": "es. Ginevra",
+      "saved": "Salvato",
+      "updated": "Il Suo indirizzo è stato aggiornato.",
+      "incomplete": "Indirizzo incompleto",
+      "incompleteMessage": "Compili via, codice postale e città."
+    },
+    "favorites": {
+      "title": "Articoli preferiti",
+      "empty": "Nessun preferito ancora",
+      "emptyHint": "Gli articoli che Le piacciono appariranno qui"
+    },
+    "notificationSettings": {
+      "title": "Notifiche push",
+      "enable": "Attivare le notifiche push",
+      "highPriority": "Notifiche ad alta priorità",
+      "newMessage": "Nuovo messaggio",
+      "newFeedback": "Nuovo feedback",
+      "other": "Altre notifiche",
+      "favoriteItems": "Articoli preferiti",
+      "newFollowers": "Nuovi follower",
+      "newItems": "Nuovi articoli"
+    },
+    "notificationsScreen": {
+      "markAllRead": "Segna tutto come letto",
+      "unableMarkRead": "Impossibile segnare come letto"
+    },
+    "orders": {
+      "title": "Ordini",
+      "myPurchases": "I miei acquisti",
+      "mySales": "Le mie vendite",
+      "sellerCommission": "Commissione Bloomi: {{amount}}",
+      "sellerPayout": "Pagamento netto: {{amount}}",
+      "awaitingShipment": "In attesa di spedizione",
+      "packageOnWay": "Pacco in viaggio 📦",
+      "orderCompleted": "Ordine completato ✅",
+      "orderCancelled": "Ordine annullato",
+      "shipped": "Spedito ✅",
+      "completedPayment": "Completato ✅ — Pagamento ricevuto",
+      "cancelled": "Annullato",
+      "confirmReceipt": "Confermare la ricezione",
+      "confirming": "Conferma…",
+      "cancelOrder": "Annullare l'ordine",
+      "cancelling": "Annullamento…",
+      "trackParcel": "Tracciare il mio pacco",
+      "openDispute": "Aprire una contestazione",
+      "disputeMessage": "In caso di problemi con il Suo ordine, La preghiamo di contattarci a contact@bloomi.ch indicando l'ID ordine.",
+      "copyOrderId": "Copiare l'ID ordine",
+      "sendEmail": "Inviare e-mail",
+      "leaveReview": "Lasciare una recensione",
+      "markShipped": "Segna come spedito",
+      "updating": "Aggiornamento…",
+      "generateLabel": "Generare l'etichetta",
+      "generating": "Generazione…",
+      "saveAddress": "Salvare questo indirizzo nel mio profilo",
+      "streetNumber": "Via e numero",
+      "countryExample": "Paese (es. CH)",
+      "cancelOrderTitle": "Annullare questo ordine?",
+      "cancelOrderMessage": "Questo attiverà un rimborso se necessario. Desidera continuare?",
+      "unableLoad": "Impossibile caricare i Suoi ordini.",
+      "unableConfirm": "Impossibile confermare la ricezione.",
+      "unableCancel": "Impossibile annullare l'ordine.",
+      "unableShipped": "Impossibile contrassegnare l'ordine come spedito.",
+      "unableLabel": "Impossibile generare l'etichetta.",
+      "labelNoDoc": "L'etichetta è stata generata, ma non è stato restituito alcun documento.",
+      "incompleteAddress": "Indirizzo incompleto",
+      "incompleteAddressMessage": "Compili via, città, codice postale e paese.",
+      "shippingLabelShare": "Etichetta di spedizione Swiss Post",
+      "ratePurchase": "⭐ Valuti il Suo acquisto",
+      "parcelShipped": "📦 In viaggio! Il Suo pacco è stato spedito",
+      "reviewPrompt": "Com'è andato il Suo ordine? Lasci una recensione al venditore!",
+      "sellerShipped": "Il venditore ha spedito il Suo ordine."
+    },
+    "blockedUsers": {
+      "title": "Utenti bloccati",
+      "empty": "Nessun utente bloccato",
+      "unblock": "Sbloccare",
+      "unblocking": "Sblocco…",
+      "unblockTitle": "Sbloccare {{name}}?",
+      "unblockMessage": "I loro annunci ricompariranno nel Suo feed e nelle ricerche.",
+      "couldNotUnblock": "Impossibile sbloccare",
+      "viewProfileA11y": "Vedere il profilo di {{name}}",
+      "unblockA11y": "Sbloccare {{name}}"
+    },
+    "leaveReview": {
+      "title": "Lasciare una recensione",
+      "commentOptional": "Commento (facoltativo)",
+      "commentPlaceholder": "Scrivere un commento...",
+      "skip": "Salta",
+      "ratingRequired": "Valutazione richiesta",
+      "ratingHint": "Scelga una valutazione tra 1 e 5 stelle.",
+      "missingOrder": "Informazioni ordine mancanti.",
+      "mustSignIn": "Deve aver effettuato l'accesso.",
+      "someoneReviewed": "⭐ Qualcuno Le ha lasciato una recensione!"
+    },
+    "editListing": {
+      "title": "Titolo",
+      "priceChf": "Prezzo (CHF)",
+      "listingUpdated": "Annuncio aggiornato con successo.",
+      "unableUpdate": "Impossibile aggiornare l'annuncio.",
+      "validPrice": "Inserisca un prezzo valido.",
+      "permissionPhotos": "Abbiamo bisogno di accedere alle Sue foto per modificare un annuncio."
+    },
+    "publicProfile": {
+      "closet": "Guardaroba",
+      "reviews": "Recensioni",
+      "message": "Messaggio",
+      "report": "Segnala",
+      "blockSeller": "Bloccare il venditore",
+      "menu": "Menu",
+      "options": "Opzioni",
+      "userActions": "Azioni utente",
+      "addCover": "Aggiungere una foto di copertina",
+      "coverPermission": "Consentire l'accesso alla libreria foto per cambiare la foto di copertina.",
+      "noReviews": "Nessuna recensione ancora",
+      "followers": "follower,",
+      "reportSeller": "Segnalare il venditore",
+      "sellerBlocked": "Venditore bloccato",
+      "sellerBlockedMessage": "Non vedrà più i loro annunci su Bloomi.",
+      "nothingToReport": "Niente da segnalare",
+      "noListingChat": "Questo venditore non ha annunci attivi per avviare una conversazione.",
+      "noListingReport": "Questo venditore non ha annunci attivi segnalabili dal profilo al momento."
+    },
+    "feedback": {
+      "stub": "Da implementare"
+    },
+    "ownerSheet": {
+      "manageListing": "Gestire l'annuncio",
+      "editOrRemove": "Modifichi o rimuova questo articolo dal Suo guardaroba.",
+      "deleteListing": "Eliminare l'annuncio",
+      "deletePermanently": "Eliminare definitivamente",
+      "draftHint": "Bozza: rimossa dal feed, conservata per lo storico ordini.",
+      "deactivate": "Disattivare l'annuncio",
+      "deactivateHint": "Nascondere dal feed. Potrà riattivare in seguito.",
+      "deleteConfirmMessage": "Questa operazione non può essere annullata."
+    }
+  },
+  "legal": {
+    "terms": {
+      "pageTitle": "TODO",
+      "effectiveDate": "TODO",
+      "intro1": "TODO",
+      "intro2": "TODO",
+      "intro3": "TODO",
+      "article1Title": "TODO",
+      "article1Body": "TODO",
+      "article2Title": "TODO",
+      "article2Body": "TODO",
+      "article3Title": "TODO",
+      "article3Body": "TODO",
+      "article4Title": "TODO",
+      "article4Body": "TODO",
+      "article5Title": "TODO",
+      "article5Body": "TODO",
+      "article6Title": "TODO",
+      "article6Body": "TODO",
+      "article7Title": "TODO",
+      "article7Body": "TODO",
+      "article8Title": "TODO",
+      "article8Body": "TODO",
+      "article9Title": "TODO",
+      "article9Body": "TODO",
+      "article10Title": "TODO",
+      "article10Body": "TODO",
+      "article11Title": "TODO",
+      "article11Body": "TODO",
+      "article12Title": "TODO",
+      "article12Body": "TODO",
+      "article13Title": "TODO",
+      "article13Body": "TODO",
+      "article14Title": "TODO",
+      "article14Body": "TODO",
+      "copyright": "TODO"
+    },
+    "help": {
+      "pageTitle": "TODO",
+      "buyTitle": "TODO",
+      "sellTitle": "TODO",
+      "accountTitle": "TODO",
+      "miscTitle": "TODO",
+      "buy": {
+        "personalizeFeed": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "buyItem": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "saveSearch": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "chatMember": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "favorites": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "makeOffer": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "reserve": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "bundle": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "trackOrder": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "itemMismatch": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "cancelPurchase": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "findItems": {
+          "question": "TODO",
+          "answer": "TODO"
+        }
+      },
+      "sell": {
+        "manageListings": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "sellingBasics": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "postListing": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "payments": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "listingRemoved": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "shippingReturns": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "proAccount": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "tips": {
+          "question": "TODO",
+          "answer": "TODO"
+        }
+      },
+      "account": {
+        "manageProfile": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "verifyIdentity": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "signUpSignIn": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "accountBlocked": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "ratings": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "privacy": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "security": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "referrals": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "policies": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "suggestions": {
+          "question": "TODO",
+          "answer": "TODO"
+        }
+      },
+      "misc": {
+        "contactSupport": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "report": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "prohibited": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "staySafe": {
+          "question": "TODO",
+          "answer": "TODO"
+        },
+        "bug": {
+          "question": "TODO",
+          "answer": "TODO"
+        }
+      }
+    }
+  },
+  "reports": {
+    "inappropriate": "Contenuto inappropriato",
+    "scam": "Truffa",
+    "illegal": "Contenuto illegale",
+    "other": "Altro"
+  },
+  "notifications": {
+    "newMessage": "Nuovo messaggio",
+    "messages": "Messaggi",
+    "termsOverlay": {
+      "title": "Termini di utilizzo",
+      "body": "Creando un account o utilizzando Bloomi, accetta i nostri Termini di utilizzo e l'Informativa sulla privacy. Si impegna a trattare gli altri utenti con rispetto, a non pubblicare contenuti illegali, fuorvianti o inappropriati e a rispettare le nostre regole di sicurezza e moderazione. I contenuti segnalati possono essere esaminati e rimossi.",
+      "readTerms": "Leggere i termini di utilizzo completi",
+      "readPrivacy": "Leggere l'informativa sulla privacy",
+      "accept": "Accetto"
+    }
+  },
+  "components": {
+    "listingCard": {
+      "noImage": "Nessuna immagine"
+    },
+    "influencerBadge": {
+      "label": "Profilo influencer"
+    }
+  }
+}

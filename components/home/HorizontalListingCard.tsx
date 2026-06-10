@@ -1,9 +1,12 @@
 import React from 'react';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../lib/theme';
 import type { FeedListing } from '../../lib/api';
 import { Text } from '../ui/Text';
+import { useTranslation } from 'react-i18next';
+import { computeBuyerFees } from '../../lib/fees';
+import { ListingCoverImage } from '../ui/ListingCoverImage';
 
 interface HorizontalListingCardProps {
   item: FeedListing;
@@ -11,23 +14,34 @@ interface HorizontalListingCardProps {
   onPressSeller?: () => void;
 }
 
+const CARD_WIDTH = 220;
+const IMAGE_HEIGHT = 120;
+
 export function HorizontalListingCard({
   item,
   onPress,
   onPressSeller
 }: HorizontalListingCardProps) {
+  const { t } = useTranslation();
   const likeCount = 12;
+  const itemPrice = Number(item.price);
+  const fees = itemPrice > 0 && !isNaN(itemPrice) ? computeBuyerFees(itemPrice) : null;
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
       {item.cover_photo_url ? (
         <View style={[styles.imageContainer, styles.imageFrame]}>
-          <Image source={{ uri: item.cover_photo_url }} style={styles.image} resizeMode="cover" />
+          <ListingCoverImage
+            uri={item.cover_photo_url}
+            widthDp={CARD_WIDTH}
+            heightDp={IMAGE_HEIGHT}
+            recyclingKey={item.id}
+          />
         </View>
       ) : (
         <View style={styles.imageContainer}>
           <Text variant="caption" color="textSecondary">
-            Pas d&apos;image
+            {t('common.noImage')}
           </Text>
         </View>
       )}
@@ -48,9 +62,11 @@ export function HorizontalListingCard({
           <Text variant="button" style={styles.priceMain}>
             {Math.round(item.price)} CHF
           </Text>
-          <Text variant="caption" style={styles.priceIncl}>
-            {Math.round(item.price * 1.08)} CHF incl.
-          </Text>
+          {fees ? (
+            <Text variant="caption" style={styles.priceIncl}>
+              {Math.round(fees.finalPriceChf)} CHF {t('feed.pricing.priceIncl')}
+            </Text>
+          ) : null}
         </View>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
           {item.category ?? 'Marque inconnue'} · {item.condition ?? '—'}
@@ -71,9 +87,6 @@ export function HorizontalListingCard({
   );
 }
 
-const CARD_WIDTH = 220;
-const IMAGE_HEIGHT = 120;
-
 const styles = StyleSheet.create({
   container: {
     width: CARD_WIDTH,
@@ -93,10 +106,6 @@ const styles = StyleSheet.create({
   imageFrame: {
     overflow: 'hidden',
     backgroundColor: '#F5F5F5'
-  },
-  image: {
-    width: '100%',
-    height: '100%'
   },
   body: {
     paddingHorizontal: theme.spacing.gapMd,
@@ -131,4 +140,3 @@ const styles = StyleSheet.create({
     columnGap: theme.spacing.gapSm / 2
   }
 });
-

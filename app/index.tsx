@@ -1,28 +1,56 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '../stores/authStore';
+import { theme } from '../lib/theme';
+import { isAuthCallbackUrl } from '../lib/auth/authCallbackUrl';
+import {
+  consumeStripeConnectReturnPending,
+  isStripeConnectReturnUrl,
+  navigateAfterStripeConnectReturn,
+  navigateInTabs
+} from '../lib/navigation/navigateInTabs';
 
 export default function IndexScreen() {
   const router = useRouter();
-  const { session, initialized, isLoading } = useAuthStore();
+  const { session, initialized, isLoading, isGuest } = useAuthStore();
+  const didRedirectRef = useRef(false);
 
   useEffect(() => {
-    // Attendre que l'initialisation soit terminée
-    if (!initialized || isLoading) {
+    if (!initialized || isLoading || didRedirectRef.current) {
       return;
     }
 
-    // Rediriger selon l'état d'authentification
-    if (session) {
-      router.replace('/tabs/feed');
-    } else {
-      // Rediriger vers le splash d'onboarding pour les nouveaux utilisateurs
-      router.replace('/onboarding/splash');
-    }
-  }, [initialized, isLoading, session, router]);
+    void (async () => {
+      const initialUrl = await Linking.getInitialURL();
+      const pendingStripeReturn = await consumeStripeConnectReturnPending();
+      if (isStripeConnectReturnUrl(initialUrl) || pendingStripeReturn) {
+        didRedirectRef.current = true;
+        navigateAfterStripeConnectReturn();
+        return;
+      }
 
-  // Afficher un écran de chargement pendant l'initialisation
+      if (isAuthCallbackUrl(initialUrl)) {
+        didRedirectRef.current = true;
+        router.replace({
+          pathname: '/auth/callback',
+          params: { rawUrl: initialUrl ?? '' }
+        });
+        return;
+      }
+
+      didRedirectRef.current = true;
+      if (session) {
+        navigateInTabs('/tabs/feed');
+      } else if (isGuest) {
+        navigateInTabs('/tabs/feed');
+      } else {
+        router.replace('/onboarding/splash');
+      }
+    })();
+  }, [initialized, isLoading, session, isGuest, router]);
+
   if (!initialized || isLoading) {
     return (
       <View
@@ -30,26 +58,24 @@ export default function IndexScreen() {
           flex: 1,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: '#ffffff'
+          backgroundColor: theme.colors.primary
         }}
       >
-        <ActivityIndicator size="large" color="#111827" />
+        <ActivityIndicator size="large" color={theme.colors.textPrimary} />
       </View>
     );
   }
 
-  // Ce code ne devrait jamais être atteint car la redirection se fait dans useEffect
-  // Mais on le garde pour éviter un écran blanc
   return (
     <View
       style={{
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#ffffff'
+        backgroundColor: theme.colors.primary
       }}
     >
-      <ActivityIndicator size="large" color="#111827" />
+      <ActivityIndicator size="large" color={theme.colors.textPrimary} />
     </View>
   );
 }

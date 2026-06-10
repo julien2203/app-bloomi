@@ -16,8 +16,10 @@ import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
 import { HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
+import { useTranslation } from 'react-i18next';
 
 export default function VerifyEmailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = typeof params.email === 'string' ? params.email : undefined;
@@ -33,7 +35,7 @@ export default function VerifyEmailScreen() {
 
   const handleResend = async () => {
     if (!email) {
-      setError('Email address missing.');
+      setError(t('auth.verifyEmail.emailMissing'));
       return;
     }
 
@@ -50,16 +52,16 @@ export default function VerifyEmailScreen() {
       if (resendError) {
         setError(resendError.message);
       } else {
-        setMessage('A new confirmation email has been sent.');
+        setMessage(t('auth.verifyEmail.resent'));
       }
     } catch (e) {
-      setError('Unable to resend the email right now.');
+      setError(t('auth.verifyEmail.unableResend'));
     } finally {
       setLoadingResend(false);
     }
   };
 
-  const displayedEmail = email ?? 'your email address';
+  const displayedEmail = email ?? t('auth.verifyEmail.defaultEmail');
 
   return (
     <>
@@ -68,7 +70,7 @@ export default function VerifyEmailScreen() {
         {/* Header */}
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
-          <Text style={styles.headerTitle}>Verify your email</Text>
+          <Text style={styles.headerTitle}>{t('auth.verifyEmail.title')}</Text>
           <TouchableOpacity
             onPress={async () => {
               try {
@@ -80,7 +82,7 @@ export default function VerifyEmailScreen() {
             style={styles.logoutButton}
             hitSlop={HIT_SLOP_COMFORTABLE}
           >
-            <Text style={styles.logoutText}>Log out</Text>
+            <Text style={styles.logoutText}>{t('profile.signOut')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.headerSeparator} />
@@ -102,17 +104,16 @@ export default function VerifyEmailScreen() {
             {/* Bloc texte */}
             <View style={styles.textBlock}>
               <Text style={styles.title}>
-                Verify your email to keep your account secure
+                {t('auth.verifyEmail.headline')}
               </Text>
               <Text style={styles.subtitle}>
-                Verifying your email address helps you to safely recover your password, retrieve and
-                protect your account, and receive secure messages from us.
+                {t('auth.verifyEmail.subtitle')}
               </Text>
             </View>
 
             {/* Bouton principal */}
             <Button
-              title="Open my email app"
+              title={t('auth.verifyEmail.openEmail')}
               onPress={handleOpenMailbox}
               variant="primary-green"
               style={styles.primaryButton}
@@ -126,14 +127,14 @@ export default function VerifyEmailScreen() {
               }}
               style={styles.learnMoreContainer}
             >
-              <Text style={styles.learnMoreText}>Learn more</Text>
+              <Text style={styles.learnMoreText}>{t('common.learnMore')}</Text>
             </TouchableOpacity>
 
             {/* Lien renvoi email + messages */}
             <TouchableOpacity onPress={handleResend} style={styles.resendLink}>
               <Text style={styles.resendText}>
-                Didn&apos;t get our email?{' '}
-                <Text style={styles.resendTextUnderline}>Resend link</Text>
+                {`${t('auth.verifyEmail.noEmail')} `}
+                <Text style={styles.resendTextUnderline}>{t('auth.verifyEmail.resendLink')}</Text>
               </Text>
             </TouchableOpacity>
 
@@ -156,14 +157,14 @@ export default function VerifyEmailScreen() {
                   style={styles.legalLink}
                   onPress={() => Linking.openURL('https://bloomi.app/terms')}
                 >
-                  Terms of Service
+                  {t('common.termsOfService')}
                 </Text>{' '}
                 and acknowledge you&apos;ve read our{' '}
                 <Text
                   style={styles.legalLink}
                   onPress={() => Linking.openURL('https://bloomi.app/privacy')}
                 >
-                  Privacy Policy
+                  {t('common.privacyPolicy')}
                 </Text>
                 .
               </Text>

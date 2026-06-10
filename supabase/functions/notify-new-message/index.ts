@@ -1,5 +1,9 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  fetchRecipientLanguage,
+  newMessagePushText,
+} from "../_shared/pushNotificationI18n.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -144,18 +148,22 @@ Deno.serve(async (req) => {
 
   const displayNameRaw = (senderProfile as any)?.display_name;
   const displayName =
-    typeof displayNameRaw === "string" && displayNameRaw.trim() !== "" ? displayNameRaw.trim() : "Quelqu'un";
+    typeof displayNameRaw === "string" && displayNameRaw.trim() !== ""
+      ? displayNameRaw.trim()
+      : "";
 
   const clipped = clipMessage(message_body, 100);
+  const recipientLang = await fetchRecipientLanguage(supabaseAdmin, recipientId);
+  const { title, body } = newMessagePushText(recipientLang, displayName, clipped);
 
   try {
     await sendNotification({
       supabaseUrl,
       supabaseServiceRoleKey,
       user_id: recipientId,
-      title: `💬 Nouveau message de ${displayName}`,
-      body: clipped,
-      data: { thread_id },
+      title,
+      body,
+      data: { thread_id, notification_type: "new_message" },
     });
   } catch (e) {
     return jsonResponse(

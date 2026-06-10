@@ -8,10 +8,17 @@ import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
-import { getRootCategoriesByGender } from '../../lib/api/filters';
+import { getDescendantCategoryIds, getRootCategoriesByGender } from '../../lib/api/filters';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
-
-type GenderKey = 'Woman' | 'Men' | 'Kids' | 'Baby';
+import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
+import { useTranslation } from 'react-i18next';
+import {
+  resolveFilterGenderParam,
+  UI_TO_DB_GENDER,
+  FILTER_GENDER_OPTIONS,
+  type FilterGenderKey
+} from '../../lib/filterGenderParams';
+import { translateCategoryLabel } from '../../lib/categoryI18n';
 
 type RootCategory = {
   id: number;
@@ -20,14 +27,8 @@ type RootCategory = {
   gender: string | null;
 };
 
-const UI_TO_DB_GENDER: Record<GenderKey, string> = {
-  Woman: 'femme',
-  Men: 'homme',
-  Kids: 'enfant',
-  Baby: 'bebe'
-};
-
 export default function CategoryGenderScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
@@ -38,19 +39,22 @@ export default function CategoryGenderScreen() {
     resultsQuery?: string;
     resultsTitle?: string;
   }>();
-  const genderParam = params.gender as GenderKey | undefined;
-  const gender: GenderKey = useMemo(
-    () =>
-      genderParam && UI_TO_DB_GENDER[genderParam as GenderKey]
-        ? (genderParam as GenderKey)
-        : 'Woman',
+  const genderParam = typeof params.gender === 'string' ? params.gender : undefined;
+  const gender: FilterGenderKey = useMemo(
+    () => resolveFilterGenderParam(genderParam),
     [genderParam]
   );
 
   const [categories, setCategories] = useState<RootCategory[]>([]);
+  const [allGenderCategoryIds, setAllGenderCategoryIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const { filters, setFilter } = useFiltersScreenStore();
 
   const dbGender = UI_TO_DB_GENDER[gender];
+  const genderTitle = useMemo(() => {
+    const opt = FILTER_GENDER_OPTIONS.find((o) => o.genderKey === gender);
+    return opt ? t(opt.labelKey) : gender;
+  }, [gender, t]);
 
   useEffect(() => {
     const load = async () => {
@@ -94,8 +98,12 @@ export default function CategoryGenderScreen() {
         }
 
         setCategories(mapped);
+        const rootIds = mapped.map((row) => row.id);
+        const descendants = await getDescendantCategoryIds(rootIds);
+        setAllGenderCategoryIds(descendants);
       } catch {
         setCategories([]);
+        setAllGenderCategoryIds([]);
       } finally {
         setLoading(false);
       }
@@ -117,6 +125,7 @@ export default function CategoryGenderScreen() {
       params: {
         parentId: String(category.id),
         title: category.name,
+        categorySlug: category.slug,
         gender: dbGender,
         ...(params.returnTo ? { returnTo: params.returnTo } : {}),
         ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
@@ -126,13 +135,25 @@ export default function CategoryGenderScreen() {
     });
   };
 
+  const handleSelectAllGenderItems = () => {
+    setFilter('categoryIds', allGenderCategoryIds);
+    navigateAfterFilterCommit(
+      router,
+      typeof params.returnTo === 'string' ? params.returnTo : undefined
+    );
+  };
+
+  const allGenderSelected =
+    allGenderCategoryIds.length > 0 &&
+    allGenderCategoryIds.every((id) => filters.categoryIds.includes(id));
+
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            {gender}
+            {genderTitle}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -143,19 +164,37 @@ export default function CategoryGenderScreen() {
               <ActivityIndicator size="small" color={theme.colors.primary} />
             </View>
           ) : (
-            categories.map((cat) => (
+            <>
               <TouchableOpacity
-                key={cat.id}
                 style={styles.row}
                 activeOpacity={0.7}
-                onPress={() => openDetail(cat)}
+                onPress={handleSelectAllGenderItems}
               >
                 <Text variant="body" style={styles.rowLabel}>
-                  {cat.name}
+                  {t(`filters.allGenderItems.${gender.toLowerCase()}`)}
                 </Text>
-                <Text style={styles.chevron}>{'›'}</Text>
+                {allGenderSelected ? (
+                  <View style={[styles.radioOuter, styles.radioOuterSelected]}>
+                    <Text style={styles.checkmark}>✓</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.chevron}>{'›'}</Text>
+                )}
               </TouchableOpacity>
-            ))
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.row}
+                  activeOpacity={0.7}
+                  onPress={() => openDetail(cat)}
+                >
+                  <Text variant="body" style={styles.rowLabel}>
+                    {translateCategoryLabel({ name: cat.name, slug: cat.slug }, t)}
+                  </Text>
+                  <Text style={styles.chevron}>{'›'}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
           )}
         </View>
 
@@ -166,7 +205,7 @@ export default function CategoryGenderScreen() {
           ]}
         >
           <Button
-            title="Show results"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}
@@ -216,6 +255,25 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5'
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#CCCCCC',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  radioOuterSelected: {
+    borderColor: '#C3EA4F',
+    backgroundColor: '#C3EA4F'
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700'
   },
   rowLabel: {
     ...theme.typography.body,

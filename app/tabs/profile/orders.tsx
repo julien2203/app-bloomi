@@ -13,11 +13,13 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../lib/supabase';
 import { SUPABASE_URL } from '../../../lib/env';
@@ -37,6 +39,7 @@ type OrderRow = {
   status: string | null;
   payment_status: string | null;
   seller_amount: number | string | null;
+  seller_commission_chf?: number | string | null;
   created_at: string | null;
   delivery_mode?: string | null;
   shipping_address?: string | null;
@@ -63,6 +66,7 @@ type EnrichedOrder = OrderRow & {
   listing: ListingForOrder | null;
   coverPhotoUrl: string | null;
   displayAmount: string;
+  commissionLabel?: string | null;
 };
 
 type SenderAddress = {
@@ -86,7 +90,12 @@ function normalizePhotoUrl(rawUrl: string) {
 }
 
 export default function OrdersScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { from_notifications, from_notifications_origin } = useLocalSearchParams<{
+    from_notifications?: string;
+    from_notifications_origin?: string;
+  }>();
   const { user } = useAuthStore();
 
   const [tab, setTab] = useState<OrdersTab>('purchases');
@@ -108,13 +117,15 @@ export default function OrdersScreen() {
   const [reviewedOrderIds, setReviewedOrderIds] = useState<Set<string>>(() => new Set());
   const [addressModalVisible, setAddressModalVisible] = useState(false);
   const [addressModalOrder, setAddressModalOrder] = useState<EnrichedOrder | null>(null);
-  const [addressModalSellerName, setAddressModalSellerName] = useState('Vendeur');
+  const [addressModalSellerName, setAddressModalSellerName] = useState('Seller');
   const [senderStreetInput, setSenderStreetInput] = useState('');
   const [senderCityInput, setSenderCityInput] = useState('');
   const [senderZipInput, setSenderZipInput] = useState('');
   const [senderCountryInput, setSenderCountryInput] = useState('');
   const [saveSenderAddress, setSaveSenderAddress] = useState(true);
   const [submittingAddressModal, setSubmittingAddressModal] = useState(false);
+  const [disputeModalVisible, setDisputeModalVisible] = useState(false);
+  const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
 
   const userId = user?.id ?? null;
 
@@ -140,6 +151,7 @@ export default function OrdersScreen() {
           status,
           payment_status,
           seller_amount,
+          seller_commission_chf,
           created_at,
           delivery_mode,
           shipping_address,
@@ -214,7 +226,21 @@ export default function OrdersScreen() {
               listing?.price ??
               (o.listing_price as any) ??
               null
-          )
+          ),
+          commissionLabel:
+            tab === 'sales' && o.seller_commission_chf != null
+              ? (() => {
+                  const commission =
+                    typeof o.seller_commission_chf === 'number'
+                      ? o.seller_commission_chf
+                      : Number(o.seller_commission_chf);
+                  return Number.isFinite(commission) && commission > 0
+                    ? t('profile.orders.sellerCommission', {
+                        amount: formatAmount(commission)
+                      })
+                    : null;
+                })()
+              : null
         };
       });
 
@@ -246,13 +272,13 @@ export default function OrdersScreen() {
       console.log('Erreur chargement commandes:', e);
       const message =
         e instanceof Error && e.message
-          ? `Unable to load your orders: ${e.message}`
-          : 'Unable to load your orders.';
-      Alert.alert('Error', message);
+          ? `${t('profile.orders.unableLoad')}: ${e.message}`
+          : t('profile.orders.unableLoad');
+      Alert.alert(t('common.error'), message);
     } finally {
       setLoading(false);
     }
-  }, [tabQuery, userId]);
+  }, [tab, tabQuery, t, userId]);
 
   useEffect(() => {
     void loadOrders();
@@ -282,6 +308,32 @@ export default function OrdersScreen() {
       userId != null && String(order.status ?? '').toLowerCase() === 'pending',
     [userId]
   );
+
+  const openDisputeModal = useCallback((orderId: string) => {
+    setDisputeOrderId(orderId);
+    setDisputeModalVisible(true);
+  }, []);
+
+  const closeDisputeModal = useCallback(() => {
+    setDisputeModalVisible(false);
+    setDisputeOrderId(null);
+  }, []);
+
+  const copyDisputeOrderId = useCallback(async () => {
+    if (!disputeOrderId) return;
+    await Clipboard.setStringAsync(disputeOrderId);
+  }, [disputeOrderId]);
+
+  const sendDisputeEmail = useCallback(async () => {
+    const orderId = disputeOrderId ?? '';
+    const subject = encodeURIComponent('Order dispute');
+    const body = encodeURIComponent(`Order ID: ${orderId}`);
+    const url = `mailto:contact@bloomi.ch?subject=${subject}&body=${body}`;
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+    }
+  }, [disputeOrderId]);
 
   const canGenerateShippingLabel = useCallback(
     (order: EnrichedOrder) =>
@@ -341,8 +393,8 @@ export default function OrdersScreen() {
 
         void sendPushNotificationWithUserJwt({
           user_id: order.buyer_id,
-          title: '⭐ Donne ton avis sur ton achat',
-          body: "Comment s'est passée ta commande ? Laisse un avis au vendeur !",
+          titleKey: 'profile.orders.ratePurchase',
+          bodyKey: 'profile.orders.reviewPrompt',
           notification_type: 'new_feedback',
           data: { order_id: orderId, listing_id: order.listing_id }
         });
@@ -353,7 +405,7 @@ export default function OrdersScreen() {
           e instanceof Error && e.message
             ? `Unable to confirm receipt: ${e.message}`
             : 'Unable to confirm receipt.';
-        Alert.alert('Error', message);
+        Alert.alert(t('common.error'), message);
       } finally {
         setConfirmingOrderIds((prev) => {
           const next = new Set(prev);
@@ -371,12 +423,12 @@ export default function OrdersScreen() {
       if (cancellingOrderIds.has(orderId)) return;
 
       Alert.alert(
-        'Cancel this order?',
-        'This will trigger a refund if needed. Do you want to continue?',
+        t('profile.orders.cancelOrderTitle'),
+        t('profile.orders.cancelOrderMessage'),
         [
-          { text: 'Back', style: 'cancel' },
+          { text: t('common.back'), style: 'cancel' },
           {
-            text: 'Cancel order',
+            text: t('profile.orders.cancelOrder'),
             style: 'destructive',
             onPress: async () => {
               setCancellingOrderIds((prev) => new Set(prev).add(orderId));
@@ -423,7 +475,7 @@ export default function OrdersScreen() {
                   e instanceof Error && e.message
                     ? `Unable to cancel the order: ${e.message}`
                     : 'Unable to cancel the order.';
-                Alert.alert('Error', message);
+                Alert.alert(t('common.error'), message);
               } finally {
                 setCancellingOrderIds((prev) => {
                   const next = new Set(prev);
@@ -503,11 +555,14 @@ export default function OrdersScreen() {
       }
 
       if (!response.ok || (data as any)?.success !== true) {
+        const rawDetails = (data as any)?.details;
+        const detailsStr =
+          typeof rawDetails === 'object' && rawDetails !== null
+            ? JSON.stringify(rawDetails)
+            : String(rawDetails ?? '');
         throw new Error(
           (data as any)?.error ??
-            (data as any)?.details ??
-            responseText ??
-            'generate-shipping-label: failed'
+            (detailsStr || responseText || 'generate-shipping-label: failed')
         );
       }
 
@@ -535,7 +590,7 @@ export default function OrdersScreen() {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: 'application/pdf',
-            dialogTitle: 'Étiquette La Poste'
+            dialogTitle: 'Swiss Post shipping label'
           });
         } else {
           await Print.printAsync({ uri: fileUri });
@@ -543,7 +598,7 @@ export default function OrdersScreen() {
       } else if (labelUrl) {
         await Linking.openURL(labelUrl);
       } else {
-        Alert.alert('Success', 'Label was generated, but no document was returned.');
+        Alert.alert(t('common.success'), t('profile.orders.labelNoDoc'));
       }
 
       await loadOrders();
@@ -570,7 +625,7 @@ export default function OrdersScreen() {
 
         const sellerName =
           String((sellerProfile as any)?.display_name ?? '').trim() ||
-          'Vendeur';
+          'Seller';
         const sellerStreet = String((sellerProfile as any)?.street ?? '').trim();
         const sellerCity = String((sellerProfile as any)?.city ?? '').trim();
         const sellerZip = String((sellerProfile as any)?.postal_code ?? '').trim();
@@ -607,7 +662,7 @@ export default function OrdersScreen() {
           e instanceof Error && e.message
             ? `Could not generate label: ${e.message}`
             : 'Could not generate label.';
-        Alert.alert('Error', message);
+        Alert.alert(t('common.error'), message);
       } finally {
         setGeneratingLabelOrderIds((prev) => {
           const next = new Set(prev);
@@ -628,7 +683,10 @@ export default function OrdersScreen() {
     const country = senderCountryInput.trim().toUpperCase();
 
     if (!street || !city || !zip || !country) {
-      Alert.alert('Incomplete address', 'Please fill in street, city, postal code, and country.');
+      Alert.alert(
+        t('profile.orders.incompleteAddress'),
+        t('profile.orders.incompleteAddressMessage')
+      );
       return;
     }
 
@@ -662,7 +720,7 @@ export default function OrdersScreen() {
         e instanceof Error && e.message
           ? `Could not generate label: ${e.message}`
           : 'Could not generate label.';
-      Alert.alert('Error', message);
+      Alert.alert(t('common.error'), message);
     } finally {
       setSubmittingAddressModal(false);
       setGeneratingLabelOrderIds((prev) => {
@@ -723,8 +781,8 @@ export default function OrdersScreen() {
 
         void sendPushNotificationWithUserJwt({
           user_id: order.buyer_id,
-          title: "📦 C'est parti ! Ton colis est en route",
-          body: 'Votre vendeur a expédié votre commande.',
+          titleKey: 'profile.orders.parcelShipped',
+          bodyKey: 'profile.orders.sellerShipped',
           notification_type: 'new_items',
           data: { order_id: order.id, listing_id: order.listing_id }
         });
@@ -735,7 +793,7 @@ export default function OrdersScreen() {
           e instanceof Error && e.message
             ? `Could not mark order as shipped: ${e.message}`
             : 'Could not mark order as shipped.';
-        Alert.alert('Error', message);
+        Alert.alert(t('common.error'), message);
       } finally {
         setMarkingShippedOrderIds((prev) => {
           const next = new Set(prev);
@@ -831,8 +889,15 @@ export default function OrdersScreen() {
                 {item.listing?.title ?? 'Listing'}
               </Text>
               <Text variant="body" color="textSecondary" style={styles.orderAmount}>
-                {item.displayAmount}
+                {!isPurchasesTab && item.commissionLabel
+                  ? t('profile.orders.sellerPayout', { amount: item.displayAmount })
+                  : item.displayAmount}
               </Text>
+              {!isPurchasesTab && item.commissionLabel ? (
+                <Text variant="captionSm" color="textSecondary">
+                  {item.commissionLabel}
+                </Text>
+              ) : null}
               <Text
                 variant="captionSm"
                 color={statusColor}
@@ -850,11 +915,12 @@ export default function OrdersScreen() {
 
           {((isPurchasesTab &&
             ((statusNorm === 'pending' && showCancel) ||
-              (statusNorm === 'shipped' && (showConfirm || hasTracking)) ||
+              statusNorm === 'shipped' ||
               (statusNorm === 'completed' && showLeaveReview))) ||
             (!isPurchasesTab &&
               ((statusNorm === 'pending' &&
                 (showCancel || (!hasTracking && showGenerateLabel) || hasTracking)) ||
+                (statusNorm === 'shipped' && showGenerateLabel) ||
                 (statusNorm === 'completed' && showLeaveReview)))) ? (
             <View style={styles.actionsWrap}>
               {isPurchasesTab && statusNorm === 'shipped' && showConfirm ? (
@@ -872,7 +938,11 @@ export default function OrdersScreen() {
               {isPurchasesTab && statusNorm === 'pending' && showCancel ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title={isCancelling ? 'Cancelling…' : 'Cancel order'}
+                    title={
+                      isCancelling
+                        ? t('profile.orders.cancelling')
+                        : t('profile.orders.cancelOrder')
+                    }
                     onPress={() => cancelOrder(item.id)}
                     disabled={isCancelling}
                     loading={isCancelling}
@@ -880,10 +950,23 @@ export default function OrdersScreen() {
                   />
                 </View>
               ) : null}
+              {isPurchasesTab && statusNorm === 'shipped' ? (
+                <View style={styles.disputeButtonWrap}>
+                  <TouchableOpacity
+                    style={styles.disputeButton}
+                    activeOpacity={0.85}
+                    onPress={() => openDisputeModal(item.id)}
+                  >
+                    <RNText style={styles.disputeButtonText}>
+                      {t('profile.orders.openDispute')}
+                    </RNText>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               {isPurchasesTab && statusNorm === 'shipped' && hasTracking ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title="Track my parcel"
+                    title={t('profile.orders.trackParcel')}
                     onPress={() => void followPackage(trackingNumber)}
                     variant="secondary"
                   />
@@ -892,14 +975,14 @@ export default function OrdersScreen() {
               {isPurchasesTab && statusNorm === 'completed' && showLeaveReview ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title="Leave a review"
+                    title={t('profile.orders.leaveReview')}
                     onPress={() => void leaveReview(item)}
                     variant="secondary"
                   />
                 </View>
               ) : null}
 
-              {!isPurchasesTab && statusNorm === 'pending' && showGenerateLabel ? (
+              {!isPurchasesTab && showGenerateLabel ? (
                 <View style={styles.generateLabelButtonWrap}>
                   <Button
                     title={
@@ -939,7 +1022,7 @@ export default function OrdersScreen() {
               {!isPurchasesTab && statusNorm === 'completed' && showLeaveReview ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title="Leave a review"
+                    title={t('profile.orders.leaveReview')}
                     onPress={() => void leaveReview(item)}
                     variant="secondary"
                   />
@@ -965,20 +1048,36 @@ export default function OrdersScreen() {
       leaveReview,
       followPackage,
       markAsShipped,
-      tab
+      openDisputeModal,
+      tab,
+      t
     ]
   );
 
-  const title = tab === 'purchases' ? 'My purchases' : 'My sales';
+  const title = tab === 'purchases' ? t('profile.orders.myPurchases') : t('profile.orders.mySales');
+
+  const handleBack = useCallback(() => {
+    if (from_notifications === '1') {
+      router.replace({
+        pathname: '/tabs/profile/notifications',
+        params:
+          from_notifications_origin === 'feed' || from_notifications_origin === 'profile'
+            ? { from: from_notifications_origin }
+            : undefined
+      });
+      return;
+    }
+    router.back();
+  }, [from_notifications, from_notifications_origin, router]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <HeaderBackButton onPress={() => router.back()} />
+          <HeaderBackButton onPress={handleBack} />
           <Text variant="h2" style={styles.title}>
-            Orders
+            {t('profile.orders.title')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -988,14 +1087,14 @@ export default function OrdersScreen() {
             onPress={() => setTab('purchases')}
             activeOpacity={0.8}
           >
-            <RNText style={styles.tabText}>My purchases</RNText>
+            <RNText style={styles.tabText}>{t('profile.orders.myPurchases')}</RNText>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, tab === 'sales' && styles.tabActive]}
             onPress={() => setTab('sales')}
             activeOpacity={0.8}
           >
-            <RNText style={styles.tabText}>My sales</RNText>
+            <RNText style={styles.tabText}>{t('profile.orders.mySales')}</RNText>
           </TouchableOpacity>
         </View>
       </View>
@@ -1018,7 +1117,7 @@ export default function OrdersScreen() {
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text variant="body" color="textSecondary" style={styles.emptyText}>
-                No orders yet ({title})
+                {t('profile.orders.noOrdersYet', { tab: title })}
               </Text>
             </View>
           }
@@ -1038,37 +1137,37 @@ export default function OrdersScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text variant="h3" style={styles.modalTitle}>
-              Sender address
+              {t('profile.orders.senderAddressTitle')}
             </Text>
             <Text variant="captionSm" color="textSecondary" style={styles.modalSubtitle}>
-              Enter your address to generate the label.
+              {t('profile.orders.senderAddressSubtitle')}
             </Text>
 
             <TextInput
               value={senderStreetInput}
               onChangeText={setSenderStreetInput}
-              placeholder="Street and number"
+              placeholder={t('profile.orders.streetNumber')}
               style={styles.modalInput}
               editable={!submittingAddressModal}
             />
             <TextInput
               value={senderCityInput}
               onChangeText={setSenderCityInput}
-              placeholder="City"
+              placeholder={t('feed.checkout.city')}
               style={styles.modalInput}
               editable={!submittingAddressModal}
             />
             <TextInput
               value={senderZipInput}
               onChangeText={setSenderZipInput}
-              placeholder="Postal code"
+              placeholder={t('feed.checkout.postalCode')}
               style={styles.modalInput}
               editable={!submittingAddressModal}
             />
             <TextInput
               value={senderCountryInput}
               onChangeText={setSenderCountryInput}
-              placeholder="Country (e.g. CH)"
+              placeholder={t('profile.orders.countryExample')}
               autoCapitalize="characters"
               style={styles.modalInput}
               editable={!submittingAddressModal}
@@ -1082,13 +1181,13 @@ export default function OrdersScreen() {
             >
               <View style={[styles.checkbox, saveSenderAddress && styles.checkboxChecked]} />
               <Text variant="captionSm" color="textSecondary">
-                Save this address to my profile
+                {t('profile.orders.saveAddress')}
               </Text>
             </TouchableOpacity>
 
             <View style={styles.modalActions}>
               <Button
-                title="Cancel"
+                title={t('common.cancel')}
                 onPress={() => {
                   setAddressModalVisible(false);
                   setAddressModalOrder(null);
@@ -1097,12 +1196,53 @@ export default function OrdersScreen() {
                 disabled={submittingAddressModal}
               />
               <Button
-                title={submittingAddressModal ? 'Generating…' : 'Generate label'}
+                title={submittingAddressModal ? t('profile.orders.generating') : t('profile.orders.generateLabel')}
                 onPress={() => void submitSenderAddressModal()}
                 loading={submittingAddressModal}
                 disabled={submittingAddressModal}
                 variant="primary"
               />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={disputeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDisputeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.disputeModalBackdrop}
+            activeOpacity={1}
+            onPress={closeDisputeModal}
+          />
+          <View style={styles.modalCard}>
+            <Text variant="h3" style={styles.modalTitle}>
+              {t('profile.orders.openDispute')}
+            </Text>
+            <Text variant="body" color="textSecondary" style={styles.disputeModalMessage}>
+              {t('profile.orders.disputeMessage')}
+            </Text>
+            {disputeOrderId ? (
+              <Text variant="captionSm" color="textSecondary" style={styles.disputeOrderId}>
+                {disputeOrderId}
+              </Text>
+            ) : null}
+            <View style={styles.disputeModalActions}>
+              <Button
+                title={t('profile.orders.copyOrderId')}
+                onPress={() => void copyDisputeOrderId()}
+                variant="secondary"
+              />
+              <Button
+                title={t('profile.orders.sendEmail')}
+                onPress={() => void sendDisputeEmail()}
+                variant="secondary"
+              />
+              <Button title={t('common.close')} onPress={closeDisputeModal} variant="google" />
             </View>
           </View>
         </View>
@@ -1143,14 +1283,13 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 10
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent'
   },
   tabActive: {
-    backgroundColor: theme.colors.googleWhite,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2
+    backgroundColor: '#C3EA4F',
+    borderColor: '#C3EA4F'
   },
   tabText: {
     textAlign: 'center',
@@ -1283,6 +1422,37 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 8
+  },
+  disputeButtonWrap: {
+    marginTop: 0
+  },
+  disputeButton: {
+    backgroundColor: '#F0F0F0',
+    borderRadius: theme.radius.button,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  disputeButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontFamily: theme.fontFamily.semiBold,
+    textAlign: 'center'
+  },
+  disputeModalBackdrop: {
+    ...StyleSheet.absoluteFillObject
+  },
+  disputeModalMessage: {
+    lineHeight: 22,
+    marginBottom: 8
+  },
+  disputeOrderId: {
+    marginBottom: 12
+  },
+  disputeModalActions: {
+    gap: 10,
     marginTop: 8
   }
 });

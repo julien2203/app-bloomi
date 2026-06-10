@@ -1,9 +1,11 @@
 import React from 'react';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../lib/theme';
 import type { FeedListing } from '../../lib/api';
 import { Text } from '../ui/Text';
+import { useTranslation } from 'react-i18next';
+import { ListingCoverImage } from '../ui/ListingCoverImage';
 
 interface VerticalListingCardProps {
   item: FeedListing;
@@ -11,11 +13,14 @@ interface VerticalListingCardProps {
   onPressSeller?: () => void;
 }
 
+const IMAGE_HEIGHT = 150;
+
 export function VerticalListingCard({
   item,
   onPress,
   onPressSeller
 }: VerticalListingCardProps) {
+  const { t } = useTranslation();
   const likeCount = 24;
 
   return (
@@ -28,24 +33,24 @@ export function VerticalListingCard({
           style={styles.sellerChip}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          {item.seller_avatar_url ? (
-            <Image source={{ uri: item.seller_avatar_url }} style={styles.avatarImage} />
-          ) : (
-            <View style={styles.avatar} />
-          )}
           <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {item.seller_display_name ?? 'Vendeur'}
+            {item.seller_display_name ?? 'Seller'}
           </Text>
         </TouchableOpacity>
       </View>
       {item.cover_photo_url ? (
         <View style={[styles.imageContainer, styles.imageFrame]}>
-          <Image source={{ uri: item.cover_photo_url }} style={styles.image} resizeMode="cover" />
+          <ListingCoverImage
+            uri={item.cover_photo_url}
+            widthDp={180}
+            heightDp={IMAGE_HEIGHT}
+            recyclingKey={item.id}
+          />
         </View>
       ) : (
         <View style={styles.imageContainer}>
           <Text variant="caption" color="textSecondary">
-            Pas d&apos;image
+            {t('common.noImage')}
           </Text>
         </View>
       )}
@@ -69,8 +74,6 @@ export function VerticalListingCard({
   );
 }
 
-const IMAGE_HEIGHT = 150;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -89,18 +92,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     columnGap: theme.spacing.gapSm
   },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: theme.colors.muted
-  },
-  avatarImage: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: theme.colors.muted
-  },
   imageContainer: {
     width: '100%',
     height: IMAGE_HEIGHT,
@@ -112,10 +103,6 @@ const styles = StyleSheet.create({
   imageFrame: {
     overflow: 'hidden',
     backgroundColor: '#F5F5F5'
-  },
-  image: {
-    width: '100%',
-    height: '100%'
   },
   body: {
     paddingHorizontal: theme.spacing.gapSm,
@@ -137,4 +124,3 @@ const styles = StyleSheet.create({
     columnGap: theme.spacing.gapSm / 2
   }
 });
-

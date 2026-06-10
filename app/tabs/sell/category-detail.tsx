@@ -10,10 +10,13 @@ import { theme } from '../../../lib/theme';
 import { getChildCategories } from '../../../lib/api/filters';
 import { useSellFormStore } from '../../../lib/store/sellForm';
 import { supabase } from '../../../lib/supabase';
+import { useTranslation } from 'react-i18next';
+import { translateCategoryLabel } from '../../../lib/categoryI18n';
 
 type CategoryRow = {
   id: number;
   name: string;
+  slug?: string | null;
 };
 
 function inferTypeFromParentSlug(parentSlug?: string | null): 'chaussures' | 'pantalons' | 'chemises' | 'vetements' {
@@ -25,11 +28,22 @@ function inferTypeFromParentSlug(parentSlug?: string | null): 'chaussures' | 'pa
 }
 
 export default function SellCategoryDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ parentId?: string; title?: string; gender?: string }>();
+  const params = useLocalSearchParams<{
+    parentId?: string;
+    title?: string;
+    gender?: string;
+    return_to?: string;
+    edit_id?: string;
+  }>();
   const parentId = params.parentId ? Number(params.parentId) : NaN;
-  const headerTitle = params.title || 'Category';
+  const headerTitle =
+    translateCategoryLabel(
+      { name: String(params.title ?? ''), slug: params.categorySlug },
+      t
+    ) || t('sell.category');
   const gender = typeof params.gender === 'string' ? params.gender : undefined;
 
   const { setField } = useSellFormStore();
@@ -56,7 +70,8 @@ export default function SellCategoryDetailScreen() {
         setCategories(
           (data as any[]).map((row) => ({
             id: row.id as number,
-            name: row.name as string
+            name: row.name as string,
+            slug: (row.slug as string | undefined) ?? null
           }))
         );
       } catch {
@@ -83,10 +98,9 @@ export default function SellCategoryDetailScreen() {
     setField('categoryGender', gender);
     setField('categoryType', inferTypeFromParentSlug(parentSlug));
 
-    // Revenir jusqu'à l'écran principal Sell (index)
-    router.back(); // back to gender
-    router.back(); // back to category root (tabs/sell/category)
-    router.back(); // back to Sell index
+    router.back();
+    router.back();
+    router.back();
   };
 
   return (
@@ -117,7 +131,7 @@ export default function SellCategoryDetailScreen() {
                     onPress={() => setSelectedId(cat.id)}
                   >
                     <Text variant="body" style={styles.rowLabel}>
-                      {cat.name}
+                      {translateCategoryLabel({ name: cat.name, slug: cat.slug }, t)}
                     </Text>
                     <View
                       style={[
@@ -139,7 +153,7 @@ export default function SellCategoryDetailScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleConfirm}
             variant="primary"
             disabled={!selectedId}

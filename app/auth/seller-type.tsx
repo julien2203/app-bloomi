@@ -16,10 +16,12 @@ import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 type SellerType = 'individual' | 'pro';
 
 export default function SellerTypeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = typeof params.email === 'string' ? params.email : '';
@@ -37,13 +39,13 @@ export default function SellerTypeScreen() {
 
   const validateProFields = () => {
     if (!companyName.trim() || !ideNumber.trim() || !companyAddress.trim()) {
-      setError('Please fill in all required fields.');
+      setError(t('auth.sellerType.fillRequired'));
       return false;
     }
     // Validation simple du format IDE (CHE-XXX.XXX.XXX)
     const ideRegex = /^CHE-\d{3}\.\d{3}\.\d{3}$/;
     if (!ideRegex.test(ideNumber.trim())) {
-      setError('The UID number must be in the format CHE-XXX.XXX.XXX.');
+      setError(t('auth.sellerType.ideFormat'));
       return false;
     }
     return true;
@@ -65,7 +67,10 @@ export default function SellerTypeScreen() {
 
       const { data, error: userError } = await supabase.auth.getUser();
       if (userError || !data.user) {
-        setError('Unable to load your account. Please try again.');
+        // Sur certains projets (email confirmation activée), signUp ne crée pas de session immédiate.
+        // Dans ce cas, on laisse l'utilisateur poursuivre vers la vérification email
+        // plutôt que de bloquer le flow.
+        goToVerifyEmail();
         return;
       }
 
@@ -127,7 +132,7 @@ export default function SellerTypeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
-          <Text style={styles.headerTitle}>Sign up</Text>
+          <Text style={styles.headerTitle}>{t('auth.signUp.title')}</Text>
           <View style={{ width: 20 }} />
         </View>
         <View style={styles.headerSeparator} />
@@ -141,7 +146,7 @@ export default function SellerTypeScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.content}>
-              <Text style={styles.sectionTitle}>Are you selling as</Text>
+              <Text style={styles.sectionTitle}>{t('auth.sellerType.sellingAs')}</Text>
 
               <View style={styles.pillsRow}>
                 <TouchableOpacity
@@ -152,7 +157,7 @@ export default function SellerTypeScreen() {
                   ]}
                   onPress={() => setSellerType('individual')}
                 >
-                  <Text style={styles.pillText}>Individual</Text>
+                  <Text style={styles.pillText}>{t('auth.sellerType.individual')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -162,14 +167,14 @@ export default function SellerTypeScreen() {
                   ]}
                   onPress={() => setSellerType('pro')}
                 >
-                  <Text style={styles.pillText}>Professional</Text>
+                  <Text style={styles.pillText}>{t('auth.sellerType.professional')}</Text>
                 </TouchableOpacity>
               </View>
 
               {isPro && (
                 <View style={styles.proForm}>
                   <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Company name</Text>
+                    <Text style={styles.fieldLabel}>{t('auth.sellerType.companyName')}</Text>
                     <View style={styles.fieldInputWrapper}>
                       <TextInput
                         style={styles.fieldInput}
@@ -182,21 +187,21 @@ export default function SellerTypeScreen() {
                   </View>
 
                   <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>IDE number (CHE-XXX.XXX.XXX)</Text>
+                    <Text style={styles.fieldLabel}>{t('auth.sellerType.ideNumber')}</Text>
                     <View style={styles.fieldInputWrapper}>
                       <TextInput
                         style={styles.fieldInput}
                         value={ideNumber}
                         onChangeText={setIdeNumber}
                         autoCapitalize="characters"
-                        placeholder="CHE-123.456.789"
+                        placeholder={t('auth.sellerType.idePlaceholder')}
                         placeholderTextColor={theme.colors.textSecondary}
                       />
                     </View>
                   </View>
 
                   <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Business address</Text>
+                    <Text style={styles.fieldLabel}>{t('auth.sellerType.businessAddress')}</Text>
                     <View style={styles.fieldInputWrapper}>
                       <TextInput
                         style={styles.fieldInput}
@@ -209,13 +214,13 @@ export default function SellerTypeScreen() {
                   </View>
 
                   <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Website or Instagram (optional)</Text>
+                    <Text style={styles.fieldLabel}>{t('auth.sellerType.websiteOptional')}</Text>
                     <View style={styles.fieldInputWrapper}>
                       <TextInput
                         style={styles.fieldInput}
                         value={companySocial}
                         onChangeText={setCompanySocial}
-                        placeholder="https:// or @username"
+                        placeholder={t('auth.sellerType.socialPlaceholder')}
                         placeholderTextColor={theme.colors.textSecondary}
                       />
                     </View>
@@ -226,7 +231,7 @@ export default function SellerTypeScreen() {
               {/* Influenceur / créateur */}
               <View style={styles.influencerBlock}>
                 <Text style={styles.influencerTitle}>
-                  Are you an influencer or content creator?
+                  {t('auth.sellerType.influencerQuestion')}
                 </Text>
                 <View style={styles.pillsColumn}>
                   <TouchableOpacity
@@ -237,7 +242,7 @@ export default function SellerTypeScreen() {
                     ]}
                     onPress={() => setIsInfluencer(true)}
                   >
-                    <Text style={styles.pillText}>Yes, I am an influencer</Text>
+                    <Text style={styles.pillText}>{t('auth.sellerType.influencerYes')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.8}
@@ -247,12 +252,12 @@ export default function SellerTypeScreen() {
                     ]}
                     onPress={() => setIsInfluencer(false)}
                   >
-                    <Text style={styles.pillText}>No</Text>
+                    <Text style={styles.pillText}>{t('auth.sellerType.influencerNo')}</Text>
                   </TouchableOpacity>
                 </View>
                 {isInfluencer === true ? (
                   <Text style={styles.influencerHint}>
-                    Your request will be reviewed by our team
+                    {t('auth.sellerType.influencerHint')}
                   </Text>
                 ) : null}
               </View>
@@ -264,7 +269,7 @@ export default function SellerTypeScreen() {
               ) : null}
 
               <Button
-                title="Continue"
+                title={t('common.continue')}
                 onPress={handleContinue}
                 variant="primary-green"
                 disabled={!canContinue || loading}

@@ -2,9 +2,11 @@ import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Modal,
+  Platform,
+  Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Switch,
   Text,
@@ -13,8 +15,10 @@ import {
   View,
   Image
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
@@ -72,10 +76,40 @@ type ToastState = {
   type: 'error' | 'success';
 } | null;
 
-export default function EditProfileScreen() {
-  const navigation = useNavigation();
-  const { user } = useAuthStore();
+type EditFieldModal = 'username' | 'about' | null;
 
+const PAGE_BG = theme.colors.backgroundWhite;
+const ROW_DIVIDER = '#E5E5E5';
+const INPUT_BORDER = '#D1D5DB';
+/** Espace supplémentaire entre la feuille d’édition et le clavier (iOS). */
+const KEYBOARD_EXTRA_GAP = 40;
+const LABEL_COLOR = '#A0A0A0';
+const VALUE_COLOR = '#1A1A1A';
+const ICON_BG = '#F0F0F0';
+const ICON_COLOR = '#8E8E93';
+const LOCATION_ICON_COLOR = '#6B6B6B';
+const AVATAR_FALLBACK_BG = '#F0F0F0';
+const SWITCH_TRACK_OFF = '#D1D1D6';
+
+function FieldIconCircle({
+  name,
+  filled
+}: {
+  name: React.ComponentProps<typeof Feather>['name'];
+  filled?: boolean;
+}) {
+  return (
+    <View style={styles.fieldIconCircle}>
+      <Feather name={name} size={18} color={filled ? LOCATION_ICON_COLOR : ICON_COLOR} />
+    </View>
+  );
+}
+
+export default function EditProfileScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [about, setAbout] = useState('');
@@ -94,7 +128,33 @@ export default function EditProfileScreen() {
   const [updatingLocationVisible, setUpdatingLocationVisible] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [editFieldModal, setEditFieldModal] = useState<EditFieldModal>(null);
+  const [modalDraft, setModalDraft] = useState('');
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const [toast, setToast] = useState<ToastState>(null);
+
+  useEffect(() => {
+    if (!editFieldModal) {
+      setKeyboardInset(0);
+      return;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = Keyboard.addListener(showEvent, (event) => {
+      const height = event.endCoordinates.height;
+      setKeyboardInset(Math.max(0, height - insets.bottom) + KEYBOARD_EXTRA_GAP);
+    });
+    const onHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardInset(0);
+    });
+
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, [editFieldModal, insets.bottom]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -106,7 +166,6 @@ export default function EditProfileScreen() {
       setLoading(true);
       try {
         let data: any = null;
-        // 1) Query complète (inclut les champs GPS)
         const full = await supabase
           .from('profiles')
           .select(
@@ -118,7 +177,6 @@ export default function EditProfileScreen() {
         if (!full.error) {
           data = full.data;
         } else {
-          // 2) Fallback: schéma pas à jour (colonnes manquantes) ou policy restrictive
           const minimal = await supabase
             .from('profiles')
             .select('id, avatar_url, display_name, bio, about, location, location_visible')
@@ -148,8 +206,20 @@ export default function EditProfileScreen() {
           setLocationVisible(Boolean(row.location_visible));
           setGpsCity(row.city ?? null);
           setGpsCountry(row.country ?? null);
-          setGpsLat(typeof row.latitude === 'number' ? row.latitude : row.latitude != null ? Number(row.latitude as any) : null);
-          setGpsLng(typeof row.longitude === 'number' ? row.longitude : row.longitude != null ? Number(row.longitude as any) : null);
+          setGpsLat(
+            typeof row.latitude === 'number'
+              ? row.latitude
+              : row.latitude != null
+                ? Number(row.latitude as any)
+                : null
+          );
+          setGpsLng(
+            typeof row.longitude === 'number'
+              ? row.longitude
+              : row.longitude != null
+                ? Number(row.longitude as any)
+                : null
+          );
           setGpsPermissionDenied(false);
           setAvatarUrl(row.avatar_url ?? null);
         } else {
@@ -204,12 +274,27 @@ export default function EditProfileScreen() {
     return (first + second).toUpperCase();
   };
 
+  const openEditModal = (field: EditFieldModal) => {
+    if (!field) return;
+    setModalDraft(field === 'username' ? displayName : about);
+    setEditFieldModal(field);
+  };
+
+  const confirmEditModal = () => {
+    if (editFieldModal === 'username') {
+      setDisplayName(modalDraft);
+    } else if (editFieldModal === 'about') {
+      setAbout(modalDraft);
+    }
+    setEditFieldModal(null);
+  };
+
   const requestPhotoPermissions = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        'Permission required',
-        'We need access to your photos to change your avatar.'
+        t('common.error'),
+        t('profile.editProfileScreen.permissionPhotos')
       );
       return false;
     }
@@ -236,7 +321,6 @@ export default function EditProfileScreen() {
     const asset = result.assets[0];
     const previousAvatar = avatarUrl;
 
-    // Optimistic update
     setAvatarUrl(asset.uri);
     setUploadingAvatar(true);
 
@@ -248,7 +332,6 @@ export default function EditProfileScreen() {
       };
 
       const base64 = await FileSystem.readAsStringAsync(file.uri, {
-        // Certaines versions d'Expo n'exposent pas EncodingType, on fallback sur la string 'base64'
         encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64'
       });
       const arrayBuffer = decodeBase64(base64);
@@ -284,9 +367,7 @@ export default function EditProfileScreen() {
       setToast({
         type: 'error',
         message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to update profile photo.'
+          error instanceof Error ? error.message : 'Unable to update profile photo.'
       });
     } finally {
       setUploadingAvatar(false);
@@ -296,7 +377,6 @@ export default function EditProfileScreen() {
   const handleToggleLocationVisible = async (value: boolean) => {
     if (!user?.id) return;
 
-    // OFF: persist immediately + clear coords
     if (!value) {
       setLocationVisible(false);
       setGpsCity(null);
@@ -318,7 +398,7 @@ export default function EditProfileScreen() {
       } catch {
         setToast({
           type: 'error',
-          message: 'Unable to turn off location.'
+          message: t('profile.editProfileScreen.unableLocationOff')
         });
       } finally {
         setUpdatingLocationVisible(false);
@@ -326,13 +406,12 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // ON: request GPS + reverse geocode, do not persist until Save
     setDetectingLocation(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
         setGpsPermissionDenied(true);
-        setToast({ type: 'error', message: 'Location permission denied.' });
+        setToast({ type: 'error', message: t('profile.editProfileScreen.locationDenied') });
         setLocationVisible(false);
         return;
       }
@@ -349,13 +428,15 @@ export default function EditProfileScreen() {
         (place as any)?.subregion ||
         (place as any)?.region ||
         null;
-      const countryCode = ((place as any)?.isoCountryCode || (place as any)?.countryCode || '').toString().toUpperCase();
+      const countryCode = ((place as any)?.isoCountryCode || (place as any)?.countryCode || '')
+        .toString()
+        .toUpperCase();
 
       const allowed = ['CH', 'FR', 'DE', 'IT'] as const;
       if (!allowed.includes(countryCode as any)) {
         Alert.alert(
-          'Zone non disponible',
-          'Bloomi est disponible uniquement en Suisse, France, Allemagne et Italie'
+          t('profile.editProfileScreen.areaUnavailable'),
+          t('profile.editProfileScreen.countriesOnly')
         );
         setLocationVisible(false);
         setGpsCity(null);
@@ -373,7 +454,7 @@ export default function EditProfileScreen() {
     } catch {
       setToast({
         type: 'error',
-        message: 'Unable to get your location.'
+        message: t('profile.editProfileScreen.unableLocation')
       });
       setLocationVisible(false);
     } finally {
@@ -413,7 +494,6 @@ export default function EditProfileScreen() {
         throw error;
       }
 
-      // Mettre à jour également le username côté Auth (user_metadata)
       await supabase.auth.updateUser({
         data: {
           username: displayNameValue || null
@@ -422,7 +502,7 @@ export default function EditProfileScreen() {
 
       setToast({
         type: 'success',
-        message: 'Profile updated.'
+        message: t('profile.editProfileScreen.profileUpdated')
       });
 
       navigation.goBack();
@@ -430,7 +510,7 @@ export default function EditProfileScreen() {
       setToast({
         type: 'error',
         message:
-          error instanceof Error ? error.message : 'Une erreur est survenue lors de la sauvegarde.'
+          error instanceof Error ? error.message : 'Something went wrong while saving.'
       });
     } finally {
       setSaving(false);
@@ -447,7 +527,7 @@ export default function EditProfileScreen() {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Choose a canton</Text>
+            <Text style={styles.modalTitle}>{t('profile.editProfileScreen.chooseCanton')}</Text>
             <TouchableOpacity
               onPress={() => setLocationModalVisible(false)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -474,6 +554,71 @@ export default function EditProfileScreen() {
     </Modal>
   );
 
+  const renderEditFieldModal = () => {
+    if (!editFieldModal) return null;
+    const title =
+      editFieldModal === 'username'
+        ? t('profile.editProfileScreen.username')
+        : t('profile.editProfileScreen.aboutMe');
+    const isAbout = editFieldModal === 'about';
+
+    return (
+      <Modal
+        visible
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEditFieldModal(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setEditFieldModal(null)}>
+            <Pressable
+              style={[
+                styles.editModalSheet,
+                {
+                  marginBottom: keyboardInset,
+                  paddingBottom: Math.max(insets.bottom, 20)
+                }
+              ]}
+              onPress={() => {}}
+            >
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => setEditFieldModal(null)} hitSlop={12}>
+                  <Text style={styles.editModalCancel}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>{title}</Text>
+                <TouchableOpacity onPress={confirmEditModal} hitSlop={12}>
+                  <Text style={styles.editModalDone}>{t('common.confirm')}</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                keyboardDismissMode="interactive"
+                contentContainerStyle={styles.editModalScrollContent}
+              >
+                <TextInput
+                  value={modalDraft}
+                  onChangeText={setModalDraft}
+                  placeholder={
+                    isAbout
+                      ? t('profile.editProfileScreen.aboutMe')
+                      : t('profile.editProfileScreen.username')
+                  }
+                  placeholderTextColor={LABEL_COLOR}
+                  style={[styles.editModalInput, isAbout && styles.editModalInputMultiline]}
+                  autoCapitalize={isAbout ? 'sentences' : 'none'}
+                  autoCorrect={isAbout}
+                  multiline={isAbout}
+                  textAlignVertical={isAbout ? 'top' : 'center'}
+                  autoFocus
+                />
+              </ScrollView>
+            </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
+
   const renderToast = () => {
     if (!toast) return null;
 
@@ -490,11 +635,16 @@ export default function EditProfileScreen() {
   };
 
   const isSaveDisabled = saving || loading;
+  const usernameDisplay = displayName.trim() || t('profile.editProfileScreen.username');
+  const aboutDisplay = about.trim() || t('profile.editProfileScreen.aboutMe');
 
-  // Configurer le bouton "Save" dans le header natif
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: 'Edit profile',
+      headerTitle: t('profile.editProfileScreen.title'),
+      headerBackTitleVisible: false,
+      headerBackTitle: '',
+      headerStyle: { backgroundColor: PAGE_BG },
+      headerShadowVisible: false,
       headerRight: () => (
         <TouchableOpacity
           onPress={handleSave}
@@ -503,17 +653,17 @@ export default function EditProfileScreen() {
           style={{ paddingHorizontal: 8 }}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#000000" />
+            <ActivityIndicator size="small" color={VALUE_COLOR} />
           ) : (
             <Text
               style={{
                 fontSize: 16,
-                fontWeight: '600',
-                color: '#C3EA4F',
+                fontFamily: theme.fontFamily.semiBold,
+                color: theme.colors.primary,
                 opacity: isSaveDisabled ? 0.4 : 1
               }}
             >
-              Save
+              {t('common.save')}
             </Text>
           )}
         </TouchableOpacity>
@@ -529,13 +679,14 @@ export default function EditProfileScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Avatar */}
-        <View style={styles.avatarContainer}>
+        {/* Profile photo */}
+        <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>
             {loading ? (
               <View style={styles.avatarSkeleton}>
-                <ActivityIndicator size="small" color="#AAAAAA" />
+                <ActivityIndicator size="small" color={ICON_COLOR} />
               </View>
             ) : avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
@@ -546,250 +697,303 @@ export default function EditProfileScreen() {
             )}
 
             <TouchableOpacity
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               onPress={handlePickAvatar}
               style={styles.cameraButton}
+              disabled={uploadingAvatar}
             >
               {uploadingAvatar ? (
-                <ActivityIndicator size="small" color="#4B5563" />
+                <ActivityIndicator size="small" color={ICON_COLOR} />
               ) : (
-                <Feather name="camera" size={14} color="#4B5563" />
+                <Feather name="camera" size={14} color={ICON_COLOR} />
               )}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Username / display name */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Username</Text>
-          {loading ? (
-            <View style={styles.textSkeleton} />
-          ) : (
-            <TextInput
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Your username"
-              placeholderTextColor="#9CA3AF"
-              style={styles.displayNameInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          )}
-          <View style={styles.sectionSeparator} />
-        </View>
-
-        {/* About me */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>About me</Text>
-          {loading ? (
-            <View style={styles.textSkeleton} />
-          ) : (
-            <TextInput
-              value={about}
-              onChangeText={setAbout}
-              placeholder="Tell others a bit about you"
-              placeholderTextColor="#9CA3AF"
-              multiline
-              textAlignVertical="top"
-              style={styles.aboutInput}
-            />
-          )}
-          <View style={styles.sectionSeparator} />
-        </View>
-
-        {/* Location: GPS par défaut, fallback manuel si permission refusée */}
-        {!gpsPermissionDenied ? (
-          <>
-            {/* My location - toggle visibilité (GPS) */}
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>My location</Text>
-              <Switch
-                value={locationVisible}
-                onValueChange={handleToggleLocationVisible}
-                trackColor={{ false: '#CCCCCC', true: '#C3EA4F' }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#CCCCCC"
-                disabled={updatingLocationVisible || loading || detectingLocation}
-              />
-            </View>
-
-            {locationVisible && gpsCity ? (
-              <View style={styles.locationDetectedRow}>
-                <Text style={styles.locationDetectedText}>
-                  {`📍 ${gpsCity}${gpsCountry ? `, ${gpsCountry}` : ''}`}
+        {/* Fields card */}
+        <View style={styles.fieldsCard}>
+          {/* Row 1 — Username */}
+          <TouchableOpacity
+            style={styles.fieldRow}
+            activeOpacity={0.7}
+            onPress={() => openEditModal('username')}
+            disabled={loading}
+          >
+            <FieldIconCircle name="user" />
+            <View style={styles.fieldTextCol}>
+              <Text style={styles.fieldLabel}>{t('profile.editProfileScreen.username')}</Text>
+              {loading ? (
+                <View style={styles.valueSkeleton} />
+              ) : (
+                <Text style={styles.fieldValue} numberOfLines={1}>
+                  {usernameDisplay}
                 </Text>
+              )}
+            </View>
+            <Feather name="chevron-right" size={16} color={LABEL_COLOR} />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Row 2 — About me */}
+          <TouchableOpacity
+            style={styles.fieldRow}
+            activeOpacity={0.7}
+            onPress={() => openEditModal('about')}
+            disabled={loading}
+          >
+            <FieldIconCircle name="edit-2" />
+            <View style={styles.fieldTextCol}>
+              <Text style={styles.fieldLabel}>{t('profile.editProfileScreen.aboutMe')}</Text>
+              {loading ? (
+                <View style={styles.valueSkeleton} />
+              ) : (
+                <Text style={styles.fieldValue} numberOfLines={2}>
+                  {aboutDisplay}
+                </Text>
+              )}
+            </View>
+            <Feather name="chevron-right" size={16} color={LABEL_COLOR} />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Row 3 — Location */}
+          {gpsPermissionDenied ? (
+            <TouchableOpacity
+              style={styles.fieldRow}
+              activeOpacity={0.7}
+              onPress={() => setLocationModalVisible(true)}
+              disabled={loading}
+            >
+              <FieldIconCircle name="map-pin" filled />
+              <View style={styles.fieldTextCol}>
+                <Text style={styles.fieldValueSingle}>{t('profile.editProfileScreen.myLocation')}</Text>
+                {loading ? (
+                  <View style={[styles.valueSkeleton, { marginTop: 6 }]} />
+                ) : (
+                  <Text style={styles.fieldSubValue} numberOfLines={1}>
+                    {location || t('profile.editProfileScreen.selectLocation')}
+                  </Text>
+                )}
               </View>
-            ) : null}
-          </>
-        ) : (
-          <>
-            {/* Fallback manuel: visible uniquement si permission GPS refusée */}
-            <TouchableOpacity activeOpacity={0.7} onPress={() => setLocationModalVisible(true)}>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>My location</Text>
-                <View style={styles.rowRight}>
-                  {loading ? (
-                    <View style={styles.locationSkeleton} />
-                  ) : (
-                    <Text style={styles.rowValue}>{location || 'Select your location'}</Text>
-                  )}
-                  <Text style={styles.chevron}>{'›'}</Text>
-                </View>
-              </View>
+              <Feather name="chevron-right" size={16} color={LABEL_COLOR} />
             </TouchableOpacity>
-          </>
-        )}
+          ) : (
+            <View style={styles.fieldRow}>
+              <FieldIconCircle name="map-pin" filled />
+              <View style={styles.fieldTextCol}>
+                <Text style={styles.fieldValueSingle}>{t('profile.editProfileScreen.myLocation')}</Text>
+                {locationVisible && gpsCity ? (
+                  <Text style={styles.fieldSubValue} numberOfLines={1}>
+                    {`📍 ${gpsCity}${gpsCountry ? `, ${gpsCountry}` : ''}`}
+                  </Text>
+                ) : null}
+              </View>
+              {detectingLocation ? (
+                <ActivityIndicator size="small" color={ICON_COLOR} />
+              ) : (
+                <Switch
+                  value={locationVisible}
+                  onValueChange={handleToggleLocationVisible}
+                  trackColor={{ false: SWITCH_TRACK_OFF, true: theme.colors.primary }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={SWITCH_TRACK_OFF}
+                  disabled={updatingLocationVisible || loading}
+                  style={styles.locationSwitch}
+                />
+              )}
+            </View>
+          )}
+        </View>
+
+        {!gpsPermissionDenied ? (
+          <Text style={styles.locationHelp}>
+            {t('profile.editProfileScreen.locationHelp')}
+          </Text>
+        ) : null}
+
       </ScrollView>
 
       {renderLocationModal()}
+      {renderEditFieldModal()}
       {renderToast()}
     </SafeAreaView>
   );
 }
 
+const AVATAR_SIZE = 90;
+const CAMERA_SIZE = 28;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF'
+    backgroundColor: PAGE_BG
   },
   scroll: {
     flex: 1
   },
   scrollContent: {
-    paddingBottom: 32
+    paddingBottom: 40
   },
-  avatarContainer: {
-    marginTop: 24,
-    marginBottom: 24,
-    alignItems: 'center',
-    justifyContent: 'center'
+  avatarSection: {
+    marginTop: 32,
+    marginBottom: 32,
+    alignItems: 'center'
   },
   avatarWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3F4F6',
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: AVATAR_FALLBACK_BG,
     alignItems: 'center',
     justifyContent: 'center'
   },
   avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2
   },
   avatarSkeleton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E5E7EB',
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: AVATAR_FALLBACK_BG,
     alignItems: 'center',
     justifyContent: 'center'
   },
   avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E5E7EB',
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: AVATAR_FALLBACK_BG,
     alignItems: 'center',
     justifyContent: 'center'
   },
   avatarInitials: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#111827'
+    fontSize: 30,
+    fontFamily: theme.fontFamily.semiBold,
+    color: VALUE_COLOR
   },
   cameraButton: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    right: 0,
+    bottom: 0,
+    width: CAMERA_SIZE,
+    height: CAMERA_SIZE,
+    borderRadius: CAMERA_SIZE / 2,
     backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4
+      },
+      android: {
+        elevation: 3
+      },
+      default: {}
+    })
+  },
+  fieldsCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: INPUT_BORDER,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6
+      },
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    gap: 12,
+    backgroundColor: '#FFFFFF'
+  },
+  fieldIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: ICON_BG,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  section: {
-    paddingHorizontal: 20
+  fieldTextCol: {
+    flex: 1,
+    minWidth: 0
   },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#000000',
-    marginBottom: 8
+  fieldLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: theme.fontFamily.regular,
+    color: LABEL_COLOR,
+    marginBottom: 2
   },
-  displayNameInput: {
-    fontSize: 16,
-    color: '#000000',
-    paddingVertical: 8
+  fieldValue: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: theme.fontFamily.regular,
+    color: VALUE_COLOR
   },
-  aboutInput: {
-    minHeight: 72,
-    fontSize: 16,
-    color: '#000000',
-    paddingVertical: 8
+  fieldValueSingle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: theme.fontFamily.regular,
+    color: VALUE_COLOR
   },
-  sectionSeparator: {
+  fieldSubValue: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: theme.fontFamily.regular,
+    color: LABEL_COLOR
+  },
+  rowDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E5E5'
+    backgroundColor: ROW_DIVIDER,
+    marginLeft: 16 + 36 + 12
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5E5',
-    backgroundColor: '#FFFFFF'
+  locationSwitch: {
+    transform: Platform.OS === 'ios' ? [{ scaleX: 0.92 }, { scaleY: 0.92 }] : undefined
   },
-  rowLabel: {
-    fontSize: 16,
-    color: '#000000'
+  locationHelp: {
+    marginTop: 8,
+    marginHorizontal: 16,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: theme.fontFamily.regular,
+    color: LABEL_COLOR
   },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  rowValue: {
-    fontSize: 16,
-    color: '#AAAAAA'
-  },
-  chevron: {
-    marginLeft: 6,
-    fontSize: 18,
-    color: '#AAAAAA'
-  },
-  textSkeleton: {
-    height: 72,
+  valueSkeleton: {
+    height: 16,
+    width: '70%',
     borderRadius: 4,
-    backgroundColor: '#F3F4F6',
-    marginBottom: 4
-  },
-  locationSkeleton: {
-    width: 120,
-    height: 14,
-    borderRadius: 4,
-    backgroundColor: '#F3F4F6'
-  },
-  locationDetectedRow: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5E5',
-    backgroundColor: '#FFFFFF'
-  },
-  locationDetectedText: {
-    fontSize: 14,
-    color: '#111827'
+    backgroundColor: ICON_BG
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end'
+  },
+  editModalScrollContent: {
+    flexGrow: 1
   },
   modalContent: {
     maxHeight: '70%',
@@ -800,25 +1004,60 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 24
   },
+  editModalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 28
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12
+    marginBottom: 16
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000000'
+    fontFamily: theme.fontFamily.semiBold,
+    color: VALUE_COLOR
+  },
+  editModalCancel: {
+    fontSize: 16,
+    fontFamily: theme.fontFamily.regular,
+    color: LABEL_COLOR
+  },
+  editModalDone: {
+    fontSize: 16,
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.primary
+  },
+  editModalInput: {
+    fontSize: 16,
+    fontFamily: theme.fontFamily.regular,
+    color: VALUE_COLOR,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48
+  },
+  editModalInputMultiline: {
+    minHeight: 120,
+    paddingTop: 12
   },
   cantonRow: {
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5E5'
+    borderBottomColor: ROW_DIVIDER
   },
   cantonText: {
     fontSize: 16,
-    color: '#111827'
+    fontFamily: theme.fontFamily.regular,
+    color: VALUE_COLOR
   },
   toastContainer: {
     position: 'absolute',
@@ -834,13 +1073,13 @@ const styles = StyleSheet.create({
   toastText: {
     fontSize: 14,
     color: '#FFFFFF',
-    textAlign: 'center'
+    textAlign: 'center',
+    fontFamily: theme.fontFamily.regular
   },
   toastError: {
-    backgroundColor: '#EF4444'
+    backgroundColor: theme.colors.danger
   },
   toastSuccess: {
     backgroundColor: '#16A34A'
   }
 });
-

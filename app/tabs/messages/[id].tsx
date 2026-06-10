@@ -13,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../../lib/supabase';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
@@ -23,6 +24,8 @@ import { useAuthStore } from '../../../stores/authStore';
 import type { ThreadListItem } from '../../../lib/api_queries';
 import { SUPABASE_URL } from '../../../lib/env';
 import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
+import { refreshUnreadThreadsBadge } from '../../../lib/unreadMessagesBadge';
+import { computeBuyerFinalPriceChf } from '../../../lib/formatBuyerPrice';
 
 type MessageRow = {
   id: string;
@@ -49,10 +52,18 @@ function formatTime(dateString: string): string {
 }
 
 export default function ThreadScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, from_listing_id, from_notifications, from_inbox, from_notifications_origin } = useLocalSearchParams<{
+    id?: string;
+    from_listing_id?: string;
+    from_notifications?: string;
+    from_inbox?: string;
+    from_notifications_origin?: string;
+  }>();
   const threadId = typeof id === 'string' ? id : '';
+  const fromListingId = typeof from_listing_id === 'string' ? from_listing_id : '';
 
   const { user } = useAuthStore();
 
@@ -79,7 +90,7 @@ export default function ThreadScreen() {
         throw qError;
       }
 
-      setThreadMeta(data as ThreadListItem);
+      setThreadMeta(data ? { ...(data as ThreadListItem) } : null);
     } catch {
       setThreadMeta(null);
     }
@@ -98,9 +109,9 @@ export default function ThreadScreen() {
         throw msgError;
       }
 
-      setMessages((data || []) as MessageRow[]);
+      setMessages(((data || []) as MessageRow[]).map((row) => ({ ...row })));
     } catch {
-      setError('Unable to load this conversation.');
+      setError(t('messages.loadError'));
       setMessages([]);
     } finally {
       setLoading(false);
@@ -134,7 +145,7 @@ export default function ThreadScreen() {
   useEffect(() => {
     if (!threadId) {
       setLoading(false);
-      setError('Conversation not found.');
+      setError(t('messages.notFound'));
       return;
     }
     void loadThreadMeta();
@@ -187,20 +198,25 @@ export default function ThreadScreen() {
 
     void (async () => {
       const now = new Date().toISOString();
-      await supabase
+      const { error: markReadError } = await supabase
         .from('messages')
         .update({ read_at: now })
         .eq('thread_id', threadId)
-        .eq('is_system', false)
+        .or('is_system.is.false,is_system.is.null')
         .neq('sender_id', user.id)
         .is('read_at', null);
+
+      if (!markReadError) {
+        // Keep tab badge in sync immediately after opening a thread.
+        void refreshUnreadThreadsBadge(user.id);
+      }
     })();
   }, [threadId, user, messages.length]);
 
   const otherName = useMemo(() => {
-    if (!threadMeta) return 'Conversation';
-    return threadMeta.other_participant_name || 'Conversation';
-  }, [threadMeta]);
+    if (!threadMeta) return t('messages.conversation');
+    return threadMeta.other_participant_name || t('messages.conversation');
+  }, [threadMeta, t]);
 
   const listingTitle = useMemo(() => {
     if (!threadMeta) return '';
@@ -416,7 +432,7 @@ export default function ThreadScreen() {
               .insert({
                 thread_id: threadId,
                 sender_id: user.id,
-                body: "✅ Offre acceptée ! L'acheteur peut maintenant finaliser son achat.",
+                body: t('messages.offerAcceptedSystem'),
                 type: 'system',
                 is_system: true
               })
@@ -437,8 +453,9 @@ export default function ThreadScreen() {
             if (buyerId && amount != null) {
               void sendPushNotificationWithUserJwt({
                 user_id: buyerId,
-                title: "✅ Offre acceptée, let's gooo !",
-                body: `Le vendeur a accepté ton offre de ${amount.toFixed(2)} CHF. Finalise ton achat !`,
+                titleKey: 'messages.offerAcceptedTitle',
+                bodyKey: 'messages.offerAcceptedBody',
+                bodyParams: { amount: amount.toFixed(2) },
                 notification_type: 'new_message',
                 data: {
                   thread_id: threadId,
@@ -453,7 +470,7 @@ export default function ThreadScreen() {
               .insert({
                 thread_id: threadId,
                 sender_id: user.id,
-                body: 'Offer declined.',
+                body: t('messages.offerDeclinedSystem'),
                 type: 'text'
               })
               .select('*')
@@ -473,9 +490,8 @@ export default function ThreadScreen() {
             if (buyerId) {
               void sendPushNotificationWithUserJwt({
                 user_id: buyerId,
-                title: '❌ Offre refusée… next !',
-                body:
-                  "Le vendeur n'a pas accepté ton offre. Tu peux faire une nouvelle offre ou acheter au prix normal.",
+                titleKey: 'messages.offerDeclinedTitle',
+                bodyKey: 'messages.offerDeclinedBody',
                 notification_type: 'new_message',
                 data: {
                   thread_id: threadId,
@@ -511,7 +527,7 @@ export default function ThreadScreen() {
           <View style={styles.offerCard}>
             <View style={styles.offerRow}>
               <Text variant="body" style={styles.offerAmount}>
-                {amount != null ? `${amount.toFixed(2)} CHF` : 'Offer'}
+                {amount != null ? `${amount.toFixed(2)} CHF` : t('messages.offer')}
               </Text>
               {originalPrice != null && (
                 <Text variant="captionSm" style={styles.offerOriginalPrice}>
@@ -523,15 +539,19 @@ export default function ThreadScreen() {
               variant="captionSm"
               style={[styles.offerStatus, { color: statusColor }]}
             >
-              {status}
+              {status === 'Pending'
+                ? t('messages.pending')
+                : status === 'Accepted'
+                  ? t('messages.accepted')
+                  : t('messages.declined')}
             </Text>
             {status === 'Accepted' && hasAnyOrder && (
               <Text variant="captionSm" color="textSecondary" style={styles.offerOrderNote}>
                 {orderStatusNorm === 'cancelled'
-                  ? 'Order cancelled'
+                  ? t('messages.orderCancelled')
                   : orderPaymentNorm === 'transferred'
-                    ? 'Purchased'
-                    : 'Order in progress'}
+                    ? t('messages.purchased')
+                    : t('messages.orderInProgress')}
               </Text>
             )}
             {canActOnOffer && (
@@ -543,7 +563,7 @@ export default function ThreadScreen() {
                   onPress={() => void updateOfferStatus('accepted')}
                 >
                   <Text variant="captionSm" style={styles.offerActionText}>
-                    Accept
+                    {t('messages.accept')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -553,7 +573,7 @@ export default function ThreadScreen() {
                   onPress={() => void updateOfferStatus('declined')}
                 >
                   <Text variant="captionSm" style={styles.offerActionText}>
-                    Decline
+                    {t('messages.decline')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -565,10 +585,10 @@ export default function ThreadScreen() {
                   style={styles.offerPayLimeButton}
                   onPress={handleBuyAcceptedOffer}
                   accessibilityRole="button"
-                  accessibilityLabel={`Payer ${amount!.toFixed(2)} CHF maintenant`}
+                  accessibilityLabel={t('messages.payNowA11y', { amount: amount!.toFixed(2) })}
                 >
                   <Text variant="body" style={styles.offerPayLimeButtonText}>
-                    {`💳 Payer ${amount!.toFixed(2)} CHF maintenant`}
+                    {t('messages.payNow', { amount: amount!.toFixed(2) })}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -606,13 +626,43 @@ export default function ThreadScreen() {
     );
   };
 
+  const goBackToContext = useCallback(() => {
+    if (from_notifications === '1') {
+      router.replace({
+        pathname: '/tabs/profile/notifications',
+        params:
+          from_notifications_origin === 'feed' || from_notifications_origin === 'profile'
+            ? { from: from_notifications_origin }
+            : undefined
+      });
+      return;
+    }
+    if (from_inbox === '1') {
+      router.replace('/tabs/messages');
+      return;
+    }
+    if (fromListingId) {
+      // Retour contextuel sans POP_TO_TOP (dismissAll provoque un warning selon le navigator actif).
+      router.replace({
+        pathname: `/tabs/feed/${fromListingId}` as any,
+        params: { from_offer_chat: '1' }
+      });
+      return;
+    }
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/tabs/messages');
+  }, [fromListingId, from_inbox, from_notifications, from_notifications_origin, router]);
+
   const content = useMemo(() => {
     if (loading) {
       return (
         <View style={styles.center}>
           <ActivityIndicator color={theme.colors.primary} />
           <Text variant="captionSm" color="textSecondary" style={styles.loadingText}>
-            Chargement de la conversation...
+            {t('messages.loadingConversation')}
           </Text>
         </View>
       );
@@ -625,9 +675,9 @@ export default function ThreadScreen() {
             {error}
           </Text>
           <Button
-            title="Back"
+            title={t('common.back')}
             variant="secondary"
-            onPress={() => router.replace('/tabs/messages')}
+            onPress={goBackToContext}
             style={styles.errorButton}
           />
         </View>
@@ -657,11 +707,7 @@ export default function ThreadScreen() {
   ]);
 
   const handleBack = () => {
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/tabs/messages');
-    }
+    goBackToContext();
   };
 
   return (
@@ -713,7 +759,9 @@ export default function ThreadScreen() {
               )}
               {listingPrice != null && (
                 <Text variant="captionSm" style={styles.listingHeaderProtection}>
-                  {(listingPrice * (1 + 0.08)).toFixed(0)}CHF includes Buyer Protection 🛡️
+                  {t('messages.includesBuyerProtection', {
+                    amount: computeBuyerFinalPriceChf(listingPrice).toFixed(0)
+                  })}
                 </Text>
               )}
             </View>
@@ -729,10 +777,12 @@ export default function ThreadScreen() {
               style={styles.offerPayLimeButton}
               onPress={handlePayAcceptedOfferFromBar}
               accessibilityRole="button"
-              accessibilityLabel={`Payer ${acceptedOfferPayAction.amount.toFixed(2)} CHF`}
+              accessibilityLabel={t('messages.payNowA11y', {
+                amount: acceptedOfferPayAction.amount.toFixed(2)
+              })}
             >
               <Text variant="body" style={styles.offerPayLimeButtonText}>
-                {`💳 Payer ${acceptedOfferPayAction.amount.toFixed(2)} CHF`}
+                {t('messages.payNow', { amount: acceptedOfferPayAction.amount.toFixed(2) })}
               </Text>
             </TouchableOpacity>
           </View>
@@ -747,7 +797,7 @@ export default function ThreadScreen() {
           <View style={styles.inputBar}>
             <TextInput
               style={styles.textInput}
-              placeholder="Write a message here..."
+              placeholder={t('messages.placeholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={input}
               onChangeText={setInput}

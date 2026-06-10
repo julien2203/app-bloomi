@@ -8,6 +8,8 @@ import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Button } from '../../../components/ui/Button';
 import { theme } from '../../../lib/theme';
 import { getRootCategoriesByGender } from '../../../lib/api/filters';
+import { useTranslation } from 'react-i18next';
+import { translateCategoryLabel } from '../../../lib/categoryI18n';
 
 type GenderKey = 'Woman' | 'Men' | 'Kids' | 'Baby';
 
@@ -26,9 +28,10 @@ const UI_TO_DB_GENDER: Record<GenderKey, string> = {
 };
 
 export default function SellCategoryGenderScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ gender?: string }>();
+  const params = useLocalSearchParams<{ gender?: string; return_to?: string; edit_id?: string }>();
   const genderParam = params.gender as GenderKey | undefined;
   const gender: GenderKey = genderParam && UI_TO_DB_GENDER[genderParam as GenderKey]
     ? (genderParam as GenderKey)
@@ -38,6 +41,14 @@ export default function SellCategoryGenderScreen() {
   const [loading, setLoading] = useState(false);
 
   const dbGender = UI_TO_DB_GENDER[gender];
+  const genderTitleKey =
+    gender === 'Woman'
+      ? 'filters.woman'
+      : gender === 'Men'
+        ? 'filters.men'
+        : gender === 'Kids'
+          ? 'filters.kids'
+          : 'filters.baby';
 
   useEffect(() => {
     const load = async () => {
@@ -68,7 +79,10 @@ export default function SellCategoryGenderScreen() {
       params: {
         parentId: String(category.id),
         title: category.name,
-        gender: dbGender
+        categorySlug: category.slug,
+        gender: dbGender,
+        ...(typeof params.return_to === 'string' ? { return_to: params.return_to } : {}),
+        ...(typeof params.edit_id === 'string' ? { edit_id: params.edit_id } : {})
       }
     });
   };
@@ -83,7 +97,7 @@ export default function SellCategoryGenderScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            {gender}
+            {t(genderTitleKey)}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -103,7 +117,7 @@ export default function SellCategoryGenderScreen() {
                   onPress={() => openDetail(cat)}
                 >
                   <Text variant="body" style={styles.rowLabel}>
-                    {cat.name}
+                    {translateCategoryLabel({ name: cat.name, slug: cat.slug }, t)}
                   </Text>
                   <Text style={styles.chevron}>{'›'}</Text>
                 </TouchableOpacity>
@@ -119,7 +133,7 @@ export default function SellCategoryGenderScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

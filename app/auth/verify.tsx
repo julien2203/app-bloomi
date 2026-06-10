@@ -14,8 +14,10 @@ import { supabase } from '../../lib/supabase';
 import { DEV_OTP_MODE, DEV_TEST_CODE } from '../../lib/env';
 import { isDevTestCode, verifyDevTestCode } from '../../lib/auth';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
+import { useTranslation } from 'react-i18next';
 
 export default function VerifyScreen() {
+  const { t } = useTranslation();
   const { phone } = useLocalSearchParams<{ phone?: string }>();
   const router = useRouter();
 
@@ -25,7 +27,7 @@ export default function VerifyScreen() {
 
   const handleVerify = async () => {
     if (!phone || typeof phone !== 'string') {
-      setError('Phone number not found. Please start sign-in again.');
+      setError(t('auth.verify.phoneNotFound'));
       return;
     }
 
@@ -37,7 +39,7 @@ export default function VerifyScreen() {
       if (isDevTestCode(code)) {
         const result = await verifyDevTestCode(phone);
         if (!result.success) {
-          setError(result.error || 'Test authentication error');
+          setError(result.error || t('auth.verify.testAuthError'));
           setIsSubmitting(false);
           return;
         }
@@ -60,14 +62,14 @@ export default function VerifyScreen() {
       }
 
       if (!data.session) {
-        setError('Unable to complete sign-in. Please try again.');
+        setError(t('auth.verify.signInFailed'));
         setIsSubmitting(false);
         return;
       }
 
       router.replace('/tabs/feed');
     } catch (e) {
-      setError('Something went wrong verifying the code.');
+      setError(t('auth.verify.verifyError'));
       setIsSubmitting(false);
     }
   };
@@ -91,11 +93,12 @@ export default function VerifyScreen() {
             <HeaderBackButton onPress={() => router.back()} />
           </View>
           <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 8 }}>
-            Enter the SMS code
+            {t('auth.verify.title')}
           </Text>
           <Text style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>
-            We sent a verification code to{' '}
-            <Text style={{ fontWeight: '600' }}>{phone ?? 'your number'}</Text>.
+            {t('auth.verify.subtitle', {
+              phone: phone ?? t('auth.verify.yourNumber')
+            })}
           </Text>
 
           {DEV_OTP_MODE && (
@@ -130,7 +133,7 @@ export default function VerifyScreen() {
                   marginBottom: 4
                 }}
               >
-                6-digit code
+                {t('auth.verify.code')}
               </Text>
               <TextInput
                 value={code}
@@ -186,7 +189,7 @@ export default function VerifyScreen() {
                 fontSize: 15
               }}
             >
-              Verify
+              {t('auth.verify.verify')}
             </Text>
           </TouchableOpacity>
 
@@ -197,7 +200,7 @@ export default function VerifyScreen() {
                 color: '#9ca3af'
               }}
             >
-              We send a verification SMS. Make sure this number can receive text messages.
+              {t('auth.verify.smsFootnote')}
             </Text>
           </View>
         </View>

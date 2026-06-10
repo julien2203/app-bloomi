@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { ModalCard } from './ui/ModalCard';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../lib/theme';
@@ -16,6 +17,7 @@ interface CheckEmailModalProps {
 }
 
 export function CheckEmailModal({ visible, onClose, email }: CheckEmailModalProps) {
+  const { t } = useTranslation();
   const icon = (
     <View style={styles.iconCircle}>
       <Ionicons name="mail" size={32} color={theme.colors.appleBlack} />
@@ -27,13 +29,13 @@ export function CheckEmailModal({ visible, onClose, email }: CheckEmailModalProp
       visible={visible}
       onClose={onClose}
       icon={icon}
-      title="Check your email"
+      title={t('auth.checkEmail.title')}
       message={
         email
-          ? `We've sent a verification link to ${email}. Please check your inbox and click the link to verify your account.`
-          : "We've sent a verification link to your email address. Please check your inbox and click the link to verify your account."
+          ? t('auth.checkEmail.messageWithEmail', { email })
+          : t('auth.checkEmail.messageGeneric')
       }
-      buttonText="Got it"
+      buttonText={t('auth.checkEmail.gotIt')}
       onButtonPress={onClose}
     />
   );

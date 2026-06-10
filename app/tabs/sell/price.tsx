@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   TextInput,
   KeyboardAvoidingView,
@@ -14,8 +13,10 @@ import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { useSellFormStore } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { useTranslation } from 'react-i18next';
 
 export default function SellPriceScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
@@ -40,12 +41,12 @@ export default function SellPriceScreen() {
         <View style={styles.inner}>
           <View style={styles.header}>
             <HeaderBackButton onPress={() => router.back()} />
-            <Text style={styles.headerTitle}>Price</Text>
+            <Text style={styles.headerTitle}>{t('sell.price')}</Text>
             <View style={styles.headerRightPlaceholder} />
           </View>
 
           <View style={styles.body}>
-            <Text style={styles.label}>CHF</Text>
+            <Text style={styles.label}>{t('common.chf')}</Text>
             <TextInput
               style={styles.input}
               placeholder="0"
@@ -60,7 +61,7 @@ export default function SellPriceScreen() {
 
           <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
             <Button
-              title="Confirm"
+              title={t('common.confirm')}
               onPress={handleConfirm}
               variant="primary"
               textStyle={{ fontWeight: '700' }}

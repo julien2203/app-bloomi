@@ -19,14 +19,16 @@ import {
   signInWithOAuthProvider,
   type OAuthProvider
 } from '../../lib/socialAuth';
+import { useTranslation } from 'react-i18next';
 
 export default function OnboardingStep2() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [oauthLoading, setOauthLoading] = useState(false);
 
   const handleSocialLogin = async (provider: 'apple' | 'google' | 'facebook') => {
     if (provider === 'facebook') {
-      Alert.alert('Facebook', 'Facebook sign-in is coming soon.');
+      Alert.alert(t('onboarding.social.facebook'), t('onboarding.social.facebookSoon'));
       return;
     }
 
@@ -38,7 +40,7 @@ export default function OnboardingStep2() {
 
       if (error) {
         if (!isOAuthCancelled(error)) {
-          Alert.alert('Sign in', error.message);
+          Alert.alert(t('auth.login.submit'), error.message);
         }
         return;
       }
@@ -47,14 +49,14 @@ export default function OnboardingStep2() {
         data: { session }
       } = await supabase.auth.getSession();
       if (!session) {
-        Alert.alert('Sign in', 'Unable to complete sign-in. Please try again.');
+        Alert.alert(t('auth.login.submit'), t('onboarding.social.unableComplete'));
         return;
       }
 
       await ensureProfileAfterOAuthLogin(session);
       router.replace('/tabs/feed');
     } catch {
-      Alert.alert('Sign in', 'Something went wrong during social sign-in.');
+      Alert.alert(t('auth.login.submit'), t('onboarding.social.unableSocial'));
     } finally {
       setOauthLoading(false);
     }
@@ -82,7 +84,7 @@ export default function OnboardingStep2() {
           {/* Boutons en bas */}
           <View style={styles.footer}>
             <Button
-              title="Continue with Apple"
+              title={t('onboarding.social.apple')}
               onPress={() => void handleSocialLogin('apple')}
               variant="apple-black"
               style={styles.socialButton}
@@ -90,7 +92,7 @@ export default function OnboardingStep2() {
               disabled={oauthLoading}
             />
             <Button
-              title="Continue with Google"
+              title={t('onboarding.social.google')}
               onPress={() => void handleSocialLogin('google')}
               variant="google-white"
               style={styles.socialButton}
@@ -98,7 +100,7 @@ export default function OnboardingStep2() {
               disabled={oauthLoading}
             />
             <Button
-              title="Continue with Facebook"
+              title={t('onboarding.social.facebook')}
               onPress={() => void handleSocialLogin('facebook')}
               variant="facebook-blue"
               style={styles.socialButton}
@@ -108,7 +110,7 @@ export default function OnboardingStep2() {
             <DividerOr variant="light" />
 
             <Button
-              title="Sign up with email"
+              title={t('onboarding.step2.signUpEmail')}
               onPress={() => router.push('/auth/sign-up')}
               variant="primary-green"
               style={styles.socialButton}
@@ -119,12 +121,12 @@ export default function OnboardingStep2() {
 
             <View style={styles.loginLink}>
               <Text style={styles.loginLinkText}>
-                Do you already have an account?{' '}
+                {`${t('onboarding.step1.alreadyAccount')} `}
                 <Text
                   style={styles.loginLinkButton}
                   onPress={() => router.push('/auth/login')}
                 >
-                  Log in.
+                  {t('auth.login.submit')}
                 </Text>
               </Text>
             </View>
@@ -132,10 +134,11 @@ export default function OnboardingStep2() {
 
           <View style={styles.legalContainer}>
             <Text style={styles.legalText}>
-              By continuing, you agree to Thrivi&apos;s{' '}
-              <Text style={styles.legalLink}>Terms of Service</Text>
-              {' '}and acknowledge you&apos;ve read our{' '}
-              <Text style={styles.legalLink}>Privacy Policy</Text>
+              {`${t('onboarding.legal.prefix')} `}
+              <Text style={styles.legalLink}>{t('common.termsOfService')}</Text>
+              {' '}
+              {`${t('onboarding.legal.andRead')} `}
+              <Text style={styles.legalLink}>{t('common.privacyPolicy')}</Text>
             </Text>
           </View>
         </SafeAreaView>

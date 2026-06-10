@@ -1,0 +1,105 @@
+{
+  "app/filters/brand.tsx": [
+    ") : hasNoResults ? ("
+  ],
+  "app/filters/color.tsx": [
+    ") : hasNoResults ? ("
+  ],
+  "app/tabs/feed/listing/order-confirmation.tsx": [
+    ") : error ? ("
+  ],
+  "app/tabs/feed/make-offer.tsx": [
+    "CHF"
+  ],
+  "app/tabs/feed/[id].tsx": [
+    ") : user?.id ? ("
+  ],
+  "app/tabs/messages/[id].tsx": [
+    ", insertError); } else if (data) { setMessages((prev) => [...prev, data as MessageRow].sort((a, b) => a.created_at.localeCompare(b.created_at) ) ); // Mettre à jour last_message_at sur le thread await supabase .from("
+  ],
+  "app/tabs/profile/edit-listing/brand.tsx": [
+    ") : hasNoResults ? ("
+  ],
+  "app/tabs/profile/edit-profile.tsx": [
+    ") : avatarUrl ? ("
+  ],
+  "app/tabs/profile/help.tsx": [
+    "ACCOUNT",
+    "BUY",
+    "MISC",
+    "SELL"
+  ],
+  "app/tabs/profile/personalization.tsx": [
+    ") : isSelected ? ("
+  ],
+  "app/tabs/sell/brand.tsx": [
+    ") : hasNoResults ? ("
+  ],
+  "app/tabs/sell/index.tsx": [
+    "12.99CHF",
+    "5.99CHF"
+  ],
+  "app/_layout.tsx": [
+    "Messages"
+  ],
+  "components/listing/OwnerListingBottomSheet.tsx": [
+    ") : isDraft ? (",
+    "void | Promise"
+  ],
+  "components/navigation/FloatingTabBar.tsx": [
+    ") : tab.key === 'search' ? (",
+    ") : tab.key === 'sell' ? ("
+  ],
+  "components/ProductCard.tsx": [
+    "void; style?: StyleProp"
+  ],
+  "components/results/UniversalResultsScreen.tsx": [
+    "([7]); for (let i = 17; i",
+    ") : item === 'Filter' ? (",
+    ") : item === 'Nearby' ? ("
+  ],
+  "screens/CGUScreen.tsx": [
+    "• a secure password.",
+    "• ANY FINANCIAL LOSS OR DATA LOSS RELATED TO USE OF THE PLATFORM.",
+    "• DAMAGE CAUSED BY A PURCHASED ITEM,",
+    "• DELIVERY DELAYS OR DELIVERY ISSUES,",
+    "• DISPUTES BETWEEN USERS,",
+    "• Footwear,",
+    "• INACCURATE DESCRIPTION OF AN ITEM BY A SELLER,",
+    "• Website: www.bloomi.ch",
+    "• your date of birth,",
+    "© 2026 Bloomi Sàrl — All rights reserved",
+    "1. Who is Bloomi?",
+    "10. Personal data",
+    "11. Your account and closure",
+    "12. Changes to the Terms",
+    "13. Governing law",
+    "13.1 Swiss law applies",
+    "14. Contact us",
+    "2. Who may use Bloomi?",
+    "2.1 Eligibility",
+    "2.4 What we require before your first sale",
+    "3. What may be sold",
+    "3.1 Permitted items",
+    "3.2 Prohibited items",
+    "4. How does a sale work?",
+    "4.2 Rules by seller type",
+    "5. Returns",
+    "6. Delivery",
+    "6.1 Available delivery methods",
+    "7. Fees and commissions",
+    "8. What Bloomi cannot guarantee",
+    "8.3 Force majeure",
+    "9. Your content and our rights",
+    "AS A SELLER, YOU ARE RESPONSIBLE FOR PACKAGING, ADDRESSING, AND DEPOSITING THE PARCEL WITHIN THE DEADLINES. BLOOMI IS NOT LIABLE FOR ISSUES ARISING FROM A POORLY PACKAGED PARCEL, INCORRECT ADDRESSING, OR LATE DEPOSIT.",
+    "BLOOMI DOES NOT MEDIATE BETWEEN PRIVATE INDIVIDUALS. AS A TECHNICAL INTERMEDIARY, WE CANNOT VERIFY THE AUTHENTICITY OF CLAIMS. THAT IS PRECISELY WHY WE HAVE PUT IN PLACE A CLEAR, SYSTEMATIC RIGHT OF RETURN: IF YOU ARE NOT SATISFIED, YOU RETURN THE ITEM AND YOU ARE REFUNDED.",
+    "BLOOMI IS NOT INVOLVED IN THIS TYPE OF ARRANGEMENT AND CANNOT BE HELD LIABLE FOR ANYTHING THAT OCCURS IN THAT CONTEXT.",
+    "BY PUBLISHING PHOTOS OR DESCRIPTIONS ON BLOOMI, YOU CONFIRM THAT YOU ARE THE AUTHOR OR THAT YOU HOLD THE NECESSARY RIGHTS. YOU GRANT BLOOMI A FREE, NON-EXCLUSIVE LICENCE TO DISPLAY, HOST, AND USE THAT CONTENT FOR THE OPERATION AND PROMOTION OF THE PLATFORM.",
+    "Effective as of April 13, 2026",
+    "IF WE DETECT FRAUDULENT CONDUCT, A BREACH OF THESE TERMS, ABUSE OF THE PLATFORM, OR ANY ACTIVITY CONTRARY TO APPLICABLE LAW, WE MAY RESTRICT OR CLOSE AN ACCOUNT, WITH OR WITHOUT PRIOR NOTICE.",
+    "IN THE EVENT OF A DISPUTE, WE ALWAYS PREFER TO TALK IT THROUGH. WRITE TO US AT CONTACT@BLOOMI.CH AND WE WILL DO OUR BEST TO FIND AN AMICABLE SOLUTION. IF NO AGREEMENT IS REACHED WITHIN A REASONABLE PERIOD, THE COURTS OF THE CANTON OF VAUD SHALL HAVE JURISDICTION, SUBJECT TO MANDATORY PROVISIONS IN FAVOUR OF CONSUMERS.",
+    "Terms of Use",
+    "TO THE EXTENT PERMITTED BY MANDATORY LAW, BLOOMI CANNOT BE HELD LIABLE FOR:",
+    "WE MAY SUSPEND OR CLOSE AN ACCOUNT IN THE EVENT OF FRAUD, BREACH OF THESE TERMS, ABUSE OF THE PLATFORM, OR NON-COMPLIANCE WITH APPLICABLE LAW."
+  ]
+}

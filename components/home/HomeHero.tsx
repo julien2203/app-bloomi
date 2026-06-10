@@ -1,47 +1,52 @@
-import React from 'react';
-import { ImageBackground, StyleSheet, View, TouchableOpacity } from 'react-native';
+import React, { useCallback } from 'react';
+import { ImageBackground, StyleSheet, View, TouchableOpacity, Text as RNText } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../../lib/theme';
 import { images } from '../../lib/assets';
-import { useRouter } from 'expo-router';
-import { Text } from '../ui/Text';
+import { useRouter, type Href } from 'expo-router';
 import { HIT_SLOP_EXTRA } from '../../lib/touchTargets';
+import { normalizeLanguage } from '../../lib/i18n';
+import type { HomeHeroContent } from '../../lib/api/homeHero';
+import { getDefaultHomeHero } from '../../lib/api/homeHero';
 
-interface HomeHeroProps {
-  backgroundUri: string | null;
+export type HomeHeroProps = {
+  config?: HomeHeroContent;
   unreadNotificationsCount?: number;
-}
+};
 
-export function HomeHero({ backgroundUri, unreadNotificationsCount = 0 }: HomeHeroProps) {
+export function HomeHero({ config, unreadNotificationsCount: _unread = 0 }: HomeHeroProps) {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
+  const fallbackHero = getDefaultHomeHero(normalizeLanguage(i18n.language));
+  const hero = config ?? fallbackHero;
 
-  const handleSellPress = () => {
-    router.push('/tabs/sell');
-  };
+  const handleCtaPress = useCallback(() => {
+    const route = hero.ctaRoute?.trim() || fallbackHero.ctaRoute;
+    router.push(route as Href);
+  }, [fallbackHero.ctaRoute, hero.ctaRoute, router]);
 
   return (
     <View style={styles.container}>
       <ImageBackground
-        source={
-          backgroundUri
-            ? { uri: backgroundUri }
-            : images.hero
-        }
+        source={hero.imageUrl ? { uri: hero.imageUrl } : images.hero}
         style={styles.image}
         imageStyle={styles.imageInner}
         resizeMode="cover"
       >
         <View style={styles.overlay} pointerEvents="none" />
         <View style={styles.content}>
-          <View style={styles.leftMiddleCtaContainer}>
+          <View style={styles.topLeftBlock}>
+            <View style={styles.headlineBlock}>
+              <RNText style={styles.headlineLine}>{hero.headlineLine1}</RNText>
+              <RNText style={styles.headlineLine}>{hero.headlineLine2}</RNText>
+            </View>
             <TouchableOpacity
-              onPress={handleSellPress}
+              onPress={handleCtaPress}
               activeOpacity={0.85}
               style={styles.ctaButton}
               hitSlop={HIT_SLOP_EXTRA}
             >
-              <Text variant="button" style={styles.ctaText}>
-                Sell now
-              </Text>
+              <RNText style={styles.ctaText}>{t('feed.hero.cta')}</RNText>
             </TouchableOpacity>
           </View>
         </View>
@@ -49,6 +54,8 @@ export function HomeHero({ backgroundUri, unreadNotificationsCount = 0 }: HomeHe
     </View>
   );
 }
+
+const HERO_HEIGHT = 157;
 
 const styles = StyleSheet.create({
   container: {
@@ -58,7 +65,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 220
+    height: HERO_HEIGHT
   },
   imageInner: {
     borderRadius: 12,
@@ -75,26 +82,41 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'flex-start',
-    paddingHorizontal: 16,
-    paddingTop: 128,
-    paddingBottom: 16
-  },
-  leftMiddleCtaContainer: {
     alignItems: 'flex-start',
-    marginTop: 0
+    paddingTop: 37,
+    paddingLeft: 18,
+    paddingRight: 22,
+    paddingBottom: 11
+  },
+  topLeftBlock: {
+    alignItems: 'flex-start',
+    maxWidth: '85%'
+  },
+  headlineBlock: {
+    marginBottom: 8
+  },
+  headlineLine: {
+    fontFamily: theme.fontFamily.semiBold,
+    fontSize: 20,
+    lineHeight: 25,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4
   },
   ctaButton: {
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#C3EA4F',
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F8F6F6',
     borderWidth: 0,
-    marginLeft: 6,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center'
   },
   ctaText: {
-    color: theme.colors.appleBlack
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: theme.fontFamily.semiBold,
+    color: '#171918'
   }
 });
-

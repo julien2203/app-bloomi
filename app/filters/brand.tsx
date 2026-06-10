@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
@@ -21,9 +22,10 @@ import {
   getBrands,
   getBrandNameCountsInCategory,
   getCategoryFilterContext,
-  genderDisplayLabelFr
+  genderDisplayLabel
 } from '../../lib/api/filters';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { dedupeBrandsByName } from '../../lib/edit-listing/dedupeBrands';
 
 type BrandRow = {
   id: number;
@@ -38,6 +40,7 @@ type BrandSection = {
 };
 
 export default function BrandFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
@@ -54,10 +57,10 @@ export default function BrandFilterScreen() {
 
   const genderParam = typeof params.gender === 'string' ? params.gender : undefined;
   const typeParam = typeof params.type === 'string' ? params.type : undefined;
-  const headerTitle = typeof params.title === 'string' ? params.title : 'Brand';
+  const headerTitle = typeof params.title === 'string' ? params.title : t('filters.searchBrands');
 
   const [brandSections, setBrandSections] = useState<BrandSection[]>([]);
-  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>(filters.brandIds ?? []);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([...(filters.brandIds ?? [])]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,19 +86,20 @@ export default function BrandFilterScreen() {
       setLoading(true);
       setError(null);
 
-      const categoryId = filters.categoryId;
+      const categoryId = filters.categoryIds?.[0];
 
       if (!categoryId) {
         const data = await getBrands(genderParam, typeParam);
-        const mapped: BrandRow[] = (data as any[]).map((row) => {
-          const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
-          const count = rawCount < 0 ? 0 : rawCount;
-          return {
-            id: row.id as number,
-            name: row.name as string,
-            count
-          };
-        });
+        let mapped: BrandRow[] = dedupeBrandsByName(
+          (data as { id: number; name: string; items_count?: number }[]).map((row) => {
+            const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
+            return {
+              id: row.id,
+              name: row.name,
+              count: rawCount < 0 ? 0 : rawCount
+            };
+          })
+        );
         mapped.sort((a, b) => {
           if (b.count !== a.count) return b.count - a.count;
           return a.name.localeCompare(b.name);
@@ -111,15 +115,16 @@ export default function BrandFilterScreen() {
       const catCounts = await getBrandNameCountsInCategory(String(categoryId));
       const data = await getBrands(g, t, { categoryIdForCounts: String(categoryId) });
 
-      let mapped: BrandRow[] = (data as any[]).map((row) => {
-        const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
-        const count = rawCount < 0 ? 0 : rawCount;
-        return {
-          id: row.id as number,
-          name: row.name as string,
-          count
-        };
-      });
+      let mapped: BrandRow[] = dedupeBrandsByName(
+        (data as { id: number; name: string; items_count?: number }[]).map((row) => {
+          const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
+          return {
+            id: row.id,
+            name: row.name,
+            count: rawCount < 0 ? 0 : rawCount
+          };
+        })
+      );
 
       if (!t && catCounts.size > 0) {
         const inCategory = new Set(catCounts.keys());
@@ -139,18 +144,18 @@ export default function BrandFilterScreen() {
         }
       }
 
-      const popularIds = new Set(popularRows.map((r) => r.id));
+      const popularNames = new Set(popularRows.map((r) => r.name.trim().toLowerCase()));
       const restRows = mapped
-        .filter((b) => !popularIds.has(b.id))
+        .filter((b) => !popularNames.has(b.name.trim().toLowerCase()))
         .sort((a, b) => a.name.localeCompare(b.name));
 
-      const genderLabel = genderDisplayLabelFr((ctx?.gender ?? genderParam) ?? null);
+      const genderLabel = genderDisplayLabel((ctx?.gender ?? genderParam) ?? null);
       const sections: BrandSection[] = [];
 
       if (popularRows.length > 0) {
         sections.push({
           key: 'popular',
-          title: `Popular for ${genderLabel}`,
+          title: t('filters.popularForGender', { gender: genderLabel }),
           rows: popularRows
         });
       }
@@ -165,13 +170,13 @@ export default function BrandFilterScreen() {
 
       sections.push({
         key: 'all',
-        title: popularRows.length > 0 ? 'All brands' : null,
+        title: popularRows.length > 0 ? t('filters.allBrands') : null,
         rows: allRows
       });
 
       setBrandSections(sections);
     } catch {
-      setError('Unable to load brands. Please try again.');
+      setError(t('filters.brandsLoadError'));
       setBrandSections([]);
     } finally {
       setLoading(false);
@@ -183,12 +188,13 @@ export default function BrandFilterScreen() {
   }, [
     genderParam,
     typeParam,
-    filters.categoryId,
+    filters.categoryIds,
     filters.sizeIds,
     filters.colorIds,
     filters.conditionIds,
     filters.priceMin,
-    filters.priceMax
+    filters.priceMax,
+    t
   ]);
 
   const filteredSections = useMemo(() => {
@@ -217,7 +223,7 @@ export default function BrandFilterScreen() {
             style={styles.clearAllHit}
           >
             <Text variant="body" style={styles.clearAllText}>
-              Clear all
+              {t('filters.clearAll')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -226,7 +232,7 @@ export default function BrandFilterScreen() {
           <View style={styles.searchInputWrapper}>
             <Ionicons name="search" size={18} color="#AAAAAA" style={styles.searchIcon} />
             <TextInput
-              placeholder="Search for brands"
+              placeholder={t('filters.searchBrands')}
               placeholderTextColor="#AAAAAA"
               style={styles.searchInput}
               value={search}
@@ -251,7 +257,7 @@ export default function BrandFilterScreen() {
             </Text>
             <TouchableOpacity onPress={loadBrands} activeOpacity={0.7}>
               <Text variant="captionSm" color="primary">
-                Retry
+                {t('common.retry')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -270,7 +276,7 @@ export default function BrandFilterScreen() {
           ) : hasNoResults ? (
             <View style={styles.emptyContainer}>
               <Text variant="body" color="textSecondary">
-                No brands found
+                {t('filters.noBrandsFound')}
               </Text>
             </View>
           ) : (
@@ -334,7 +340,7 @@ export default function BrandFilterScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

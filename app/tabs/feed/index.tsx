@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
+  cloneFeedListings,
   getFeedListings,
   getMyLikedListingIds,
   type FeedListing
@@ -28,8 +30,19 @@ import { useLikesStore } from '../../../stores/likesStore';
 import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
 import { FeedHeader } from '../../../components/feed/FeedHeader';
 import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
+import { getCardImagePriority, LIST_IMAGE_PERF_PROPS } from '../../../lib/cardImagePriority';
+import { subscribeBlockedUsersRevision } from '../../../lib/store/blockedUsersSync';
+import { normalizeLanguage } from '../../../lib/i18n';
+import {
+  getDefaultHomeHero,
+  getPublishedHomeHero,
+  type HomeHeroContent
+} from '../../../lib/api/homeHero';
+
+const FEED_LISTINGS_LIMIT = 20;
 
 export default function HomeScreen() {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { filters } = useFeedFiltersStore();
@@ -46,6 +59,10 @@ export default function HomeScreen() {
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const heroLanguage = normalizeLanguage(i18n.language);
+  const [homeHero, setHomeHero] = useState<HomeHeroContent>(() =>
+    getDefaultHomeHero(heroLanguage)
+  );
 
   const notificationsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const notificationsBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,8 +77,8 @@ export default function HomeScreen() {
     const q = searchText.trim();
     if (!q) return;
     router.push({
-      pathname: '/tabs/results' as any,
-      params: { section: 'search', query: q, title: 'Recherche' }
+      pathname: '/tabs/search' as any,
+      params: { query: q }
     });
   }, [router, searchText]);
 
@@ -80,13 +97,16 @@ export default function HomeScreen() {
           ).data?.map((row: any) => String(row.blocked_id)).filter(Boolean) ?? []
         : [];
 
-      const filterBlocked = (rows: FeedListing[]) =>
-        blockedSellerIds.length > 0
-          ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
-          : rows;
+      const filterBlocked = (rows: FeedListing[]) => {
+        const filtered =
+          blockedSellerIds.length > 0
+            ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+            : rows;
+        return cloneFeedListings(filtered);
+      };
 
       const feedPromise = getFeedListings({
-        limit: 40,
+        limit: FEED_LISTINGS_LIMIT,
         offset: 0,
         filters
       });
@@ -186,16 +206,14 @@ export default function HomeScreen() {
       const [
         { data, error: fetchError },
         { data: likedIds, error: likedIdsError },
-        sponsoredRes,
-        trendingRes,
-        influencersRes
+        heroConfig
       ] = await Promise.all([
         feedPromise,
         likedIdsPromise,
-        sponsoredPromise,
-        trendingPromise,
-        influencersPromise
+        getPublishedHomeHero(normalizeLanguage(i18n.language))
       ]);
+
+      setHomeHero(heroConfig);
 
       if (fetchError) {
         setError(fetchError);
@@ -203,10 +221,6 @@ export default function HomeScreen() {
       } else {
         setListings(filterBlocked(data));
       }
-
-      setSponsoredListings(filterBlocked(sponsoredRes));
-      setTrendingListings(filterBlocked(trendingRes));
-      setInfluencerListings(filterBlocked(influencersRes));
 
       // Hydrate store instantanément dès qu'on a l'info user-likes.
       if (!user) {
@@ -223,6 +237,19 @@ export default function HomeScreen() {
         }
         setCounts(counts);
       }
+
+      // Les sections secondaires peuvent être lourdes: on les charge après avoir affiché le feed principal.
+      void Promise.all([sponsoredPromise, trendingPromise, influencersPromise])
+        .then(([sponsoredRes, trendingRes, influencersRes]) => {
+          setSponsoredListings(filterBlocked(sponsoredRes));
+          setTrendingListings(filterBlocked(trendingRes));
+          setInfluencerListings(filterBlocked(influencersRes));
+        })
+        .catch(() => {
+          setSponsoredListings([]);
+          setTrendingListings([]);
+          setInfluencerListings([]);
+        });
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error'));
       setListings([]);
@@ -230,7 +257,13 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filters, user, setLikedIds, setCounts, clearLikes]);
+  }, [filters, user, setLikedIds, setCounts, clearLikes, i18n.language]);
+
+  useEffect(() => {
+    return subscribeBlockedUsersRevision(() => {
+      void fetchFeed();
+    });
+  }, [fetchFeed]);
 
   const loadUnreadNotificationsCount = useCallback(async () => {
     const setUnread = useNotificationsBadgeStore.getState().setUnreadCount;
@@ -319,8 +352,8 @@ export default function HomeScreen() {
     void fetchFeed();
   };
 
-  const handleListingPress = (id: string) => {
-    router.push(`/tabs/feed/${id}`);
+  const handleListingPress = (item: FeedListing) => {
+    router.push(`/tabs/feed/${item.id}`);
   };
 
   const all = listings;
@@ -336,7 +369,7 @@ export default function HomeScreen() {
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text variant="body" color="textSecondary" style={styles.loadingText}>
-            Chargement du feed...
+            Loading feed...
           </Text>
         </View>
       </Screen>
@@ -359,7 +392,7 @@ export default function HomeScreen() {
             style={styles.retryText}
             onPress={fetchFeed}
           >
-            Réessayer
+            {t('common.retry')}
           </Text>
         </View>
       </Screen>
@@ -390,17 +423,17 @@ export default function HomeScreen() {
           {/* 12px gap below sticky bar */}
           <View style={{ height: 12 }} />
 
-          <HomeHero backgroundUri={null} unreadNotificationsCount={unreadNotificationsCount} />
+          <HomeHero config={homeHero} unreadNotificationsCount={unreadNotificationsCount} />
 
           {sponsoredListings.length > 0 ? (
             <View style={styles.section}>
               <SectionHeader
-                title="Sponsored"
+                title={t('feed.tabs.sponsored')}
                 titleColor="#000000"
                 onPressSeeAll={() => {
                   router.push({
                     pathname: '/tabs/results' as any,
-                    params: { section: 'sponsored', title: 'Sponsored' }
+                    params: { section: 'sponsored', title: t('feed.tabs.sponsored') }
                   });
                 }}
               />
@@ -411,12 +444,12 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalList}
                 ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-                renderItem={({ item }) => (
+                {...LIST_IMAGE_PERF_PROPS}
+                renderItem={({ item, index }) => (
                   <ProductCard
                     listingId={item.id}
                     sellerId={item.seller_id}
                     sellerName={item.seller_display_name}
-                    sellerAvatarUrl={item.seller_avatar_url}
                     sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                     title={item.title}
                     price={item.price}
@@ -425,9 +458,10 @@ export default function HomeScreen() {
                     size={(item as any).size ?? undefined}
                     condition={item.condition ?? undefined}
                     imageUrl={item.cover_photo_url}
-                    onPress={() => handleListingPress(item.id)}
+                    onPress={() => handleListingPress(item)}
                     cardWidth={167}
-                    imageRatio={1}
+                    imageRatio={1.3}
+                    imagePriority={getCardImagePriority(index)}
                     style={styles.horizontalCard}
                   />
                 )}
@@ -438,12 +472,12 @@ export default function HomeScreen() {
         {trendingListings.length > 0 ? (
           <View style={styles.section}>
             <SectionHeader
-              title="Trending"
+              title={t('feed.tabs.trending')}
               titleColor="#000000"
               onPressSeeAll={() => {
                 router.push({
                   pathname: '/tabs/results' as any,
-                  params: { section: 'trending', title: 'Trending' }
+                  params: { section: 'trending', title: t('feed.tabs.trending') }
                 });
               }}
             />
@@ -454,12 +488,12 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
               ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-              renderItem={({ item }) => (
+              {...LIST_IMAGE_PERF_PROPS}
+              renderItem={({ item, index }) => (
                 <ProductCard
                   listingId={item.id}
                   sellerId={item.seller_id}
                   sellerName={item.seller_display_name}
-                  sellerAvatarUrl={item.seller_avatar_url}
                   sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                   title={item.title}
                   price={item.price}
@@ -468,9 +502,10 @@ export default function HomeScreen() {
                   size={(item as any).size ?? undefined}
                   condition={item.condition ?? undefined}
                   imageUrl={item.cover_photo_url}
-                  onPress={() => handleListingPress(item.id)}
+                  onPress={() => handleListingPress(item)}
                   cardWidth={167}
-                  imageRatio={1}
+                  imageRatio={1.3}
+                  imagePriority={getCardImagePriority(index)}
                   style={styles.horizontalCard}
                 />
               )}
@@ -481,12 +516,12 @@ export default function HomeScreen() {
         {influencerListings.length > 0 ? (
           <View style={styles.section}>
             <SectionHeader
-              title="Influencers"
+              title={t('feed.tabs.influencers')}
               titleColor="#000000"
               onPressSeeAll={() => {
                 router.push({
                   pathname: '/tabs/results' as any,
-                  params: { section: 'influencer', title: 'Influencers' }
+                  params: { section: 'influencer', title: t('feed.tabs.influencers') }
                 });
               }}
             />
@@ -497,12 +532,12 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
               ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-              renderItem={({ item }) => (
+              {...LIST_IMAGE_PERF_PROPS}
+              renderItem={({ item, index }) => (
                 <ProductCard
                   listingId={item.id}
                   sellerId={item.seller_id}
                   sellerName={item.seller_display_name}
-                  sellerAvatarUrl={item.seller_avatar_url}
                   sellerIsInfluencer={Boolean(item.seller_is_influencer)}
                   title={item.title}
                   price={item.price}
@@ -511,9 +546,10 @@ export default function HomeScreen() {
                   size={(item as any).size ?? undefined}
                   condition={item.condition ?? undefined}
                   imageUrl={item.cover_photo_url}
-                  onPress={() => handleListingPress(item.id)}
+                  onPress={() => handleListingPress(item)}
                   cardWidth={167}
-                  imageRatio={1}
+                  imageRatio={1.3}
+                  imagePriority={getCardImagePriority(index)}
                   style={styles.horizontalCard}
                 />
               )}
@@ -523,19 +559,19 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <SectionHeader
-            title="All items"
+            title={t('feed.tabs.allItems')}
             titleColor="#000000"
             onPressSeeAll={() => {
               router.push({
                 pathname: '/tabs/results' as any,
-                params: { section: 'all', title: 'All items' }
+                params: { section: 'all', title: t('feed.tabs.allItems') }
               });
             }}
           />
           {listings.length === 0 && !loading ? (
             <View style={styles.emptyInlineContainer}>
               <Text variant="body" color="textSecondary">
-                Aucune annonce pour le moment
+                No listings yet
               </Text>
             </View>
           ) : (
@@ -551,28 +587,30 @@ export default function HomeScreen() {
                     marginBottom: 12
                   }}
                 >
-                  {pair.map((item) => (
-                    <View key={item.id} style={{ flex: 1 }}>
-                      {/* Card produit réutilisée */}
-                      <ProductCard
-                        listingId={item.id}
-                        sellerId={item.seller_id}
-                        sellerName={item.seller_display_name}
-                        sellerAvatarUrl={item.seller_avatar_url}
-                        sellerIsInfluencer={Boolean(item.seller_is_influencer)}
-                        title={item.title}
-                        price={item.price}
-                        currency="CHF"
-                        brand={item.brand ?? undefined}
-                        size={(item as any).size ?? undefined}
-                        condition={item.condition ?? undefined}
-                        imageUrl={item.cover_photo_url}
-                        onPress={() => handleListingPress(item.id)}
-                        cardWidth={gridCardWidth}
-                        imageRatio={1}
-                      />
-                    </View>
-                  ))}
+                  {pair.map((item, colIndex) => {
+                    const flatIndex = rowIndex * 2 + colIndex;
+                    return (
+                      <View key={item.id} style={{ flex: 1 }}>
+                        <ProductCard
+                          listingId={item.id}
+                          sellerId={item.seller_id}
+                          sellerName={item.seller_display_name}
+                          sellerIsInfluencer={Boolean(item.seller_is_influencer)}
+                          title={item.title}
+                          price={item.price}
+                          currency="CHF"
+                          brand={item.brand ?? undefined}
+                          size={(item as any).size ?? undefined}
+                          condition={item.condition ?? undefined}
+                          imageUrl={item.cover_photo_url}
+                          onPress={() => handleListingPress(item)}
+                          cardWidth={gridCardWidth}
+                          imageRatio={1.3}
+                          imagePriority={getCardImagePriority(flatIndex)}
+                        />
+                      </View>
+                    );
+                  })}
                   {pair.length === 1 && <View style={{ flex: 1 }} />}
                 </View>
               ))}

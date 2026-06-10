@@ -18,14 +18,16 @@ import {
   signInWithOAuthProvider,
   type OAuthProvider
 } from '../../lib/socialAuth';
+import { useTranslation } from 'react-i18next';
 
 export default function OnboardingStep3() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [oauthLoading, setOauthLoading] = useState(false);
 
   const handleSocialLogin = async (provider: 'apple' | 'google' | 'facebook') => {
     if (provider === 'facebook') {
-      Alert.alert('Facebook', 'Facebook sign-in is coming soon.');
+      Alert.alert(t('onboarding.social.facebook'), t('onboarding.social.facebookSoon'));
       return;
     }
 
@@ -37,7 +39,7 @@ export default function OnboardingStep3() {
 
       if (error) {
         if (!isOAuthCancelled(error)) {
-          Alert.alert('Sign in', error.message);
+          Alert.alert(t('auth.login.submit'), error.message);
         }
         return;
       }
@@ -46,14 +48,14 @@ export default function OnboardingStep3() {
         data: { session }
       } = await supabase.auth.getSession();
       if (!session) {
-        Alert.alert('Sign in', 'Unable to complete sign-in. Please try again.');
+        Alert.alert(t('auth.login.submit'), t('onboarding.social.unableComplete'));
         return;
       }
 
       await ensureProfileAfterOAuthLogin(session);
       router.replace('/tabs/feed');
     } catch {
-      Alert.alert('Sign in', 'Something went wrong during social sign-in.');
+      Alert.alert(t('auth.login.submit'), t('onboarding.social.unableSocial'));
     } finally {
       setOauthLoading(false);
     }
@@ -81,17 +83,17 @@ export default function OnboardingStep3() {
           <View style={styles.content}>
             {/* TODO: Ajouter le texte depuis Figma */}
             <Text style={styles.headline}>
-              Your marketplace awaits
+              {t('onboarding.step3.headline')}
             </Text>
             <Text style={styles.subheadline}>
-              Connect with your community
+              {t('onboarding.step3.subheadline')}
             </Text>
           </View>
 
           {/* Boutons en bas */}
           <View style={styles.footer}>
             <Button
-              title="Continue with Apple"
+              title={t('onboarding.social.apple')}
               onPress={() => void handleSocialLogin('apple')}
               variant="apple-black"
               style={styles.socialButton}
@@ -99,7 +101,7 @@ export default function OnboardingStep3() {
               disabled={oauthLoading}
             />
             <Button
-              title="Continue with Google"
+              title={t('onboarding.social.google')}
               onPress={() => void handleSocialLogin('google')}
               variant="google-white"
               style={styles.socialButton}
@@ -107,7 +109,7 @@ export default function OnboardingStep3() {
               disabled={oauthLoading}
             />
             <Button
-              title="Continue with Facebook"
+              title={t('onboarding.social.facebook')}
               onPress={() => void handleSocialLogin('facebook')}
               variant="facebook-blue"
               style={styles.socialButton}
@@ -117,7 +119,7 @@ export default function OnboardingStep3() {
             <DividerOr variant="light" />
 
             <Button
-              title="Sign up to Bloomi"
+              title={t('onboarding.step3.signUp')}
               onPress={() => router.push('/auth/sign-up')}
               variant="primary-green"
               disabled={oauthLoading}
@@ -125,12 +127,12 @@ export default function OnboardingStep3() {
 
             <View style={styles.loginLink}>
               <Text style={styles.loginLinkText}>
-                Do you already have an account?{' '}
+                {`${t('onboarding.step1.alreadyAccount')} `}
                 <Text
                   style={styles.loginLinkButton}
                   onPress={() => router.push('/auth/login')}
                 >
-                  Log in.
+                  {t('auth.login.submit')}
                 </Text>
               </Text>
             </View>

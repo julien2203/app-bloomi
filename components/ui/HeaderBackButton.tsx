@@ -14,7 +14,7 @@ type Props = Omit<PressableProps, 'children'> & {
  */
 export function HeaderBackButton({
   style,
-  accessibilityLabel = 'Retour',
+  accessibilityLabel = 'Back',
   hitSlop = HIT_SLOP_COMFORTABLE,
   ...rest
 }: Props) {

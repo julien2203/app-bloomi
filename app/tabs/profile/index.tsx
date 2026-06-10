@@ -14,6 +14,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../../../lib/theme';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
@@ -44,6 +45,7 @@ type ProfileItemProps = {
 };
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, signOut, isLoading } = useAuthStore();
@@ -172,28 +174,28 @@ export default function ProfileScreen() {
           style={styles.editProfileButton}
           activeOpacity={0.8}
         >
-          <Text style={styles.editProfileText}>Edit profile</Text>
+          <Text style={styles.editProfileText}>{t('profile.editProfile')}</Text>
         </TouchableOpacity>
       </View>
 
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color="#000" />
-          <Text style={styles.loadingText}>Chargement du profil...</Text>
+          <Text style={styles.loadingText}>{t('profile.loadingProfile')}</Text>
         </View>
       )}
       {error && !loading && <Text style={styles.errorText}>{error}</Text>}
 
       {/* Rows liste */}
       <ProfileItem
-        label="Favorite items"
+        label={t('profile.favoriteItems')}
         icon="likeHeartOutline"
         useFeedHeartIcon
         onPress={() => router.push('/tabs/profile/favorites')}
       />
       {user?.id ? (
         <ProfileItem
-          label="View my closet"
+          label={t('profile.viewCloset')}
           icon="bookmarkOutline"
           onPress={() =>
             router.push({
@@ -204,38 +206,43 @@ export default function ProfileScreen() {
         />
       ) : null}
       <ProfileItem
-        label="Wallet"
+        label={t('profile.settingsScreen.payment')}
         icon="walletOutline"
         onPress={() => router.push('/tabs/profile/wallet')}
       />
       <ProfileItem
-        label="My orders"
+        label={t('profile.myOrders')}
         icon="billListOutline"
         onPress={() => router.push('/tabs/profile/orders')}
       />
       <ProfileItem
-        label="Notifications"
+        label={t('profile.notifications')}
         icon="notificationsBellOutline"
         useFeedBellIcon
-        onPress={() => router.push('/tabs/profile/notifications')}
+        onPress={() =>
+          router.push({
+            pathname: '/tabs/profile/notifications',
+            params: { from: 'profile' }
+          } as any)
+        }
       />
       <ProfileItem
-        label="Activate my seller account"
+        label={t('sell.activateAccount')}
         icon="walletOutline"
         onPress={() => router.push('/tabs/profile/activate-seller-account' as any)}
       />
       <ProfileItem
-        label="Settings"
+        label={t('profile.settings')}
         icon="settingsOutline"
         onPress={() => router.push('/tabs/profile/settings')}
       />
       <ProfileItem
-        label="Legal information"
+        label={t('profile.legalInfo')}
         icon="documentTextOutline"
         onPress={() => router.push('/tabs/profile/legal')}
       />
       <ProfileItem
-        label="Help center"
+        label={t('profile.helpCenter')}
         icon="questionCircleOutline"
         onPress={() => router.push('/tabs/profile/help')}
       />
@@ -243,7 +250,7 @@ export default function ProfileScreen() {
       <View style={styles.row}>
         <View style={styles.rowLeft}>
           <AppIcon name="eyeClosedOutline" size={20} color="#000000" />
-          <Text style={styles.rowLabel}>Mode vacance</Text>
+          <Text style={styles.rowLabel}>{t('profile.vacationMode')}</Text>
         </View>
         <Switch
           value={vacationMode}
@@ -257,7 +264,7 @@ export default function ProfileScreen() {
 
       {/* Déconnexion */}
       <ProfileItem
-        label="Sign out"
+        label={t('profile.signOut')}
         icon="exitOutline"
         onPress={() => {
           setSignOutModalOpen(true);
@@ -267,11 +274,11 @@ export default function ProfileScreen() {
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/tabs/profile/legal')}>
-          <Text style={styles.footerLink}>Privacy Policy</Text>
+          <Text style={styles.footerLink}>{t('common.privacyPolicy')}</Text>
         </TouchableOpacity>
         <Text style={styles.footerSeparator}>·</Text>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/tabs/profile/legal')}>
-          <Text style={styles.footerLink}>Terms &amp; Conditions</Text>
+          <Text style={styles.footerLink}>{t('common.termsAndConditions')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -283,12 +290,12 @@ export default function ProfileScreen() {
       >
         <Pressable style={styles.confirmOverlay} onPress={() => setSignOutModalOpen(false)}>
           <Pressable style={styles.confirmCard} onPress={() => null}>
-            <Text style={styles.confirmTitle}>Sign out</Text>
-            <Text style={styles.confirmMessage}>Are you sure you want to sign out?</Text>
+            <Text style={styles.confirmTitle}>{t('profile.signOut')}</Text>
+            <Text style={styles.confirmMessage}>{t('profile.signOutConfirm')}</Text>
             <View style={styles.confirmSeparator} />
             <View style={styles.confirmActionsRow}>
               <Pressable style={styles.confirmCancelBtn} onPress={() => setSignOutModalOpen(false)}>
-                <Text style={styles.confirmCancelText}>Cancel</Text>
+                <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 style={styles.confirmSignOutBtn}
@@ -299,7 +306,7 @@ export default function ProfileScreen() {
                   }
                 }}
               >
-                <Text style={styles.confirmSignOutText}>Sign out</Text>
+                <Text style={styles.confirmSignOutText}>{t('profile.signOut')}</Text>
               </Pressable>
             </View>
           </Pressable>

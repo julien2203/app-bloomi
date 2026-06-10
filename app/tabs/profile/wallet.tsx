@@ -9,6 +9,7 @@ import { supabase } from '../../../lib/supabase';
 import { SUPABASE_URL } from '../../../lib/env';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
+import { useTranslation } from 'react-i18next';
 
 type WalletBalance = {
   available_chf: number;
@@ -33,6 +34,7 @@ function trimId(v: unknown): string | null {
 }
 
 export default function WalletScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
@@ -77,7 +79,7 @@ export default function WalletScreen() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        throw new Error('Session expired, please log in again.');
+        throw new Error(t('feed.checkout.sessionExpired'));
       }
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/get-wallet-balance`, {
@@ -91,7 +93,7 @@ export default function WalletScreen() {
 
       const json = (await response.json()) as WalletBalance & { error?: string; details?: string };
       if (!response.ok) {
-        throw new Error(json.error ?? json.details ?? 'Unable to load wallet balance.');
+        throw new Error(json.error ?? json.details ?? t('profile.wallet.unableLoadBalance'));
       }
 
       const available = Number(json.available_chf);
@@ -102,11 +104,11 @@ export default function WalletScreen() {
       });
     } catch (e) {
       setBalance({ available_chf: 0, pending_chf: 0 });
-      setError(e instanceof Error ? e.message : 'Unable to load wallet balance.');
+      setError(e instanceof Error ? e.message : t('profile.wallet.unableLoadBalance'));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [t, userId]);
 
   const reloadAll = useCallback(async () => {
     setSuccessMessage(null);
@@ -132,7 +134,7 @@ export default function WalletScreen() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        throw new Error('Session expired, please log in again.');
+        throw new Error(t('feed.checkout.sessionExpired'));
       }
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/get-dashboard-link`, {
@@ -146,28 +148,28 @@ export default function WalletScreen() {
 
       const json = (await response.json()) as { url?: string; error?: string; details?: string };
       if (!response.ok) {
-        throw new Error(json.error ?? json.details ?? 'Unable to open Stripe dashboard.');
+        throw new Error(json.error ?? json.details ?? t('profile.wallet.unableStripe'));
       }
       if (!json.url) {
-        throw new Error('Missing Stripe URL.');
+        throw new Error(t('profile.wallet.missingStripeUrl'));
       }
 
       await Linking.openURL(json.url);
     } catch {
-      Alert.alert('Stripe', 'Unable to open Stripe dashboard.');
+      Alert.alert(t('profile.wallet.stripe'), t('profile.wallet.unableStripe'));
     }
-  }, []);
+  }, [t]);
 
   const handlePayout = useCallback(async () => {
     if (!canPayout || payoutLoading) return;
 
     Alert.alert(
-      'Confirm payout',
-      `Do you want to transfer ${formatChf(balance.available_chf)} to your bank account?`,
+      t('profile.wallet.confirmPayout'),
+      t('profile.wallet.confirmPayoutMessage', { amount: formatChf(balance.available_chf) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Transfer',
+          text: t('profile.wallet.transfer'),
           style: 'default',
           onPress: async () => {
             setPayoutLoading(true);
@@ -176,7 +178,7 @@ export default function WalletScreen() {
               const { data: sessionData } = await supabase.auth.getSession();
               const accessToken = sessionData.session?.access_token;
               if (!accessToken) {
-                throw new Error('Session expired, please log in again.');
+                throw new Error(t('feed.checkout.sessionExpired'));
               }
 
               const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payout`, {
@@ -197,13 +199,13 @@ export default function WalletScreen() {
               }
 
               if (!response.ok || json?.success !== true) {
-                throw new Error(json?.error ?? json?.details ?? responseText ?? 'Unable to create payout.');
+                throw new Error(json?.error ?? json?.details ?? responseText ?? t('profile.wallet.unableCreatePayout'));
               }
 
-              setSuccessMessage('Payout initiated — you will receive the funds within 1–3 business days.');
+              setSuccessMessage(t('profile.wallet.payoutInitiated'));
               await loadBalance();
             } catch (e) {
-              Alert.alert('Error', e instanceof Error ? e.message : 'Unable to create payout.');
+              Alert.alert(t('common.error'), e instanceof Error ? e.message : t('profile.wallet.unableCreatePayout'));
             } finally {
               setPayoutLoading(false);
             }
@@ -211,14 +213,14 @@ export default function WalletScreen() {
         }
       ]
     );
-  }, [balance.available_chf, canPayout, loadBalance, payoutLoading]);
+  }, [balance.available_chf, canPayout, loadBalance, payoutLoading, t]);
 
   const showPendingInfo = useCallback(() => {
     Alert.alert(
-      'Pending funds',
-      'Pending funds will become available in 2–7 days, depending on Stripe processing time.'
+      t('profile.wallet.pendingFunds'),
+      t('profile.wallet.pendingHint')
     );
-  }, []);
+  }, [t]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -226,20 +228,20 @@ export default function WalletScreen() {
         {!userId ? (
           <View style={styles.center}>
             <Text variant="body" color="textSecondary" style={styles.centerText}>
-              Please sign in to access your wallet.
+              {t('profile.wallet.signInHint')}
             </Text>
-            <Button title="Sign in" onPress={() => router.push('/auth/login')} variant="primary" />
+            <Button title={t('profile.wallet.signIn')} onPress={() => router.push('/auth/login')} variant="primary" />
           </View>
         ) : !onboardingCompleted ? (
           <View style={styles.center}>
             <Text variant="body" style={styles.centerTitle}>
-              Activate your seller account to access your wallet
+              {t('profile.wallet.activateHintTitle')}
             </Text>
             <Text variant="body" color="textSecondary" style={styles.centerText}>
-              You need to activate Stripe Connect to receive payouts.
+              {t('profile.wallet.activateHintBody')}
             </Text>
             <Button
-              title="Activate my seller account"
+              title={t('sell.activateAccount')}
               onPress={() => router.push('/tabs/profile/activate-seller-account')}
               variant="primary"
               style={styles.activateSellerAccountButton}
@@ -249,7 +251,7 @@ export default function WalletScreen() {
           <>
             <View style={styles.card}>
               <Text variant="captionSm" color="textSecondary" style={styles.label}>
-                Disponible
+                {t('profile.wallet.available')}
               </Text>
               {loading ? (
                 <View style={styles.balanceLoadingRow}>
@@ -264,7 +266,7 @@ export default function WalletScreen() {
               <View style={styles.pendingRow}>
                 <View style={styles.pendingLabelRow}>
                   <Text variant="captionSm" color="textSecondary" style={styles.pendingLabel}>
-                    En attente
+                    {t('profile.wallet.pendingFunds')}
                   </Text>
                   <TouchableOpacity
                     onPress={showPendingInfo}
@@ -297,14 +299,14 @@ export default function WalletScreen() {
 
             <View style={styles.actions}>
               <Button
-                title="Transfer to my bank account"
+                title={t('profile.wallet.transferToBank')}
                 onPress={handlePayout}
                 variant="primary"
                 disabled={!canPayout}
                 loading={payoutLoading}
               />
               <Button
-                title="Open Stripe dashboard"
+                title={t('profile.wallet.openStripe')}
                 onPress={openStripeDashboard}
                 variant="secondary"
               />

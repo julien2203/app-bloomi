@@ -7,6 +7,7 @@ import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 type NotificationPrefs = {
   enabled: boolean;
@@ -39,6 +40,7 @@ function normalizePrefs(value: unknown): NotificationPrefs {
 }
 
 export default function NotificationSettingsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
@@ -119,7 +121,7 @@ export default function NotificationSettingsScreen() {
       <View style={styles.header}>
         <HeaderBackButton onPress={() => router.back()} />
         <Text variant="body" style={styles.headerTitle}>
-          Push notifications
+          {t('profile.notificationSettings.title')}
         </Text>
         <View style={styles.headerRightPlaceholder} />
       </View>
@@ -135,7 +137,7 @@ export default function NotificationSettingsScreen() {
             <View style={styles.groupTopSeparator} />
             <View style={styles.row}>
               <Text variant="body" style={styles.rowLabel}>
-                Enable push notifications
+                {t('profile.notificationSettings.enable')}
               </Text>
               <Switch
                 value={prefs.enabled}
@@ -148,12 +150,12 @@ export default function NotificationSettingsScreen() {
             </View>
             <View style={styles.groupBottomSeparator} />
 
-            <Text style={styles.sectionLabel}>High-priority notifications</Text>
+            <Text style={styles.sectionLabel}>{t('profile.notificationSettings.highPriority')}</Text>
             <View style={styles.groupTopSeparator} />
 
             <View style={styles.row}>
               <Text variant="body" style={styles.rowLabel}>
-                New message
+                {t('profile.notificationSettings.newMessage')}
               </Text>
               <Switch
                 value={prefs.newMessage}
@@ -168,7 +170,7 @@ export default function NotificationSettingsScreen() {
 
             <View style={styles.row}>
               <Text variant="body" style={styles.rowLabel}>
-                New feedback
+                {t('profile.notificationSettings.newFeedback')}
               </Text>
               <Switch
                 value={prefs.newFeedback}
@@ -183,12 +185,12 @@ export default function NotificationSettingsScreen() {
 
             <View style={styles.largeSpacer} />
 
-            <Text style={styles.sectionLabel}>Other notifications</Text>
+            <Text style={styles.sectionLabel}>{t('profile.notificationSettings.other')}</Text>
             <View style={styles.groupTopSeparator} />
 
             <View style={styles.row}>
               <Text variant="body" style={styles.rowLabel}>
-                Favorite items
+                {t('profile.notificationSettings.favoriteItems')}
               </Text>
               <Switch
                 value={prefs.favoriteItems}
@@ -203,7 +205,7 @@ export default function NotificationSettingsScreen() {
 
             <View style={styles.row}>
               <Text variant="body" style={styles.rowLabel}>
-                New followers
+                {t('profile.notificationSettings.newFollowers')}
               </Text>
               <Switch
                 value={prefs.newFollowers}
@@ -218,7 +220,7 @@ export default function NotificationSettingsScreen() {
 
             <View style={styles.row}>
               <Text variant="body" style={styles.rowLabel}>
-                New items
+                {t('profile.notificationSettings.newItems')}
               </Text>
               <Switch
                 value={prefs.newItems}

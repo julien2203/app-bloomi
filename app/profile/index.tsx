@@ -18,13 +18,16 @@ import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { openGuestAuthPrompt } from '../../lib/guestAuthPrompt';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import type { FeedListing } from '../../lib/api';
 import {
+  cloneFeedListings,
   createOrGetThreadForListing,
   deactivateListingToDraft,
   deleteListing,
+  getSellerClosetListings,
   getSellerDraftListingsForCloset,
   isListingDeleteBlockedByOrders
 } from '../../lib/api';
@@ -35,6 +38,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
 import { InfluencerBadge } from '../../components/InfluencerBadge';
 import { OwnerListingBottomSheet } from '../../components/listing/OwnerListingBottomSheet';
+import { SafetyChoiceSheet } from '../../components/safety/SafetyChoiceSheet';
+import { bumpBlockedUsersRevision } from '../../lib/store/blockedUsersSync';
+import { REPORT_REASON_KEYS, reportReasonToDbValue } from '../../lib/reports';
+import { useTranslation } from 'react-i18next';
 
 type PublicProfileParams = {
   user_id?: string;
@@ -77,12 +84,6 @@ const COVER_HEIGHT = 160;
 const PAGE_SIZE = 20;
 const PROFILE_AVATAR_SIZE = 56;
 const PROFILE_TEXT_LEFT_GAP = 10;
-const REPORT_REASONS = [
-  'Contenu inapproprie',
-  'Arnaque',
-  'Contenu illegal',
-  'Autre'
-] as const;
 
 function formatRelativeDate(dateString: string | null): string {
   if (!dateString) return '';
@@ -149,6 +150,7 @@ function formatTimeAgoEn(dateString: string | null): string {
 }
 
 export default function PublicProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
   const params = useLocalSearchParams<PublicProfileParams>();
@@ -180,6 +182,16 @@ export default function PublicProfileScreen() {
   const [coverUploading, setCoverUploading] = useState(false);
   const lastLoadMoreScrollYRef = useRef<number>(-1);
   const [closetOwnerMenuListing, setClosetOwnerMenuListing] = useState<FeedListing | null>(null);
+
+  type SafetyModalState =
+    | { kind: 'menu_self' }
+    | { kind: 'menu_other' }
+    | { kind: 'report_reasons' }
+    | { kind: 'block_confirm' }
+    | { kind: 'done'; title: string; message: string };
+
+  const [safetyModal, setSafetyModal] = useState<SafetyModalState | null>(null);
+  const [safetyBusy, setSafetyBusy] = useState(false);
 
   const resolvedUsername = profile?.display_name ?? usernameParam ?? 'Profil';
   const myId = user?.id ?? null;
@@ -264,8 +276,8 @@ export default function PublicProfileScreen() {
     } catch (e) {
       setProfile(null);
       const message =
-        e instanceof Error && e.message ? e.message : 'Unable to load this profile.';
-      Alert.alert('Error', message);
+        e instanceof Error && e.message ? e.message : t('profile.publicProfile.unableLoadProfile');
+      Alert.alert(t('common.error'), message);
     } finally {
       setLoadingInitial(false);
     }
@@ -291,17 +303,14 @@ export default function PublicProfileScreen() {
       closetLoadingRef.current = true;
       setClosetLoadingMore(true);
       try {
-        const { data, error } = await supabase
-          .from('v_feed_listings')
-          .select('*')
-          .eq('seller_id', sellerId)
-          .eq('status', 'published')
-          .order('created_at', { ascending: false })
-          .range(nextOffset, nextOffset + PAGE_SIZE - 1);
+        const { data, error } = await getSellerClosetListings(sellerId, {
+          offset: nextOffset,
+          limit: PAGE_SIZE
+        });
 
-        if (error) throw error;
+        if (error) throw new Error(error);
 
-        const rows = (data || []) as FeedListing[];
+        const rows = cloneFeedListings(data ?? []);
         setClosetItems((prev) => (reset ? rows : [...prev, ...rows]));
         setClosetOffset(nextOffset + rows.length);
         setClosetHasMore(rows.length === PAGE_SIZE);
@@ -313,7 +322,7 @@ export default function PublicProfileScreen() {
             console.log('Erreur chargement brouillons:', draftRes.error);
             setClosetDraftItems([]);
           } else {
-            setClosetDraftItems(draftRes.data ?? []);
+            setClosetDraftItems(cloneFeedListings(draftRes.data ?? []));
           }
         }
       } catch (e) {
@@ -407,94 +416,16 @@ export default function PublicProfileScreen() {
 
   const openMenu = useCallback(() => {
     if (isMe) {
-      Alert.alert('Options', '', [{ text: 'Fermer', style: 'cancel' }]);
+      setSafetyModal({ kind: 'menu_self' });
       return;
     }
-
-    const onReport = () => {
-      if (!myId) {
-        router.push('/auth/login');
-        return;
-      }
-      if (!profile?.id) return;
-      const listingIdToReport = closetItems[0]?.id;
-      if (!listingIdToReport) {
-        Alert.alert('Signalement', 'Aucune annonce active a signaler pour ce vendeur.');
-        return;
-      }
-
-      Alert.alert(
-        'Signaler',
-        'Pourquoi souhaitez-vous signaler ?',
-        [
-          ...REPORT_REASONS.map((reason) => ({
-            text: reason,
-            onPress: () => {
-              void (async () => {
-                const { error } = await supabase.from('reports').insert({
-                  reporter_id: myId,
-                  listing_id: listingIdToReport,
-                  reason
-                });
-                if (error) {
-                  Alert.alert('Erreur', error.message);
-                  return;
-                }
-                Alert.alert('Merci', 'Votre signalement a ete envoye.');
-              })();
-            }
-          })),
-          { text: 'Annuler', style: 'cancel' as const }
-        ]
-      );
-    };
-
-    const onBlock = () => {
-      if (!myId) {
-        router.push('/auth/login');
-        return;
-      }
-      if (!profile?.id) return;
-      Alert.alert(
-        'Bloquer cet utilisateur ?',
-        'Ses annonces ne seront plus visibles dans votre feed.',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Bloquer',
-            style: 'destructive',
-            onPress: () => {
-              void (async () => {
-                const { error } = await supabase.from('blocked_users').insert({
-                  blocker_id: myId,
-                  blocked_id: profile.id
-                });
-
-                if (error && error.code !== '23505') {
-                  Alert.alert('Erreur', error.message);
-                  return;
-                }
-                Alert.alert('Utilisateur bloque', 'Ses annonces sont maintenant masquees.');
-                setClosetItems((prev) => prev.filter((item) => item.seller_id !== profile.id));
-                setClosetDraftItems((prev) => prev.filter((item) => item.seller_id !== profile.id));
-              })();
-            }
-          }
-        ]
-      );
-    };
-
-    Alert.alert('Options', '', [
-      { text: 'Signaler', onPress: onReport },
-      { text: 'Bloquer', style: 'destructive', onPress: onBlock },
-      { text: 'Annuler', style: 'cancel' }
-    ]);
-  }, [closetItems, isMe, myId, profile?.id, router]);
+    setSafetyModal({ kind: 'menu_other' });
+  }, [isMe]);
 
   const onToggleFollow = useCallback(async () => {
     if (!profile?.id) return;
     if (!myId) {
-      router.push('/auth/login');
+      openGuestAuthPrompt();
       return;
     }
     if (isMe) {
@@ -530,16 +461,17 @@ export default function PublicProfileScreen() {
       setIsFollowing(prev);
       setFollowersCount(prevFollowers);
       const message =
-        e instanceof Error && e.message ? e.message : 'Unable to update follow status.';
-      Alert.alert('Error', message);
+        e instanceof Error && e.message ? e.message : t('profile.publicProfile.unableFollow');
+      Alert.alert(t('common.error'), message);
     } finally {
       setTogglingFollow(false);
     }
   }, [followersCount, isFollowing, isMe, myId, profile?.id, router, togglingFollow]);
 
   const onPressMessage = useCallback(() => {
-    if (!profile?.id || !myId) {
-      router.push('/auth/login');
+    if (!profile?.id) return;
+    if (!myId) {
+      openGuestAuthPrompt();
       return;
     }
     if (isMe) return;
@@ -547,8 +479,8 @@ export default function PublicProfileScreen() {
     const firstListing = closetItems[0] ?? null;
     if (!firstListing?.id) {
       Alert.alert(
-        'Message',
-        'This seller has no active listing to start a conversation from.'
+        t('profile.publicProfile.message'),
+        t('profile.publicProfile.noListingChat')
       );
       return;
     }
@@ -556,7 +488,10 @@ export default function PublicProfileScreen() {
     void (async () => {
       const { data, error } = await createOrGetThreadForListing(firstListing.id, profile.id);
       if (error || !data) {
-        Alert.alert('Error', error ?? 'Unable to create conversation.');
+        Alert.alert(
+          t('common.error'),
+          error ?? t('profile.publicProfile.unableCreateConversation')
+        );
         return;
       }
       router.push({ pathname: '/tabs/messages/[id]', params: { id: data.id } });
@@ -588,7 +523,10 @@ export default function PublicProfileScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert('Permission requise', 'Autorise la galerie pour changer la photo de couverture.');
+        Alert.alert(
+          t('profile.publicProfile.permissionRequired'),
+          t('profile.publicProfile.coverPermission')
+        );
         return;
       }
 
@@ -617,7 +555,7 @@ export default function PublicProfileScreen() {
 
       const { data: publicData } = supabase.storage.from('cover').getPublicUrl(coverPath);
       const publicUrl = publicData?.publicUrl ?? '';
-      if (!publicUrl) throw new Error('Impossible de generer l URL publique.');
+      if (!publicUrl) throw new Error('Unable to generate the public URL.');
 
       const { error: updateErr } = await supabase
         .from('profiles')
@@ -627,7 +565,10 @@ export default function PublicProfileScreen() {
 
       setProfile((prev) => (prev ? { ...prev, cover_image: publicUrl } : prev));
     } catch (e) {
-      Alert.alert('Erreur', e instanceof Error ? e.message : 'Impossible de mettre a jour la cover.');
+      Alert.alert(
+        t('common.error'),
+        e instanceof Error ? e.message : t('profile.publicProfile.unableUpdateCover')
+      );
     } finally {
       setCoverUploading(false);
     }
@@ -673,15 +614,15 @@ export default function PublicProfileScreen() {
         );
       }
       if (isListingDeleteBlockedByOrders(error)) {
-        Alert.alert('Suppression impossible', error, [
-          { text: 'OK', style: 'cancel' },
+        Alert.alert(t('feed.listingDetail.cannotDelete'), error, [
+          { text: t('common.ok'), style: 'cancel' },
           {
-            text: "Désactiver l'annonce",
+            text: t('feed.listingDetail.deactivateListing'),
             onPress: () => {
               void (async () => {
                 const { error: deactErr } = await deactivateListingToDraft(listingId);
                 if (deactErr) {
-                  Alert.alert('Erreur', deactErr);
+                  Alert.alert(t('common.error'), deactErr);
                   return;
                 }
                 setClosetItems((prev) => prev.filter((x) => x.id !== listingId));
@@ -693,17 +634,17 @@ export default function PublicProfileScreen() {
         ]);
         throw new Error(error);
       }
-      Alert.alert('Error', error);
+      Alert.alert(t('common.error'), error);
       throw new Error(error);
     }
-  }, []);
+  }, [t]);
 
   const handleDeactivateClosetListing = useCallback(async () => {
     const listing = closetOwnerMenuListing;
     if (!listing) return;
     const { error } = await deactivateListingToDraft(listing.id);
     if (error) {
-      Alert.alert('Erreur', error);
+      Alert.alert(t('common.error'), error);
       throw new Error(error);
     }
     setClosetItems((prev) => prev.filter((x) => x.id !== listing.id));
@@ -712,10 +653,13 @@ export default function PublicProfileScreen() {
   const handlePermanentDeleteDraftRequest = useCallback((listingId: string) => {
     setClosetOwnerMenuListing(null);
     setTimeout(() => {
-      Alert.alert('Cette action est irréversible.', 'Supprimer définitivement ?', [
-        { text: 'Annuler', style: 'cancel' },
+      Alert.alert(
+        t('feed.listingDetail.deletePermanentlyTitle'),
+        t('feed.listingDetail.deletePermanentlyMessage'),
+        [
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             void (async () => {
@@ -731,7 +675,7 @@ export default function PublicProfileScreen() {
                     prev.some((x) => x.id === listingId) ? prev : [...prev, removedSnapshot]
                   );
                 }
-                Alert.alert('Suppression impossible', error);
+                Alert.alert(t('feed.listingDetail.cannotDelete'), error);
                 return;
               }
             })();
@@ -765,12 +709,12 @@ export default function PublicProfileScreen() {
             imageUrl={item.cover_photo_url}
             cardWidth={closetCardWidth}
             onPress={() => router.push({ pathname: '/tabs/feed/[id]', params: { id: item.id } })}
-            imageRatio={1}
+            imageRatio={1.3}
           />
           {isMe ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Listing menu"
+              accessibilityLabel={t('profile.publicProfile.listingMenu')}
               hitSlop={HIT_SLOP_COMFORTABLE}
               style={styles.closetMenuBtn}
               onPress={() => openClosetListingMenu(item)}
@@ -801,6 +745,189 @@ export default function PublicProfileScreen() {
     );
   }, []);
 
+  const closeSafetyModal = () => {
+    if (!safetyBusy) setSafetyModal(null);
+  };
+
+  const renderSafetyModal = () => {
+    if (!safetyModal) return null;
+
+    if (safetyModal.kind === 'menu_self') {
+      return (
+        <SafetyChoiceSheet
+          visible
+          onClose={closeSafetyModal}
+          title={t('profile.publicProfile.options')}
+          actions={[{ label: t('common.close'), onPress: closeSafetyModal }]}
+        />
+      );
+    }
+
+    if (safetyModal.kind === 'menu_other') {
+      return (
+        <SafetyChoiceSheet
+          visible
+          onClose={closeSafetyModal}
+          title={t('profile.publicProfile.userActions')}
+          message={t('profile.publicProfile.safetyMenuMessage')}
+          actions={[
+            {
+              label: t('profile.publicProfile.report'),
+              onPress: () => {
+                if (!myId) {
+                  closeSafetyModal();
+                  openGuestAuthPrompt();
+                  return;
+                }
+                setSafetyModal({ kind: 'report_reasons' });
+              }
+            },
+            {
+              label: t('profile.publicProfile.blockSeller'),
+              variant: 'destructive',
+              onPress: () => {
+                if (!myId) {
+                  closeSafetyModal();
+                  openGuestAuthPrompt();
+                  return;
+                }
+                setSafetyModal({ kind: 'block_confirm' });
+              }
+            },
+            { label: t('common.cancel'), onPress: closeSafetyModal }
+          ]}
+        />
+      );
+    }
+
+    if (safetyModal.kind === 'report_reasons') {
+      return (
+        <SafetyChoiceSheet
+          visible
+          onClose={closeSafetyModal}
+          title={t('profile.publicProfile.reportSeller')}
+          message={t('safety.reportReasonsHint')}
+          actions={[
+            ...REPORT_REASON_KEYS.map((reason) => ({
+              label: t(`safety.reportReasons.${reason}`),
+              disabled: safetyBusy,
+              onPress: () => {
+                void (async () => {
+                  if (!myId || !profile?.id) return;
+                  const listingIdToReport = closetItems[0]?.id;
+                  if (!listingIdToReport) {
+                    setSafetyModal({
+                      kind: 'done',
+                      title: t('profile.publicProfile.nothingToReport'),
+                      message: t('profile.publicProfile.noListingReport')
+                    });
+                    return;
+                  }
+                  setSafetyBusy(true);
+                  try {
+                    const { error } = await supabase.from('reports').insert({
+                      reporter_id: myId,
+                      listing_id: listingIdToReport,
+                      reason: reportReasonToDbValue(reason)
+                    });
+                    if (error) {
+                      setSafetyModal({
+                        kind: 'done',
+                        title: t('feed.listingDetail.reportErrorTitle'),
+                        message: error.message
+                      });
+                    } else {
+                      setSafetyModal({
+                        kind: 'done',
+                        title: t('feed.listingDetail.reportThanksTitle'),
+                        message: t('feed.listingDetail.reportThanksMessage')
+                      });
+                    }
+                  } finally {
+                    setSafetyBusy(false);
+                  }
+                })();
+              }
+            })),
+            {
+              label: t('common.back'),
+              disabled: safetyBusy,
+              onPress: () => setSafetyModal({ kind: 'menu_other' })
+            },
+            { label: t('common.cancel'), disabled: safetyBusy, onPress: closeSafetyModal }
+          ]}
+        />
+      );
+    }
+
+    if (safetyModal.kind === 'block_confirm') {
+      return (
+        <SafetyChoiceSheet
+          visible
+          onClose={closeSafetyModal}
+          title={t('profile.publicProfile.blockTitle', { name: resolvedUsername })}
+          message={t('safety.blockConfirmMessage')}
+          actions={[
+            {
+              label: t('common.notNow'),
+              disabled: safetyBusy,
+              onPress: closeSafetyModal
+            },
+            {
+              label: safetyBusy ? t('safety.blocking') : t('safety.blockAction'),
+              variant: 'destructive',
+              disabled: safetyBusy,
+              onPress: () => {
+                void (async () => {
+                  if (!myId || !profile?.id) return;
+                  setSafetyBusy(true);
+                  try {
+                    const { error } = await supabase.from('blocked_users').insert({
+                      blocker_id: myId,
+                      blocked_id: profile.id
+                    });
+                    if (error && error.code !== '23505') {
+                      setSafetyModal({
+                        kind: 'done',
+                        title: t('profile.publicProfile.couldNotBlock'),
+                        message: error.message
+                      });
+                      return;
+                    }
+                    bumpBlockedUsersRevision();
+                    setClosetItems((prev) => prev.filter((item) => item.seller_id !== profile.id));
+                    setClosetDraftItems((prev) => prev.filter((item) => item.seller_id !== profile.id));
+                    setSafetyModal({
+                      kind: 'done',
+                      title: t('profile.publicProfile.sellerBlocked'),
+                      message: t('profile.publicProfile.sellerBlockedMessage')
+                    });
+                  } finally {
+                    setSafetyBusy(false);
+                  }
+                })();
+              }
+            }
+          ]}
+        />
+      );
+    }
+
+    if (safetyModal.kind === 'done') {
+      return (
+        <SafetyChoiceSheet
+          visible
+          onClose={closeSafetyModal}
+          title={safetyModal.title}
+          message={safetyModal.message}
+          actions={[{ label: t('common.ok'), onPress: closeSafetyModal }]}
+        />
+      );
+    }
+
+    return null;
+  };
+
   const headerTitle = resolvedUsername || 'Profil';
 
   return (
@@ -815,7 +942,7 @@ export default function PublicProfileScreen() {
         </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Menu"
+          accessibilityLabel={t('profile.publicProfile.menu')}
           hitSlop={HIT_SLOP_COMFORTABLE}
           onPress={openMenu}
           style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
@@ -858,7 +985,7 @@ export default function PublicProfileScreen() {
             <View style={styles.coverPlaceholder}>
               {isMe ? (
                 <Text variant="caption" style={styles.coverPlaceholderText}>
-                  Add a cover photo
+                  {t('profile.publicProfile.addCover')}
                 </Text>
               ) : null}
             </View>
@@ -905,7 +1032,7 @@ export default function PublicProfileScreen() {
                   {ratingValue.toFixed(1)}
                 </Text>
                 <Text variant="captionSm" color="textSecondary" style={styles.reviewsCountText}>
-                  ({reviewsCount} Reviews)
+                  {t('profile.publicProfile.reviewsCount', { count: reviewsCount })}
                 </Text>
               </View>
             </View>
@@ -930,7 +1057,11 @@ export default function PublicProfileScreen() {
                 isFollowing && !isMe ? styles.followingText : null
               ]}
             >
-              {isMe ? 'Edit profile' : isFollowing ? 'Following' : 'Follow'}
+              {isMe
+                ? t('profile.editProfile')
+                : isFollowing
+                ? t('profile.publicProfile.followingBtn')
+                : t('profile.publicProfile.follow')}
             </Text>
           </Pressable>
         </View>
@@ -956,9 +1087,9 @@ export default function PublicProfileScreen() {
               <AppIcon name="infoCircleOutline" size={14} color="#888888" />
               <Text style={styles.secondaryText} numberOfLines={1}>
                 <Text style={styles.limeNumber}>{followersCount}</Text>
-                <Text style={styles.secondaryText}> followers, </Text>
+                <Text style={styles.secondaryText}> {t('profile.publicProfile.followers')} </Text>
                 <Text style={styles.limeNumber}>{followingCount}</Text>
-                <Text style={styles.secondaryText}> following</Text>
+                <Text style={styles.secondaryText}> {t('profile.publicProfile.following')}</Text>
               </Text>
             </View>
           </View>
@@ -966,7 +1097,7 @@ export default function PublicProfileScreen() {
           {!isMe ? (
             <Pressable onPress={onPressMessage} style={styles.messageButton}>
               <Text variant="caption" style={styles.messageButtonText}>
-                Message
+                {t('profile.publicProfile.message')}
               </Text>
             </Pressable>
           ) : null}
@@ -977,14 +1108,14 @@ export default function PublicProfileScreen() {
         <View style={styles.tabsRow}>
           <Pressable style={[styles.tab, styles.tabLeft]} onPress={() => setTab('closet')}>
             <Text style={tab === 'closet' ? styles.tabTextActive : styles.tabTextInactive}>
-              Closet
+              {t('profile.publicProfile.closet')}
             </Text>
             {tab === 'closet' ? <View style={styles.tabUnderline} /> : null}
           </Pressable>
 
           <Pressable style={styles.tab} onPress={() => setTab('reviews')}>
             <Text style={tab === 'reviews' ? styles.tabTextActive : styles.tabTextInactive}>
-              Reviews
+              {t('profile.publicProfile.reviews')}
             </Text>
             {tab === 'reviews' ? <View style={styles.tabUnderline} /> : null}
           </Pressable>
@@ -1032,14 +1163,14 @@ export default function PublicProfileScreen() {
             ) : reviews.length === 0 ? (
               <View style={styles.emptyReviews}>
                 <Text variant="body" color="textSecondary">
-                  No reviews yet
+                  {t('profile.publicProfile.noReviews')}
                 </Text>
               </View>
             ) : (
               <View style={styles.reviewsList}>
                 {reviews.map((r) => {
                   const reviewer = reviewersById[r.reviewer_id];
-                  const name = reviewer?.display_name ?? 'Utilisateur';
+                  const name = reviewer?.display_name ?? 'User';
                   const avatar = reviewer?.avatar_url ?? null;
                   return (
                     <View key={r.id} style={styles.reviewRow}>
@@ -1097,6 +1228,7 @@ export default function PublicProfileScreen() {
         listingStatus={closetOwnerMenuListing?.status ?? null}
         onRequestPermanentDeleteDraft={handlePermanentDeleteDraftRequest}
       />
+      {renderSafetyModal()}
     </SafeAreaView>
   );
 }

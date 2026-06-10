@@ -13,11 +13,14 @@ import {
   Alert,
   TextInput,
   Modal,
-  Keyboard
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
@@ -31,8 +34,11 @@ import { supabase } from '../../../lib/supabase';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../../../lib/env';
 import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
-import { useSellFormStore } from '../../../lib/store/sellForm';
+import { useSellFormStore, type ParcelSizeValue } from '../../../lib/store/sellForm';
 import * as Location from 'expo-location';
+import { translateColorName } from '../../../lib/colorI18n';
+import { translateConditionLabel } from '../../../lib/conditionI18n';
+import { BOOST_OPTIONS, type BoostSponsorType } from '../../../lib/fees';
 
 type Photo = {
   uri: string;
@@ -43,18 +49,22 @@ type Photo = {
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 300;
 
-const CONDITION_LABELS: Record<string, string> = {
-  new: 'New with tags',
-  like_new: 'New without tags',
-  good: 'Good',
-  fair: 'Fair',
-  poor: 'Poor'
-};
-
 const ALLOWED_COUNTRIES = ['CH', 'FR', 'DE', 'IT'] as const;
 type AllowedCountry = (typeof ALLOWED_COUNTRIES)[number];
 
+const PARCEL_SIZE_OPTIONS: { value: ParcelSizeValue; labelKey: string }[] = [
+  { value: 'small', labelKey: 'sell.parcelSize.small' },
+  { value: 'large', labelKey: 'sell.parcelSize.large' },
+  { value: 'xlarge', labelKey: 'sell.parcelSize.xlarge' }
+];
+
+function deliveryModeIncludesShipping(mode: string | undefined): boolean {
+  const dm = String(mode ?? 'both').toLowerCase();
+  return dm === 'shipping' || dm === 'both';
+}
+
 export default function SellScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
@@ -65,20 +75,38 @@ export default function SellScreen() {
   const [description, setDescription] = useState(sellValues.draftDescription ?? '');
   const [price, setPrice] = useState(sellValues.draftPriceText ?? '');
   const [city, setCity] = useState(sellValues.draftCity ?? '');
-  const [photos, setPhotos] = useState<Photo[]>((sellValues.draftPhotos as any) ?? []);
+  const [photos, setPhotos] = useState<Photo[]>([...((sellValues.draftPhotos as any) ?? [])]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
     title?: string;
     price?: string;
     photos?: string;
+    parcel_size?: string;
   }>({});
   const [showPublishSheet, setShowPublishSheet] = useState(false);
   const [showPhotoTips, setShowPhotoTips] = useState(false);
   const [lastPublishedListingId, setLastPublishedListingId] = useState<string | null>(null);
-  const [selectedSponsorType, setSelectedSponsorType] = useState<'listing' | 'dressing' | null>(
-    null
-  );
+  const [selectedBoost, setSelectedBoost] = useState<{
+    sponsorType: BoostSponsorType;
+    durationDays: 3 | 7;
+  } | null>(null);
   const [boostPaying, setBoostPaying] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const listSectionY = useRef(0);
+
+  const scrollToListSection = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, listSectionY.current - 24),
+        animated: true
+      });
+    }, Platform.OS === 'ios' ? 250 : 100);
+  };
+
+  const navigateSellField = (path: string) => {
+    Keyboard.dismiss();
+    router.push(path as never);
+  };
 
   React.useEffect(() => {
     const loadCityFromProfile = async () => {
@@ -195,8 +223,8 @@ export default function SellScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        'Permission required',
-        'We need access to your photos to create a listing.'
+        t('common.error'),
+        t('sell.permissionPhotos')
       );
       return false;
     }
@@ -234,7 +262,7 @@ export default function SellScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Allow camera access in your device settings.');
+      Alert.alert(t('common.error'), t('sell.allowCamera'));
       return;
     }
 
@@ -259,7 +287,7 @@ export default function SellScreen() {
 
     const latestTitle = titleRef.current;
     if (!latestTitle.trim()) {
-      newErrors.title = 'Title is required';
+      newErrors.title = t('sell.incompleteForm');
     }
 
     const priceFromStore =
@@ -268,11 +296,16 @@ export default function SellScreen() {
         : undefined;
     const priceNum = priceFromStore ?? parseFloat(price);
     if (!priceNum || Number.isNaN(priceNum) || priceNum <= 0) {
-      newErrors.price = 'A valid price is required';
+      newErrors.price = t('profile.editListing.validPrice');
     }
 
     if (photos.length === 0) {
-      newErrors.photos = 'At least one photo is required';
+      newErrors.photos = t('sell.addPhotos');
+    }
+
+    const deliveryMode = sellValues.delivery_mode ?? 'both';
+    if (deliveryModeIncludesShipping(deliveryMode) && !sellValues.parcel_size) {
+      newErrors.parcel_size = t('sell.parcelSize.required');
     }
 
     setErrors(newErrors);
@@ -283,9 +316,10 @@ export default function SellScreen() {
         newErrors.title ||
         newErrors.price ||
         newErrors.photos ||
-        'Please fix the fields marked in red';
+        newErrors.parcel_size ||
+        t('sell.incompleteForm');
 
-      Alert.alert('Incomplete form', firstError);
+      Alert.alert(t('sell.incompleteForm'), firstError);
     }
 
     return !hasErrors;
@@ -293,17 +327,17 @@ export default function SellScreen() {
 
   const conditionLabel =
     sellValues.condition != null
-      ? CONDITION_LABELS[sellValues.condition] ?? sellValues.condition
+      ? translateConditionLabel(sellValues.condition, t)
       : null;
 
   const colorLabel =
     sellValues.color && sellValues.color.length > 0
-      ? sellValues.color.map((c) => c.name).join(', ')
+      ? sellValues.color.map((c) => translateColorName(c.name, t)).join(', ')
       : null;
 
   const handlePublish = async () => {
     if (!user) {
-      Alert.alert('Error', 'You must be signed in to create a listing');
+      Alert.alert(t('common.error'), t('sell.mustSignInCreate'));
       return;
     }
 
@@ -344,12 +378,12 @@ export default function SellScreen() {
 
       if (!stripeCompleted) {
         Alert.alert(
-          'Activate your seller account',
-          'Before publishing a listing, activate your seller account so you can receive payouts.',
+          t('sell.activateSeller'),
+          t('sell.activateBeforePublish'),
           [
-            { text: 'Not now', style: 'cancel' },
+            { text: t('common.notNow'), style: 'cancel' },
             {
-              text: 'Activate my account',
+              text: t('sell.activateAccount'),
               onPress: () => router.push('/tabs/profile/activate-seller-account')
             }
           ]
@@ -365,6 +399,8 @@ export default function SellScreen() {
       const priceNum = priceFromStore ?? parseFloat(price);
 
       const geo = await resolveGeoForListing();
+      const deliveryMode = sellValues.delivery_mode ?? 'both';
+      const requiresParcelSize = deliveryModeIncludesShipping(deliveryMode);
 
       const listingData: ListingInsert = {
         seller_id: user.id,
@@ -374,6 +410,7 @@ export default function SellScreen() {
         // Ne pas publier immédiatement : on publie après l'étape "mise en avant" (payer ou passer)
         status: 'draft',
         category: sellValues.category?.name ?? null,
+        category_id: sellValues.category?.id ?? null,
         condition: sellValues.condition ?? null,
         brand: sellValues.brand?.name ?? null,
         size: sellValues.size?.label ?? null,
@@ -381,7 +418,8 @@ export default function SellScreen() {
           sellValues.color && sellValues.color.length > 0
             ? sellValues.color.map((c) => c.name).join(', ')
             : null,
-        delivery_mode: 'both',
+        delivery_mode: deliveryMode,
+        parcel_size: requiresParcelSize ? (sellValues.parcel_size ?? null) : null,
         city: geo.city ?? (city.trim() ? city.trim() : null),
         country_code: geo.country_code ?? 'CH',
         latitude: geo.latitude,
@@ -396,7 +434,7 @@ export default function SellScreen() {
 
       const listing = listingResult.data;
       setLastPublishedListingId(listing.id);
-      setSelectedSponsorType(null);
+      setSelectedBoost(null);
 
       // Upload les photos
       for (let i = 0; i < photos.length; i++) {
@@ -424,8 +462,8 @@ export default function SellScreen() {
       setShowPublishSheet(true);
     } catch (error) {
       Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Something went wrong while publishing'
+        t('common.error'),
+        error instanceof Error ? error.message : t('auth.signUp.somethingWrong')
       );
     } finally {
       setLoading(false);
@@ -436,20 +474,27 @@ export default function SellScreen() {
     <>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <HeaderBackButton onPress={() => router.back()} />
-          <Text style={styles.headerTitle}>Sell an item</Text>
-          <View style={styles.headerRightPlaceholder} />
-        </View>
-
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 120 }
-          ]}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardAvoid}
         >
+          <View style={styles.header}>
+            <HeaderBackButton onPress={() => router.back()} />
+            <Text style={styles.headerTitle}>{t('sell.sellingHeader')}</Text>
+            <View style={styles.headerRightPlaceholder} />
+          </View>
+
+          <ScrollView
+            ref={scrollRef}
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: insets.bottom + 24 }
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
           {/* Photos */}
           <View style={styles.photosSection}>
             {errors.photos && <Text style={styles.error}>{errors.photos}</Text>}
@@ -462,7 +507,7 @@ export default function SellScreen() {
                   activeOpacity={0.85}
                 >
                   <AppIcon name="addSquareOutline" size={20} color="#121212" />
-                  <Text style={styles.photoUploadText}>Galerie</Text>
+                  <Text style={styles.photoUploadText}>{t('sell.gallery')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.photoUploadButton}
@@ -470,7 +515,7 @@ export default function SellScreen() {
                   activeOpacity={0.85}
                 >
                   <Feather name="camera" size={20} color="#121212" />
-                  <Text style={styles.photoUploadText}>Appareil photo</Text>
+                  <Text style={styles.photoUploadText}>{t('sell.cameraFr')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -511,14 +556,14 @@ export default function SellScreen() {
             )}
 
             <Text style={[styles.photoHint, { textAlign: 'center' }]}>
-              Add up to 5 photos.{' '}
+              {`${t('sell.addPhotos')} `}
               <Text
                 style={styles.photoHintLink}
                 onPress={() => {
                   setShowPhotoTips(true);
                 }}
               >
-                See photo tips.
+                {t('sell.seePhotoTips')}
               </Text>
             </Text>
           </View>
@@ -527,10 +572,10 @@ export default function SellScreen() {
 
           {/* Title */}
           <View style={[styles.fieldGroup, { marginTop: 24 }]}>
-            <Text style={styles.fieldLabel}>Title</Text>
+            <Text style={styles.fieldLabel}>{t('sell.title')}</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g. White cos sweater"
+              placeholder={t('sell.titlePlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={title}
               onChangeText={(text) => {
@@ -549,7 +594,7 @@ export default function SellScreen() {
                 <View />
               )}
               <Text style={styles.counterText}>
-                {`${TITLE_MAX - title.length} character left`}
+                {t('sell.characterLeft', { count: TITLE_MAX - title.length })}
               </Text>
             </View>
           </View>
@@ -558,27 +603,35 @@ export default function SellScreen() {
 
           {/* Description */}
           <View style={[styles.fieldGroup, { marginTop: 20 }]}>
-            <Text style={styles.fieldLabel}>Description</Text>
+            <Text style={styles.fieldLabel}>{t('profile.editProfileScreen.aboutMe')}</Text>
             <TextInput
               style={[
                 styles.textInput,
                 styles.descriptionInput
               ]}
-              placeholder="e.g. Only worn a few times, true to size"
+              placeholder={t('sell.descriptionPlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={description}
               onChangeText={(text) => {
                 setDescription(text);
               }}
+              onFocus={scrollToListSection}
               multiline
+              blurOnSubmit
               maxLength={DESCRIPTION_MAX}
             />
             <View style={styles.fieldFooterRow}>
               <Text style={styles.counterText}>
-                {`${DESCRIPTION_MAX - description.length} character left`}
+                {t('sell.characterLeft', { count: DESCRIPTION_MAX - description.length })}
               </Text>
             </View>
           </View>
+
+          <View
+            onLayout={(event) => {
+              listSectionY.current = event.nativeEvent.layout.y;
+            }}
+          />
 
           {/* List fields */}
           <View style={styles.listSection}>
@@ -599,11 +652,9 @@ export default function SellScreen() {
             <TouchableOpacity
               style={[styles.listRow, styles.listRowFirst]}
               activeOpacity={0.7}
-              onPress={() => {
-                router.push('/tabs/sell/category');
-              }}
+              onPress={() => navigateSellField('/tabs/sell/category')}
             >
-              <Text style={styles.listRowLabel}>Category</Text>
+              <Text style={styles.listRowLabel}>{t('sell.category')}</Text>
               <View style={styles.listRowRight}>
                 {sellValues.category ? (
                   <Text style={styles.listRowValue}>{sellValues.category.name}</Text>
@@ -618,13 +669,13 @@ export default function SellScreen() {
               activeOpacity={0.7}
               onPress={() => {
                 if (sellValues.category) {
-                  router.push('/tabs/sell/brand');
+                  navigateSellField('/tabs/sell/brand');
                 } else {
-                  router.push('/tabs/sell/brand-gender');
+                  navigateSellField('/tabs/sell/brand-gender');
                 }
               }}
             >
-              <Text style={styles.listRowLabel}>Brand</Text>
+              <Text style={styles.listRowLabel}>{t('filters.searchBrands')}</Text>
               <View style={styles.listRowRight}>
                 {sellValues.brand ? (
                   <Text style={styles.listRowValue}>{sellValues.brand.name}</Text>
@@ -638,11 +689,9 @@ export default function SellScreen() {
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
-              onPress={() => {
-                router.push('/tabs/sell/condition');
-              }}
+              onPress={() => navigateSellField('/tabs/sell/condition')}
             >
-              <Text style={styles.listRowLabel}>Condition</Text>
+              <Text style={styles.listRowLabel}>{t('filters.condition')}</Text>
               <View style={styles.listRowRight}>
                 {conditionLabel ? (
                   <Text style={styles.listRowValue}>{conditionLabel}</Text>
@@ -656,11 +705,9 @@ export default function SellScreen() {
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
-              onPress={() => {
-                router.push('/tabs/sell/size');
-              }}
+              onPress={() => navigateSellField('/tabs/sell/size')}
             >
-              <Text style={styles.listRowLabel}>Size</Text>
+              <Text style={styles.listRowLabel}>{t('sell.size')}</Text>
               <View style={styles.listRowRight}>
                 {sellValues.size ? (
                   <Text style={styles.listRowValue}>{sellValues.size.label}</Text>
@@ -674,11 +721,9 @@ export default function SellScreen() {
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
-              onPress={() => {
-                router.push('/tabs/sell/color');
-              }}
+              onPress={() => navigateSellField('/tabs/sell/color')}
             >
-              <Text style={styles.listRowLabel}>Color</Text>
+              <Text style={styles.listRowLabel}>{t('sell.color')}</Text>
               <View style={styles.listRowRight}>
                 {colorLabel ? (
                   <Text style={styles.listRowValue}>{colorLabel}</Text>
@@ -691,11 +736,9 @@ export default function SellScreen() {
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
-              onPress={() => {
-                router.push('/tabs/sell/price');
-              }}
+              onPress={() => navigateSellField('/tabs/sell/price')}
             >
-              <Text style={styles.listRowLabel}>Price</Text>
+              <Text style={styles.listRowLabel}>{t('sell.price')}</Text>
               <View style={styles.listRowRight}>
                 {typeof sellValues.price === 'number' && Number.isFinite(sellValues.price) ? (
                   <Text style={styles.listRowValue}>{sellValues.price} CHF</Text>
@@ -707,23 +750,57 @@ export default function SellScreen() {
               );
             })()}
           </View>
-        </ScrollView>
 
-        {/* Bouton Publish */}
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: insets.bottom + 16 }
-          ]}
-        >
-          <Button
-            title={loading ? 'Publishing...' : 'Publish listing'}
-            onPress={handlePublish}
-            variant="primary"
-            disabled={loading}
-            loading={loading}
-          />
-        </View>
+          {deliveryModeIncludesShipping(sellValues.delivery_mode ?? 'both') ? (
+            <View style={styles.parcelSection}>
+              <Text style={styles.parcelSectionTitle}>{t('sell.parcelSize.title')}</Text>
+              {PARCEL_SIZE_OPTIONS.map((option, index) => {
+                const isSelected = sellValues.parcel_size === option.value;
+                return (
+                  <React.Fragment key={option.value}>
+                    {index > 0 ? <View style={styles.parcelSeparator} /> : null}
+                    <TouchableOpacity
+                      style={[styles.parcelOptionRow, isSelected && styles.parcelOptionRowSelected]}
+                      onPress={() => {
+                        setField('parcel_size', option.value);
+                        if (errors.parcel_size) {
+                          setErrors((prev) => ({ ...prev, parcel_size: undefined }));
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.parcelOptionLabel,
+                          isSelected && styles.parcelOptionLabelSelected
+                        ]}
+                      >
+                        {t(option.labelKey)}
+                      </Text>
+                      <View style={[styles.parcelRadioOuter, isSelected && styles.parcelRadioOuterSelected]}>
+                        {isSelected ? <View style={styles.parcelRadioInner} /> : null}
+                      </View>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                );
+              })}
+              {errors.parcel_size ? (
+                <Text style={styles.error}>{errors.parcel_size}</Text>
+              ) : null}
+            </View>
+          ) : null}
+          </ScrollView>
+
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+            <Button
+              title={loading ? t('common.loading') : t('sell.publishListing')}
+              onPress={handlePublish}
+              variant="primary"
+              disabled={loading}
+              loading={loading}
+            />
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
 
       {/* Bottom sheet Photo tips */}
@@ -748,9 +825,9 @@ export default function SellScreen() {
             >
               <Text style={styles.photoTipsCloseButtonText}>×</Text>
             </TouchableOpacity>
-            <Text style={styles.photoTipsTitle}>Photo tips</Text>
+            <Text style={styles.photoTipsTitle}>{t('sell.photoTips')}</Text>
 
-            <Text style={styles.photoTipsSectionTitle}>Choose natural light</Text>
+            <Text style={styles.photoTipsSectionTitle}>{t('sell.chooseNaturalLight')}</Text>
 
             <View style={styles.photoTipsImagesRow}>
               <View style={styles.photoTipsImagePlaceholder}>
@@ -776,7 +853,7 @@ export default function SellScreen() {
             </View>
 
             <Text style={styles.photoTipsText}>
-              Take photos in a well-lit area. Bright daylight is best.
+              {t('sell.photoTipsBody')}
             </Text>
           </View>
         </View>
@@ -801,73 +878,76 @@ export default function SellScreen() {
           />
           <View style={styles.sheetContainer}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Product going live</Text>
+            <Text style={styles.sheetTitle}>{t('sell.productGoingLive')}</Text>
 
-            <TouchableOpacity
-              style={[
-                styles.sheetCard,
-                selectedSponsorType === 'listing' && styles.sheetCardSelected
-              ]}
-              activeOpacity={0.8}
-              onPress={() => setSelectedSponsorType('listing')}
-            >
-              <View style={styles.sheetCardHeader}>
-                <View style={styles.sheetIconCircle}>
-                  <AppIcon name="userOutline" size={18} color={theme.colors.textPrimary} />
-                </View>
-                <Text style={styles.sheetCardTitle}>Boost this listing</Text>
-                <Text style={styles.sheetPrice}>5.99CHF</Text>
-              </View>
-              <Text style={styles.sheetCardSubtitle}>
-                Pay to feature this item when it goes live.
-              </Text>
-            </TouchableOpacity>
+            {BOOST_OPTIONS.map((option) => {
+              const isSelected =
+                selectedBoost?.sponsorType === option.sponsorType &&
+                selectedBoost?.durationDays === option.durationDays;
+              const labelKey =
+                option.sponsorType === 'listing'
+                  ? option.durationDays === 3
+                    ? 'sell.boostListing3d'
+                    : 'sell.boostListing7d'
+                  : option.durationDays === 3
+                  ? 'sell.boostDressing3d'
+                  : 'sell.boostDressing7d';
 
-            <TouchableOpacity
-              style={[
-                styles.sheetCard,
-                selectedSponsorType === 'dressing' && styles.sheetCardSelected
-              ]}
-              activeOpacity={0.8}
-              onPress={() => setSelectedSponsorType('dressing')}
-            >
-              <View style={styles.sheetCardHeader}>
-                <View style={styles.sheetIconCircle}>
-                  <AppIcon name="userOutline" size={18} color={theme.colors.textPrimary} />
-                </View>
-                <Text style={styles.sheetCardTitle}>Boost your closet</Text>
-                <Text style={styles.sheetPrice}>12.99CHF</Text>
-              </View>
-              <Text style={styles.sheetCardSubtitle}>
-                Pay to feature all listings in your closet.
-              </Text>
-            </TouchableOpacity>
+              return (
+                <TouchableOpacity
+                  key={`${option.sponsorType}-${option.durationDays}`}
+                  style={[styles.sheetCard, isSelected && styles.sheetCardSelected]}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    setSelectedBoost({
+                      sponsorType: option.sponsorType,
+                      durationDays: option.durationDays
+                    })
+                  }
+                >
+                  <View style={styles.sheetCardHeader}>
+                    <View style={styles.sheetIconCircle}>
+                      <AppIcon name="userOutline" size={18} color="#171918" />
+                    </View>
+                    <Text style={styles.sheetCardTitle}>{t(labelKey)}</Text>
+                    <Text style={styles.sheetPrice}>{option.priceChf.toFixed(2)} CHF</Text>
+                  </View>
+                  <Text style={styles.sheetCardSubtitle}>
+                    {option.sponsorType === 'listing'
+                      ? t('sell.payToFeatureItem')
+                      : t('sell.payToFeatureCloset')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
 
             <Text style={styles.sheetNote}>
-              Boosts apply for 15 days.
+              {t('sell.boostDuration')}
             </Text>
 
             <Button
               title={
                 boostPaying
-                  ? 'Processing payment...'
-                  : selectedSponsorType === 'listing'
-                  ? 'Pay 5.99 CHF'
-                  : selectedSponsorType === 'dressing'
-                  ? 'Pay 12.99 CHF'
-                  : 'Choose an option'
+                  ? t('common.loading')
+                  : selectedBoost
+                  ? `${t('feed.checkout.pay')} ${BOOST_OPTIONS.find(
+                      (option) =>
+                        option.sponsorType === selectedBoost.sponsorType &&
+                        option.durationDays === selectedBoost.durationDays
+                    )?.priceChf.toFixed(2)} CHF`
+                  : t('sell.chooseOption')
               }
               onPress={async () => {
                 if (boostPaying) return;
                 if (!user?.id) {
-                  Alert.alert('Error', 'You must be signed in to pay');
+                  Alert.alert(t('common.error'), t('sell.mustSignInPay'));
                   setShowPublishSheet(false);
                   router.push('/auth/login');
                   return;
                 }
-                if (!selectedSponsorType) return;
+                if (!selectedBoost) return;
                 if (!lastPublishedListingId) {
-                  Alert.alert('Error', 'Listing not found for boost.');
+                  Alert.alert(t('common.error'), t('sell.listingNotFoundBoost'));
                   return;
                 }
 
@@ -890,7 +970,8 @@ export default function SellScreen() {
                       action: 'create',
                       listing_id: lastPublishedListingId,
                       seller_id: user.id,
-                      sponsor_type: selectedSponsorType
+                      sponsor_type: selectedBoost.sponsorType,
+                      duration_days: selectedBoost.durationDays
                     })
                   });
 
@@ -987,7 +1068,7 @@ export default function SellScreen() {
                   router.replace('/tabs/feed');
                 } catch (e) {
                   Alert.alert(
-                    'Payment failed',
+                    t('feed.checkout.paymentFailed'),
                     e instanceof Error ? e.message : 'Unknown error'
                   );
                 } finally {
@@ -995,13 +1076,13 @@ export default function SellScreen() {
                 }
               }}
               variant="primary"
-              disabled={!selectedSponsorType || boostPaying}
+              disabled={boostPaying}
               loading={boostPaying}
               style={styles.sheetPayButton}
             />
 
             <Button
-              title="Skip this step"
+              title={t('sell.skipStep')}
               onPress={async () => {
                 if (!user?.id || !lastPublishedListingId) {
                   setShowPublishSheet(false);
@@ -1039,8 +1120,8 @@ export default function SellScreen() {
                   setField('draftPhotos', [] as any);
                 } catch (e) {
                   Alert.alert(
-                    'Error',
-                    e instanceof Error ? e.message : 'Unable to publish right now.'
+                    t('common.error'),
+                    e instanceof Error ? e.message : t('auth.signUp.somethingWrong')
                   );
                   return;
                 }
@@ -1048,8 +1129,9 @@ export default function SellScreen() {
                 setShowPublishSheet(false);
                 router.replace('/tabs/feed');
               }}
-              variant="primary"
+              variant="secondary"
               style={styles.sheetSkipButton}
+              textStyle={styles.sheetSkipButtonText}
             />
           </View>
         </View>
@@ -1062,6 +1144,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.backgroundWhite
+  },
+  keyboardAvoid: {
+    flex: 1
   },
   header: {
     paddingHorizontal: 16,
@@ -1226,6 +1311,58 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 16
   },
+  parcelSection: {
+    marginTop: 8,
+    marginBottom: 16
+  },
+  parcelSectionTitle: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fontFamily.semiBold,
+    marginBottom: 8
+  },
+  parcelOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8
+  },
+  parcelOptionRowSelected: {
+    borderRadius: theme.radius.cardRadius,
+    backgroundColor: '#C3EA4F'
+  },
+  parcelOptionLabel: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary,
+    flex: 1,
+    marginRight: 12
+  },
+  parcelOptionLabelSelected: {
+    fontFamily: theme.fontFamily.semiBold
+  },
+  parcelRadioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#CCCCCC',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  parcelRadioOuterSelected: {
+    borderColor: theme.colors.textPrimary
+  },
+  parcelRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.textPrimary
+  },
+  parcelSeparator: {
+    height: 1,
+    backgroundColor: theme.colors.border
+  },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1254,10 +1391,6 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: theme.spacing.horizontalPadding,
     paddingTop: 16,
     backgroundColor: theme.colors.backgroundWhite,
@@ -1295,15 +1428,15 @@ const styles = StyleSheet.create({
   },
   sheetCard: {
     borderWidth: 1,
-    borderColor: theme.colors.primary,
-    backgroundColor: '#F9FFE8',
+    borderColor: theme.colors.border,
+    backgroundColor: '#F8F8F6',
     borderRadius: theme.radius.cardRadius,
     padding: 12,
     marginBottom: 12
   },
   sheetCardSelected: {
-    borderColor: theme.colors.appleBlack,
-    backgroundColor: theme.colors.googleWhite
+    borderColor: '#171918',
+    backgroundColor: '#F8F8F6'
   },
   sheetCardHeader: {
     flexDirection: 'row',
@@ -1325,16 +1458,16 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     flex: 1,
     marginHorizontal: 8,
-    color: theme.colors.textPrimary
+    color: '#171918'
   },
   sheetPrice: {
     ...theme.typography.body,
     fontFamily: theme.fontFamily.semiBold,
-    color: theme.colors.textPrimary
+    color: '#171918'
   },
   sheetCardSubtitle: {
     ...theme.typography.captionSm,
-    color: theme.colors.textSecondary
+    color: '#171918'
   },
   sheetNote: {
     ...theme.typography.captionSm,
@@ -1347,7 +1480,12 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   sheetSkipButton: {
-    marginTop: 4
+    marginTop: 4,
+    backgroundColor: '#F8F8F6',
+    borderWidth: 0
+  },
+  sheetSkipButtonText: {
+    color: '#171918'
   },
   photoTipsOverlay: {
     flex: 1,

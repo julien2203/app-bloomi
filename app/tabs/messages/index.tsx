@@ -7,18 +7,28 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../../lib/supabase';
-import { getInboxThreads, type ThreadListItem } from '../../../lib/api_queries';
+import {
+  attachUnreadFlagsForInboxThreads,
+  getInboxThreadsBase,
+  type ThreadListItem
+} from '../../../lib/api_queries';
+
+function cloneThreads(threads: ThreadListItem[]): ThreadListItem[] {
+  return threads.map((thread) => ({ ...thread }));
+}
 import { refreshUnreadThreadsBadge } from '../../../lib/unreadMessagesBadge';
 import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
 
-function formatRelativeDate(dateString: string | null): string {
+function formatRelativeDate(dateString: string | null, t: (key: string, opts?: any) => string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
@@ -36,43 +46,113 @@ function formatRelativeDate(dateString: string | null): string {
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
 
-  if (diffMinutes < 1) return 'Just now';
-  if (diffHours < 1) return `il y a ${diffMinutes} min`;
-  if (diffDays < 1) return `il y a ${diffHours} h`;
-  if (diffWeeks < 1) return `il y a ${diffDays} j`;
-  if (diffMonths < 1) return `il y a ${diffWeeks} sem`;
-  if (diffYears < 1) return `il y a ${diffMonths} mois`;
-  return `il y a ${diffYears} an${diffYears > 1 ? 's' : ''}`;
+  if (diffMinutes < 1) return t('feed.listingDetail.justNow');
+  if (diffHours < 1) return t('feed.listingDetail.minutesAgo', { count: diffMinutes });
+  if (diffDays < 1) return t('feed.listingDetail.hoursAgo', { count: diffHours });
+  if (diffWeeks < 1) return t('feed.listingDetail.daysAgo', { count: diffDays });
+  if (diffMonths < 1) return t('feed.listingDetail.weeksAgo', { count: diffWeeks });
+  if (diffYears < 1) return t('feed.listingDetail.monthsAgo', { count: diffMonths });
+  return t('feed.listingDetail.yearsAgo', { count: diffYears });
 }
 
 export default function MessagesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [threads, setThreads] = useState<ThreadListItem[]>([]);
+  const [previousThreads, setPreviousThreads] = useState<ThreadListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const inboxRealtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestSeqRef = useRef(0);
+  const skipFirstFocusReload = useRef(true);
 
-  const loadThreads = useCallback(async (opts?: { silent?: boolean }) => {
+  const mergeThreads = useCallback((current: ThreadListItem[], next: ThreadListItem[]) => {
+    const byId = new Map<string, ThreadListItem>();
+    for (const item of current) byId.set(item.thread_id, item);
+    for (const item of next) byId.set(item.thread_id, item);
+    return Array.from(byId.values());
+  }, []);
+
+  const loadThreads = useCallback(async (opts?: { silent?: boolean; page?: number; append?: boolean }) => {
+    const requestedPage = opts?.page ?? 1;
+    const append = opts?.append === true && requestedPage > 1;
+    const requestId = ++requestSeqRef.current;
     try {
-      if (!opts?.silent) setLoading(true);
-      setError(null);
-      const { data } = await getInboxThreads();
-      setThreads(data);
-      if (user?.id) {
-        await refreshUnreadThreadsBadge(user.id);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        if (!opts?.silent) setLoading(true);
+        if (threads.length === 0 && previousThreads.length === 0) {
+          setInitialLoading(true);
+        }
       }
+      setError(null);
+      const base = await getInboxThreadsBase({
+        page: requestedPage,
+        pageSize: 20
+      });
+
+      if (requestId !== requestSeqRef.current) return;
+
+      const baseThreads = cloneThreads(base.data as ThreadListItem[]);
+
+      if (append) {
+        setThreads((prev) => mergeThreads(prev, baseThreads));
+      } else {
+        setThreads(baseThreads);
+        setPreviousThreads(baseThreads);
+      }
+
+      setPage(requestedPage);
+      setHasMore(base.hasMore);
+
+      // Enrichissement non bloquant: badges + flags unread en parallèle
+      void Promise.all([
+        base.userId
+          ? attachUnreadFlagsForInboxThreads(baseThreads, base.userId)
+          : Promise.resolve(baseThreads),
+        user?.id ? refreshUnreadThreadsBadge(user.id) : Promise.resolve()
+      ]).then(([withUnread]) => {
+        if (requestId !== requestSeqRef.current) return;
+        const unreadThreads = cloneThreads(withUnread as ThreadListItem[]);
+        if (append) {
+          setThreads((prev) => mergeThreads(prev, unreadThreads));
+        } else {
+          setThreads(unreadThreads);
+          setPreviousThreads(unreadThreads);
+        }
+      });
     } catch {
-      setError('Unable to load your conversations.');
-      setThreads([]);
+      setError(t('messages.loadError'));
+      if (threads.length === 0 && previousThreads.length === 0) {
+        setThreads([]);
+      }
     } finally {
-      setLoading(false);
+      if (!append) {
+        setLoading(false);
+        setInitialLoading(false);
+      }
+      setLoadingMore(false);
     }
-  }, [user?.id]);
+  }, [user?.id, mergeThreads, previousThreads.length, t, threads.length]);
+
+  useEffect(() => {
+    void loadThreads();
+  }, [loadThreads]);
 
   // Premier affichage + retour sur l’écran inbox
   useFocusEffect(
     useCallback(() => {
+      if (skipFirstFocusReload.current) {
+        skipFirstFocusReload.current = false;
+        return;
+      }
       void loadThreads({ silent: true });
     }, [loadThreads])
   );
@@ -109,11 +189,14 @@ export default function MessagesScreen() {
   }, [user?.id, loadThreads]);
 
   const hasError = !!error;
+  const inboxBottomPadding = getFixedTabBarHeight(insets.bottom) + 28;
+  const visibleThreads = threads.length > 0 ? threads : previousThreads;
+  const showInitialSkeleton = initialLoading && visibleThreads.length === 0;
 
   const renderItem = useCallback(
     ({ item }: { item: ThreadListItem }) => {
       const lastBody = item.last_message_body ?? '';
-      const relativeDate = formatRelativeDate(item.last_message_created_at ?? item.thread_created_at);
+      const relativeDate = formatRelativeDate(item.last_message_created_at ?? item.thread_created_at, t);
 
       const isUnread = item.has_unread_from_other === true;
 
@@ -123,7 +206,7 @@ export default function MessagesScreen() {
       const handlePress = () => {
         router.push({
           pathname: '/tabs/messages/[id]',
-          params: { id: item.thread_id }
+          params: { id: item.thread_id, from_inbox: '1' }
         });
       };
 
@@ -150,7 +233,7 @@ export default function MessagesScreen() {
                 isUnread ? styles.nameTextUnread : styles.nameTextRead
               ]}
             >
-              {otherName || 'Utilisateur'}
+              {otherName || t('common.bloomiUser')}
             </Text>
             {lastBody ? (
               <Text
@@ -170,22 +253,35 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       );
     },
-    [router]
+    [router, t]
   );
 
-  const renderContent = useMemo(() => {
-    if (loading) {
-      return (
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.colors.primary} />
-          <Text variant="captionSm" color="textSecondary" style={styles.loadingText}>
-            Chargement de vos conversations...
-          </Text>
-        </View>
-      );
-    }
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || loading || !hasMore) return;
+    void loadThreads({ silent: true, page: page + 1, append: true });
+  }, [hasMore, loadThreads, loading, loadingMore, page]);
 
-    if (hasError) {
+  const renderSkeleton = useCallback(() => {
+    return (
+      <View style={styles.skeletonContainer}>
+        {Array.from({ length: 8 }).map((_, index) => (
+          <View key={`sk-${index}`} style={styles.skeletonRow}>
+            <View style={styles.skeletonAvatar} />
+            <View style={styles.skeletonTextCol}>
+              <View style={styles.skeletonName} />
+              <View style={styles.skeletonLine} />
+            </View>
+            <View style={styles.skeletonDate} />
+          </View>
+        ))}
+      </View>
+    );
+  }, []);
+
+  const renderContent = useMemo(() => {
+    if (showInitialSkeleton) return renderSkeleton();
+
+    if (hasError && visibleThreads.length === 0) {
       return (
         <View style={styles.center}>
           <Text variant="body" style={styles.errorText}>
@@ -193,21 +289,21 @@ export default function MessagesScreen() {
           </Text>
           <TouchableOpacity onPress={() => void loadThreads()} activeOpacity={0.7}>
             <Text variant="captionSm" color="primary">
-              Retry
+              {t('common.retry')}
             </Text>
           </TouchableOpacity>
         </View>
       );
     }
 
-    if (threads.length === 0) {
+    if (visibleThreads.length === 0) {
       return (
         <View style={styles.center}>
           <Text variant="body" style={styles.emptyTitle}>
-            Aucune conversation pour le moment
+            {t('messages.noConversationsYet')}
           </Text>
           <Text variant="captionSm" color="textSecondary" style={styles.emptyText}>
-            Vous verrez vos discussions avec les vendeurs ici.
+            {t('messages.emptyHint')}
           </Text>
         </View>
       );
@@ -215,21 +311,45 @@ export default function MessagesScreen() {
 
     return (
       <FlatList
-        data={threads}
+        data={visibleThreads}
         keyExtractor={(item) => item.thread_id}
         renderItem={renderItem}
+        removeClippedSubviews={false}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: inboxBottomPadding }]}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={
+          <>
+            {loadingMore ? (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator color={theme.colors.primary} />
+              </View>
+            ) : null}
+            <View style={styles.bottomSpacer} />
+          </>
+        }
       />
     );
-  }, [loading, hasError, error, threads, renderItem]);
+  }, [
+    showInitialSkeleton,
+    renderSkeleton,
+    hasError,
+    error,
+    loadThreads,
+    visibleThreads,
+    renderItem,
+    inboxBottomPadding,
+    handleLoadMore,
+    loadingMore
+  ]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View style={styles.headerSidePlaceholder} />
         <Text variant="body" style={styles.headerTitle}>
-          Messages
+          {t('messages.title')}
         </Text>
         <View style={styles.headerSidePlaceholder} />
       </View>
@@ -272,6 +392,46 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 8
+  },
+  skeletonContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 8
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 72,
+    paddingVertical: 12
+  },
+  skeletonAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E8E8E8'
+  },
+  skeletonTextCol: {
+    flex: 1,
+    paddingHorizontal: 12
+  },
+  skeletonName: {
+    width: '48%',
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E8E8E8',
+    marginBottom: 8
+  },
+  skeletonLine: {
+    width: '75%',
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: '#EFEFEF'
+  },
+  skeletonDate: {
+    width: 44,
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: '#EFEFEF'
   },
   errorText: {
     textAlign: 'center',
@@ -360,5 +520,12 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: '#E5E5E5'
+  },
+  bottomSpacer: {
+    height: 12
+  },
+  footerLoading: {
+    paddingVertical: 10,
+    alignItems: 'center'
   }
 });

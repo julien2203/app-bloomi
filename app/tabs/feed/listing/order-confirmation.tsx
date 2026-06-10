@@ -2,11 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../../../../components/ui/Text';
 import { Button } from '../../../../components/ui/Button';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { theme } from '../../../../lib/theme';
 import { supabase } from '../../../../lib/supabase';
+import { computeBuyerFees } from '../../../../lib/fees';
+import { formatChf, formatPercent } from '../../../../lib/formatBuyerPrice';
 
 type OrderRow = {
   id: string;
@@ -16,15 +19,14 @@ type OrderRow = {
   listing_title: string | null;
   listing_price: number | string | null;
   listing_cover_photo_url: string | null;
+  buyer_protection_chf?: number | string | null;
+  buyer_banking_fee_chf?: number | string | null;
+  shipping_fee_chf?: number | string | null;
   shipping_city?: string | null;
   shipping_postal_code?: string | null;
   shipping_country?: string | null;
   shipping_address?: string | null;
 };
-
-function formatChf(amount: number) {
-  return `${amount.toFixed(2)} CHF`;
-}
 
 function parseNumber(v: number | string | null | undefined): number | null {
   if (v == null) return null;
@@ -40,6 +42,7 @@ function normalizePhotoUrl(rawUrl: string) {
 }
 
 export default function OrderConfirmationScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ order_id?: string }>();
@@ -54,7 +57,7 @@ export default function OrderConfirmationScreen() {
 
     const load = async () => {
       if (!orderId) {
-        setError('Missing order id.');
+        setError(t('feed.checkout.missingParams'));
         setLoading(false);
         return;
       }
@@ -73,6 +76,9 @@ export default function OrderConfirmationScreen() {
             listing_title,
             listing_price,
             listing_cover_photo_url,
+            buyer_protection_chf,
+            buyer_banking_fee_chf,
+            shipping_fee_chf,
             shipping_city,
             shipping_postal_code,
             shipping_country,
@@ -83,14 +89,14 @@ export default function OrderConfirmationScreen() {
           .maybeSingle();
 
         if (qError) throw qError;
-        if (!data) throw new Error('Order not found.');
+        if (!data) throw new Error(t('messages.notFound'));
         if (!cancelled) {
-          setOrder(data as OrderRow);
+          setOrder({ ...(data as OrderRow) });
         }
       } catch (e) {
         if (!cancelled) {
           setOrder(null);
-          setError(e instanceof Error ? e.message : 'Unable to load order.');
+          setError(e instanceof Error ? e.message : t('feed.orderConfirmation.loadError'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -101,32 +107,50 @@ export default function OrderConfirmationScreen() {
     return () => {
       cancelled = true;
     };
-  }, [orderId]);
+  }, [orderId, t]);
 
-  const listingTitle = order?.listing_title ?? 'Your item';
+  const listingTitle = order?.listing_title ?? t('feed.orderConfirmation.yourItem');
   const rawCover = order?.listing_cover_photo_url ?? null;
   const coverUrl = rawCover ? normalizePhotoUrl(rawCover) : null;
 
   const price = useMemo(() => parseNumber(order?.listing_price ?? null), [order?.listing_price]);
-  const commission = useMemo(() => (price != null ? price * 0.1 : null), [price]);
-  const total = useMemo(() => (price != null && commission != null ? price + commission : null), [price, commission]);
+  const buyerFees = useMemo(() => {
+    if (price == null) return null;
+    const storedProtection = parseNumber(order?.buyer_protection_chf ?? null);
+    const storedBanking = parseNumber(order?.buyer_banking_fee_chf ?? null);
+    if (storedProtection != null && storedBanking != null) {
+      return {
+        protectionChf: storedProtection,
+        bankingChf: storedBanking,
+        protectionRate: storedProtection / price,
+        bankingRate: storedBanking / price,
+        finalPriceChf: price + storedProtection + storedBanking
+      };
+    }
+    return computeBuyerFees(price);
+  }, [order?.buyer_banking_fee_chf, order?.buyer_protection_chf, price]);
+  const shippingFee = useMemo(() => parseNumber(order?.shipping_fee_chf ?? null) ?? 0, [order?.shipping_fee_chf]);
+  const total = useMemo(
+    () => (buyerFees != null ? buyerFees.finalPriceChf + shippingFee : null),
+    [buyerFees, shippingFee]
+  );
 
   const deliveryMode = String(order?.delivery_mode ?? '').toLowerCase();
   const isShipping = deliveryMode === 'shipping';
 
   const statusLabel = useMemo(() => {
-    const base = 'Secure payment — funds on hold';
+    const base = t('feed.orderConfirmation.statusBase');
     const payment = order?.payment_status ? ` (${order.payment_status})` : '';
-    const orderStatus = order?.status ? ` • Order: ${order.status}` : '';
+    const orderStatus = order?.status ? ` • ${order.status}` : '';
     return `${base}${payment}${orderStatus}`;
-  }, [order?.payment_status, order?.status]);
+  }, [order?.payment_status, order?.status, t]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <HeaderBackButton onPress={() => router.back()} />
         <Text variant="body" style={styles.headerTitle}>
-          Order confirmation
+          {t('feed.orderConfirmation.title')}
         </Text>
         <View style={styles.headerRightPlaceholder} />
       </View>
@@ -140,35 +164,35 @@ export default function OrderConfirmationScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text variant="h2" style={styles.title}>
-          Payment confirmed
+          {t('feed.orderConfirmation.paymentConfirmed')}
         </Text>
         <Text variant="body" color="textSecondary" style={styles.subtitle}>
-          Your payment is secured. The funds are currently on hold.
+          {t('feed.orderConfirmation.subtitle')}
         </Text>
 
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
             <Text variant="captionSm" color="textSecondary" style={styles.loadingText}>
-              Loading your order…
+              {t('feed.orderConfirmation.loadingOrder')}
             </Text>
           </View>
         ) : error ? (
           <View style={styles.card}>
             <Text variant="body" style={styles.errorTitle}>
-              We couldn&apos;t load your order.
+              {t('feed.orderConfirmation.loadError')}
             </Text>
             <Text variant="caption" color="textSecondary" style={styles.errorText}>
               {error}
             </Text>
             <View style={styles.errorActions}>
               <Button
-                title="View my orders"
+                title={t('feed.orderConfirmation.viewOrders')}
                 onPress={() => router.replace('/tabs/profile/orders')}
                 variant="primary"
               />
               <Button
-                title="Back to feed"
+                title={t('feed.orderConfirmation.backToFeed')}
                 onPress={() => router.replace('/tabs/feed')}
                 variant="secondary"
               />
@@ -193,7 +217,7 @@ export default function OrderConfirmationScreen() {
                   <View style={styles.moneyBlock}>
                     <View style={styles.moneyRow}>
                       <Text variant="caption" color="textSecondary">
-                        Item price
+                        {t('feed.orderConfirmation.itemPrice')}
                       </Text>
                       <Text variant="caption" style={styles.moneyValue}>
                         {price != null ? formatChf(price) : '—'}
@@ -201,15 +225,37 @@ export default function OrderConfirmationScreen() {
                     </View>
                     <View style={styles.moneyRow}>
                       <Text variant="caption" color="textSecondary">
-                        Buyer Protection (10%)
+                        {t('feed.orderConfirmation.buyerProtection', {
+                          percent: buyerFees ? formatPercent(buyerFees.protectionRate) : 0
+                        })}
                       </Text>
                       <Text variant="caption" style={styles.moneyValue}>
-                        {commission != null ? formatChf(commission) : '—'}
+                        {buyerFees != null ? formatChf(buyerFees.protectionChf) : '—'}
                       </Text>
                     </View>
+                    <View style={styles.moneyRow}>
+                      <Text variant="caption" color="textSecondary">
+                        {t('feed.orderConfirmation.bankingFee', {
+                          percent: buyerFees ? formatPercent(buyerFees.bankingRate) : 0
+                        })}
+                      </Text>
+                      <Text variant="caption" style={styles.moneyValue}>
+                        {buyerFees != null ? formatChf(buyerFees.bankingChf) : '—'}
+                      </Text>
+                    </View>
+                    {shippingFee > 0 ? (
+                      <View style={styles.moneyRow}>
+                        <Text variant="caption" color="textSecondary">
+                          {t('feed.checkout.shippingFee')}
+                        </Text>
+                        <Text variant="caption" style={styles.moneyValue}>
+                          {formatChf(shippingFee)}
+                        </Text>
+                      </View>
+                    ) : null}
                     <View style={[styles.moneyRow, styles.moneyRowTotal]}>
                       <Text variant="body" style={styles.moneyTotalLabel}>
-                        Total paid
+                        {t('feed.orderConfirmation.totalPaid')}
                       </Text>
                       <Text variant="body" color="primary" style={styles.moneyTotalValue}>
                         {total != null ? formatChf(total) : '—'}
@@ -228,38 +274,38 @@ export default function OrderConfirmationScreen() {
 
             <View style={styles.card}>
               <Text variant="h3" style={styles.sectionTitle}>
-                What&apos;s next
+                {t('feed.orderConfirmation.whatsNext')}
               </Text>
 
               {isShipping ? (
                 <>
                   <Text variant="body" color="textSecondary" style={styles.paragraph}>
-                    The seller will ship your item. Once you receive it, confirm reception in your orders to release the payment to the seller.
+                    {t('feed.orderConfirmation.shippingParagraph')}
                   </Text>
 
                   <View style={styles.infoBox}>
                     <Text variant="captionSm" color="textSecondary" style={styles.infoLabel}>
-                      Shipping to
+                      {t('feed.orderConfirmation.shippingTo')}
                     </Text>
                     <Text variant="body" style={styles.infoValue}>
                       {order?.shipping_city || order?.shipping_postal_code || order?.shipping_country
                         ? `${order?.shipping_postal_code ?? ''} ${order?.shipping_city ?? ''}`.trim() +
                           (order?.shipping_country ? `, ${order.shipping_country}` : '')
-                        : 'Address saved in your order.'}
+                        : t('feed.orderConfirmation.addressSaved')}
                     </Text>
                   </View>
                 </>
               ) : (
                 <>
                   <Text variant="body" color="textSecondary" style={styles.paragraph}>
-                    Arrange a meet-up with the seller for an in-person handoff. After you get the item, confirm reception in your orders to release the payment.
+                    {t('feed.orderConfirmation.pickupParagraph')}
                   </Text>
                   <View style={styles.infoBox}>
                     <Text variant="captionSm" color="textSecondary" style={styles.infoLabel}>
-                      Tip
+                      {t('feed.orderConfirmation.tip')}
                     </Text>
                     <Text variant="body" style={styles.infoValue}>
-                      Check the item before confirming reception.
+                      {t('feed.orderConfirmation.checkBeforeConfirm')}
                     </Text>
                   </View>
                 </>
@@ -268,12 +314,12 @@ export default function OrderConfirmationScreen() {
 
             <View style={styles.ctaBlock}>
               <Button
-                title="View my orders"
+                title={t('feed.orderConfirmation.viewOrders')}
                 onPress={() => router.replace('/tabs/profile/orders')}
                 variant="primary"
               />
               <Button
-                title="Back to feed"
+                title={t('feed.orderConfirmation.backToFeed')}
                 onPress={() => router.replace('/tabs/feed')}
                 variant="secondary"
                 style={styles.secondaryCta}

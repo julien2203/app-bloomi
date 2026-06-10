@@ -3,7 +3,11 @@ import { Stack } from 'expo-router';
 
 export default function SellStackLayout() {
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        animation: 'slide_from_right'
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{ headerShown: false, gestureEnabled: true }}

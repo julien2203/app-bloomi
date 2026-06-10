@@ -10,6 +10,13 @@ import { supabase } from '../../../lib/supabase';
 import { SUPABASE_URL } from '../../../lib/env';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
+import {
+  isStripeConnectReturnUrl,
+  markStripeConnectReturnPending,
+  navigateAfterStripeConnectReturn,
+  navigateInTabs
+} from '../../../lib/navigation/navigateInTabs';
+import { useTranslation } from 'react-i18next';
 
 type StripeOnboardingStatus =
   | { type: 'idle'; message: string }
@@ -17,6 +24,7 @@ type StripeOnboardingStatus =
   | { type: 'error'; message: string };
 
 export default function ActivateSellerAccountScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
 
@@ -28,12 +36,12 @@ export default function ActivateSellerAccountScreen() {
   const checkStripeOnboarding = useCallback(async () => {
     if (!userId) return;
 
-    setStatus({ type: 'idle', message: 'Checking your seller account status…' });
+    setStatus({ type: 'idle', message: t('profile.activateSeller.checking') });
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        throw new Error('Session expired, please log in again.');
+        throw new Error(t('feed.checkout.sessionExpired'));
       }
 
       const response = await fetch(
@@ -53,7 +61,7 @@ export default function ActivateSellerAccountScreen() {
         throw new Error(
           (data as any)?.error ??
             (data as any)?.details ??
-            'Unable to check your Stripe status. Please try again.'
+            t('profile.activateSeller.checkError')
         );
       }
 
@@ -61,21 +69,21 @@ export default function ActivateSellerAccountScreen() {
       if (completed) {
         setStatus({
           type: 'success',
-          message: 'Seller account successfully activated. Thank you!'
+          message: t('profile.activateSeller.activated')
         });
       } else {
         setStatus({
           type: 'idle',
-          message: 'Your seller account is not activated yet.'
+          message: t('profile.activateSeller.notActivated')
         });
       }
     } catch {
       setStatus({
         type: 'error',
-        message: 'An error occurred while checking your status.'
+        message: t('profile.activateSeller.checkError')
       });
     }
-  }, [userId]);
+  }, [t, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,12 +93,20 @@ export default function ActivateSellerAccountScreen() {
 
   useEffect(() => {
     const subscription = Linking.addEventListener('url', (event) => {
-      const url = (event as any)?.url;
-      // Le Edge Function renvoie `return_url: "bloomi://profile"`.
-      if (typeof url === 'string' && url.startsWith('bloomi://profile')) {
+      const url = event?.url;
+      if (isStripeConnectReturnUrl(url)) {
+        navigateAfterStripeConnectReturn();
         void checkStripeOnboarding();
       }
     });
+
+    void (async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (isStripeConnectReturnUrl(initialUrl)) {
+        navigateAfterStripeConnectReturn();
+        void checkStripeOnboarding();
+      }
+    })();
 
     return () => {
       subscription.remove();
@@ -107,7 +123,7 @@ export default function ActivateSellerAccountScreen() {
     try {
       setStatus({
         type: 'idle',
-        message: 'Opening Stripe Connect onboarding…'
+        message: t('profile.activateSeller.openingStripe')
       });
 
       // Appelle l'Edge Function côté Supabase.
@@ -115,7 +131,7 @@ export default function ActivateSellerAccountScreen() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        throw new Error('Session expired, please log in again.');
+        throw new Error(t('feed.checkout.sessionExpired'));
       }
 
       const response = await fetch(
@@ -133,35 +149,34 @@ export default function ActivateSellerAccountScreen() {
       const data = await response.json();
       const url: string | null = (data as any)?.url ?? null;
 
-      if (!url) {
-        throw new Error(
-          (data as any)?.error ??
-            (data as any)?.details ??
-            'Missing Stripe URL in create-connect-account response.'
-        );
+      if (!response.ok || !url) {
+        const err = (data as { error?: string; details?: string })?.error ?? 'Request failed';
+        const details = (data as { details?: string })?.details;
+        throw new Error(details ? `${err}: ${details}` : err);
       }
 
+      await markStripeConnectReturnPending();
       await Linking.openURL(url);
-      // À l'arrivée dans l'app, `useFocusEffect` recalcule le statut.
+      // À l'arrivée dans l'app : deep link, marqueur AsyncStorage ou `useFocusEffect`.
     } catch (e) {
       setStatus({
         type: 'error',
         message:
           e instanceof Error
             ? `Unable to start Stripe onboarding: ${e.message}`
-            : 'Unable to start Stripe onboarding. Please try again.'
+            : t('profile.activateSeller.unableStartOnboarding')
       });
     } finally {
       setLoading(false);
     }
-  }, [loading, userId]);
+  }, [loading, t, userId]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <HeaderBackButton onPress={() => router.back()} />
         <Text variant="body" style={styles.headerTitle}>
-          Activate my seller account
+            {t('sell.activateAccount')}
         </Text>
         <View style={styles.headerRightPlaceholder} />
       </View>
@@ -174,21 +189,21 @@ export default function ActivateSellerAccountScreen() {
               <AppIcon name="checkCircleBold" size={28} color={theme.colors.appleBlack} />
             </View>
             <Text variant="h2" style={styles.successTitle}>
-              Seller account activated
+              {t('profile.activateSeller.activatedTitle')}
             </Text>
             <Text variant="body" color="textSecondary" style={styles.successSubtitle}>
-              You can sell on Bloomi and receive payouts
+              {t('profile.activateSeller.activatedSubtitle')}
             </Text>
 
             <View style={styles.successActions}>
               <Button
-                title="Open my Wallet"
-                onPress={() => router.replace('/tabs/profile/wallet')}
+                title={t('profile.activateSeller.openWallet')}
+                onPress={() => navigateInTabs('/tabs/profile/wallet')}
                 variant="primary"
               />
               <Button
-                title="Back to profile"
-                onPress={() => router.replace('/tabs/profile')}
+                title={t('profile.activateSeller.backToProfile')}
+                onPress={() => navigateInTabs('/tabs/profile')}
                 variant="secondary"
               />
             </View>
@@ -196,12 +211,12 @@ export default function ActivateSellerAccountScreen() {
         ) : (
           <>
             <Text variant="body" color="textSecondary" style={styles.description}>
-              Connect your Stripe Connect account to receive payouts for your sales.
+              {t('profile.activateSeller.connectDescription')}
             </Text>
 
             <View style={styles.buttonContainer}>
               <Button
-                title="Connect my bank account"
+                title={t('profile.activateSeller.connectBank')}
                 onPress={handleConnect}
                 disabled={!canConnect}
                 loading={loading}

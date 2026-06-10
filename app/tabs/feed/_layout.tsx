@@ -7,7 +7,8 @@ export default function FeedStackLayout() {
       screenOptions={{
         headerTitleAlign: 'center',
         headerBackTitleVisible: false,
-        headerShown: false
+        headerShown: false,
+        animation: 'slide_from_right'
       }}
     >
       <Stack.Screen
@@ -17,6 +18,15 @@ export default function FeedStackLayout() {
       <Stack.Screen
         name="[id]"
         options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="make-offer"
+        options={{
+          headerShown: false,
+          gestureEnabled: true,
+          presentation: 'modal',
+          animation: 'slide_from_bottom'
+        }}
       />
     </Stack>
   );

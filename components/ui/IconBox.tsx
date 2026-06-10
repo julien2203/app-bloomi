@@ -5,8 +5,8 @@ import type { SvgProps } from 'react-native-svg';
 type SvgIconComponent = React.ComponentType<SvgProps>;
 
 export type IconBoxProps =
-  | { boxSize: number; source: ImageSourcePropType; Svg?: undefined }
-  | { boxSize: number; Svg: SvgIconComponent; source?: undefined };
+  | { boxSize: number; source: ImageSourcePropType; Svg?: undefined; color?: string }
+  | { boxSize: number; Svg: SvgIconComponent; source?: undefined; color?: string };
 
 /**
  * Cadre fixe + contenu en « contain » pour harmoniser le rendu visuel entre icônes
@@ -15,7 +15,7 @@ export type IconBoxProps =
  * Pour les SVG (transformés en composants par Metro) : équivalent avec largeur/hauteur 100 %.
  */
 export function IconBox(props: IconBoxProps) {
-  const { boxSize } = props;
+  const { boxSize, color } = props;
 
   if ('source' in props && props.source) {
     return (
@@ -29,7 +29,13 @@ export function IconBox(props: IconBoxProps) {
   return (
     <View style={[styles.outer, { width: boxSize, height: boxSize }]} pointerEvents="none">
       <View style={styles.fill}>
-        <Svg width="100%" height="100%" pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
+        <Svg
+          width="100%"
+          height="100%"
+          pointerEvents="none"
+          preserveAspectRatio="xMidYMid meet"
+          color={color}
+        />
       </View>
     </View>
   );

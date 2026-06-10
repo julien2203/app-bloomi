@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { useSellFormStore } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
+import { useTranslation } from 'react-i18next';
 
 type ConditionValue = 'new' | 'like_new' | 'good' | 'fair';
 
@@ -18,30 +18,8 @@ type ConditionOption = {
   description: string;
 };
 
-const CONDITION_OPTIONS: ConditionOption[] = [
-  {
-    label: 'New with tags',
-    value: 'new',
-    description: 'Never worn, with original tags attached.'
-  },
-  {
-    label: 'New without tags',
-    value: 'like_new',
-    description: 'Never or barely worn, no visible signs of wear.'
-  },
-  {
-    label: 'Good',
-    value: 'good',
-    description: 'Lightly worn, minor signs of use, no defects.'
-  },
-  {
-    label: 'Fair',
-    value: 'fair',
-    description: 'Visible signs of wear, small defects possible.'
-  }
-];
-
 export default function SellConditionScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { values, setField } = useSellFormStore();
@@ -54,20 +32,43 @@ export default function SellConditionScreen() {
     router.back();
   };
 
+  const conditionOptions: ConditionOption[] = [
+    {
+      label: t('feed.listingDetail.conditionNew'),
+      value: 'new',
+      description: t('sell.conditionDescNew')
+    },
+    {
+      label: t('feed.listingDetail.conditionLikeNew'),
+      value: 'like_new',
+      description: t('sell.conditionDescLikeNew')
+    },
+    {
+      label: t('feed.listingDetail.conditionGood'),
+      value: 'good',
+      description: t('sell.conditionDescGood')
+    },
+    {
+      label: t('feed.listingDetail.conditionFair'),
+      value: 'fair',
+      description: t('sell.conditionDescFair')
+    }
+  ];
+
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Condition
+            {t('sell.condition')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
 
         <View style={styles.content}>
           <FlatList
-            data={CONDITION_OPTIONS}
+            data={conditionOptions}
             keyExtractor={(item) => item.value}
             renderItem={({ item }) => {
               const isSelected = selected === item.value;
@@ -95,13 +96,9 @@ export default function SellConditionScreen() {
                       {item.description}
                     </Text>
                   </View>
-                  {isSelected && (
-                    <Feather
-                      name="check"
-                      size={18}
-                      color={theme.colors.primary}
-                    />
-                  )}
+                  <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                    {isSelected ? <View style={styles.radioInner} /> : null}
+                  </View>
                 </TouchableOpacity>
               );
             }}
@@ -117,7 +114,7 @@ export default function SellConditionScreen() {
           ]}
         >
           <Button
-            title="Confirm"
+            title={t('common.confirm')}
             onPress={handleConfirm}
             variant="primary"
             disabled={!selected}
@@ -182,6 +179,24 @@ const styles = StyleSheet.create({
   optionText: {
     flex: 1,
     marginRight: 12
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#CCCCCC',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  radioOuterSelected: {
+    borderColor: '#C3EA4F'
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#C3EA4F'
   },
   optionDescription: {
     marginTop: 4

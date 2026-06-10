@@ -10,22 +10,29 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../../../lib/theme';
-import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
-import { getListingById, createOrGetThreadForListing, sendOfferMessage } from '../../../lib/api';
+import { ModalCard } from '../../../components/ui/ModalCard';
+import {
+  cloneListingDetail,
+  getListingById,
+  createOrGetThreadForListing,
+  sendOfferMessage
+} from '../../../lib/api';
 import type { ListingDetail } from '../../../lib/api';
 import { useAuthStore } from '../../../stores/authStore';
-
-const BUYER_PROTECTION_RATE = 0.08;
+import { openGuestAuthPrompt } from '../../../lib/guestAuthPrompt';
+import { computeBuyerFinalPriceChf } from '../../../lib/formatBuyerPrice';
 
 export default function MakeOfferScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -38,13 +45,18 @@ export default function MakeOfferScreen() {
   const [selectedCard, setSelectedCard] = useState<'10' | '20' | 'other' | null>(null);
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [offerSuccessModalVisible, setOfferSuccessModalVisible] = useState(false);
+  const [pendingChatNavigation, setPendingChatNavigation] = useState<{
+    threadId: string;
+    listingId: string;
+  } | null>(null);
 
   const inputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     const load = async () => {
       if (!listingId) {
-        setError('Listing not found');
+        setError(t('feed.listingDetail.notFound'));
         setLoading(false);
         return;
       }
@@ -52,20 +64,20 @@ export default function MakeOfferScreen() {
         setError(null);
         const { data, error: fetchError } = await getListingById(listingId);
         if (fetchError || !data) {
-          setError(fetchError?.message || 'Listing not found');
+          setError(fetchError?.message || t('feed.listingDetail.notFound'));
           setListing(null);
         } else {
-          setListing(data);
+          setListing(cloneListingDetail(data));
         }
       } catch {
-        setError('Unable to load listing.');
+        setError(t('feed.makeOffer.unableLoad'));
         setListing(null);
       } finally {
         setLoading(false);
       }
     };
     void load();
-  }, [listingId]);
+  }, [listingId, t]);
 
   const originalPrice = listing?.price ?? 0;
 
@@ -78,8 +90,8 @@ export default function MakeOfferScreen() {
     }
     const price10 = +(listing.price * 0.9).toFixed(2);
     const price20 = +(listing.price * 0.8).toFixed(2);
-    const total10 = +(price10 * (1 + BUYER_PROTECTION_RATE)).toFixed(0);
-    const total20 = +(price20 * (1 + BUYER_PROTECTION_RATE)).toFixed(0);
+    const total10 = Math.round(computeBuyerFinalPriceChf(price10));
+    const total20 = Math.round(computeBuyerFinalPriceChf(price20));
     return {
       minus10: { price: price10, total: total10 },
       minus20: { price: price20, total: total20 }
@@ -115,7 +127,11 @@ export default function MakeOfferScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!listing || !user || !isValidAmount) return;
+    if (!listing || !isValidAmount) return;
+    if (!user) {
+      openGuestAuthPrompt();
+      return;
+    }
     setSubmitting(true);
     try {
       const { data: thread, error: threadError } = await createOrGetThreadForListing(
@@ -125,7 +141,7 @@ export default function MakeOfferScreen() {
       if (threadError || !thread) {
         // eslint-disable-next-line no-console
         console.warn('Erreur thread pour offre:', threadError);
-        setError('Unable to send offer right now.');
+        setError(t('feed.makeOffer.unableSend'));
         return;
       }
 
@@ -138,14 +154,12 @@ export default function MakeOfferScreen() {
       if (msgError) {
         // eslint-disable-next-line no-console
         console.warn('Erreur message offre:', msgError);
-        setError('Unable to send offer right now.');
+        setError(t('feed.makeOffer.unableSend'));
         return;
       }
 
-      router.replace({
-        pathname: '/tabs/messages/[id]',
-        params: { id: thread.id }
-      });
+      setPendingChatNavigation({ threadId: thread.id, listingId: listing.id });
+      setOfferSuccessModalVisible(true);
     } finally {
       setSubmitting(false);
     }
@@ -159,7 +173,7 @@ export default function MakeOfferScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
             <Text variant="captionSm" color="textSecondary" style={styles.loadingText}>
-              Loading offer...
+              {t('common.loading')}
             </Text>
           </View>
         </SafeAreaView>
@@ -176,7 +190,7 @@ export default function MakeOfferScreen() {
             <Text variant="body" style={styles.errorText}>
               {error || 'Listing not found.'}
             </Text>
-            <Button title="Back" onPress={handleBack} variant="secondary" />
+            <Button title={t('common.back')} onPress={handleBack} variant="secondary" />
           </View>
         </SafeAreaView>
       </>
@@ -200,16 +214,7 @@ export default function MakeOfferScreen() {
             <Text variant="body" style={styles.headerTitle} numberOfLines={1}>
               {sellerName}
             </Text>
-            <TouchableOpacity
-              onPress={() => {
-                // TODO: afficher un modal d'info si besoin
-              }}
-              activeOpacity={0.7}
-              hitSlop={HIT_SLOP_COMFORTABLE}
-              style={HEADER_ICON_TOUCH_CONTAINER}
-            >
-              <Feather name="info" size={18} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
+            <View style={styles.headerRightPlaceholder} />
           </View>
 
           {/* Contenu scrollable + bouton sticky */}
@@ -260,7 +265,7 @@ export default function MakeOfferScreen() {
                     {quickOffers.minus10.total}CHF Total
                   </Text>
                   <Text variant="captionSm" style={styles.quickDiscount}>
-                    10% OFF
+                    {t('feed.makeOffer.off10')}
                   </Text>
                 </TouchableOpacity>
 
@@ -280,7 +285,7 @@ export default function MakeOfferScreen() {
                     {quickOffers.minus20.total}CHF Total
                   </Text>
                   <Text variant="captionSm" style={styles.quickDiscount}>
-                    20% OFF
+                    {t('feed.makeOffer.off20')}
                   </Text>
                 </TouchableOpacity>
 
@@ -294,13 +299,13 @@ export default function MakeOfferScreen() {
                   onPress={() => handleSelectCard('other')}
                 >
                   <Text variant="body" style={styles.quickPrice}>
-                    OTHER
+                    {t('feed.makeOffer.otherUpper')}
                   </Text>
                   <Text variant="captionSm" style={styles.quickTotal}>
-                    Other
+                    {t('feed.makeOffer.other')}
                   </Text>
                   <Text variant="captionSm" style={styles.quickDiscount}>
-                    NAME YOUR PRICE
+                    {t('feed.makeOffer.nameYourPrice')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -308,7 +313,7 @@ export default function MakeOfferScreen() {
               {/* Manual input */}
               <View style={styles.toBlock}>
                 <Text variant="body" style={styles.toLabel}>
-                  To
+                  {t('feed.makeOffer.to')}
                 </Text>
                 <View
                   style={[
@@ -350,7 +355,7 @@ export default function MakeOfferScreen() {
               ]}
             >
               <Button
-                title="Send offer"
+                title={t('feed.makeOffer.sendOffer')}
                 onPress={handleSubmit}
                 variant="primary"
                 disabled={!isValidAmount || submitting}
@@ -362,6 +367,37 @@ export default function MakeOfferScreen() {
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      <ModalCard
+        visible={offerSuccessModalVisible}
+        onClose={() => {
+          setOfferSuccessModalVisible(false);
+          setPendingChatNavigation(null);
+        }}
+        icon={
+          <Ionicons
+            name="checkmark-circle"
+            size={56}
+            color={theme.colors.primary}
+          />
+        }
+        title={t('feed.makeOffer.offerSent')}
+        message={t('feed.makeOffer.offerSentMessage')}
+        buttonText={t('feed.makeOffer.viewConversation')}
+        onButtonPress={() => {
+          const nav = pendingChatNavigation;
+          setOfferSuccessModalVisible(false);
+          setPendingChatNavigation(null);
+          if (!nav) return;
+          router.replace({
+            pathname: '/tabs/messages/[id]',
+            params: {
+              id: nav.threadId,
+              from_listing_id: nav.listingId
+            }
+          });
+        }}
+      />
     </>
   );
 }
@@ -389,6 +425,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.textPrimary
+  },
+  headerRightPlaceholder: {
+    width: 28
   },
   content: {
     flex: 1

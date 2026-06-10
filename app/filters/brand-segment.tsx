@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
 import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
+import { useTranslation } from 'react-i18next';
 
 type Segment = {
   label: string;
@@ -17,6 +18,7 @@ type Segment = {
 };
 
 export default function BrandSegmentScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
@@ -36,22 +38,22 @@ export default function BrandSegmentScreen() {
       default:
         return [
           {
-            label: "Women's clothing",
+            label: t('filters.segment.womenClothing'),
             gender: 'femme',
             type: 'vetements'
           },
           {
-            label: "Women's shoes",
+            label: t('filters.segment.womenShoes'),
             gender: 'femme',
             type: 'chaussures'
           },
           {
-            label: "Women's bags",
+            label: t('filters.segment.womenBags'),
             gender: 'femme',
             type: 'sacs'
           },
           {
-            label: "Women's accessories",
+            label: t('filters.segment.womenAccessories'),
             gender: 'femme',
             type: 'accessoires'
           }
@@ -59,17 +61,17 @@ export default function BrandSegmentScreen() {
       case 'homme':
         return [
           {
-            label: "Men's clothing",
+            label: t('filters.segment.menClothing'),
             gender: 'homme',
             type: 'vetements'
           },
           {
-            label: "Men's shoes",
+            label: t('filters.segment.menShoes'),
             gender: 'homme',
             type: 'chaussures'
           },
           {
-            label: "Men's accessories",
+            label: t('filters.segment.menAccessories'),
             gender: 'homme',
             type: 'accessoires'
           }
@@ -77,22 +79,22 @@ export default function BrandSegmentScreen() {
       case 'enfant':
         return [
           {
-            label: "Kids' clothing",
+            label: t('filters.segment.kidsClothing'),
             gender: 'enfant',
             type: 'vetements'
           },
           {
-            label: "Kids' shoes",
+            label: t('filters.segment.kidsShoes'),
             gender: 'enfant',
             type: 'chaussures'
           },
           {
-            label: "Kids' bags",
+            label: t('filters.segment.kidsBags'),
             gender: 'enfant',
             type: 'sacs'
           },
           {
-            label: "Kids' accessories",
+            label: t('filters.segment.kidsAccessories'),
             gender: 'enfant',
             type: 'accessoires'
           }
@@ -100,13 +102,13 @@ export default function BrandSegmentScreen() {
       case 'bebe':
         return [
           {
-            label: 'Baby clothing',
+            label: t('filters.segment.babyClothing'),
             gender: 'bebe',
             type: 'vetements'
           }
         ];
     }
-  }, [genderParam]);
+  }, [genderParam, t]);
 
   const openSegment = (segment: Segment) => {
     router.push({
@@ -133,7 +135,7 @@ export default function BrandSegmentScreen() {
         <View style={styles.header}>
           <HeaderBackButton onPress={() => router.back()} />
           <Text variant="body" style={styles.headerTitle}>
-            Brand
+            {t('filters.brand')}
           </Text>
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -161,7 +163,7 @@ export default function BrandSegmentScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

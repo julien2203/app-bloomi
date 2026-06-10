@@ -1,21 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import {
   Dimensions,
-  Image,
   StyleSheet,
   TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle
 } from 'react-native';
+import type { ImagePriority } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { theme } from '../lib/theme';
 import { Text } from './ui/Text';
 import { AppIcon } from './ui/AppIcon';
-import { InfluencerBadge } from './InfluencerBadge';
+import { ListingCoverImage } from './ui/ListingCoverImage';
 import { useAuthStore } from '../stores/authStore';
 import { likeListing, unlikeListing } from '../lib/api';
 import { useLikesStore } from '../stores/likesStore';
+import { useTranslation } from 'react-i18next';
+import { computeBuyerFees } from '../lib/fees';
 
 interface ProductCardProps {
   listingId: string;
@@ -38,27 +40,27 @@ interface ProductCardProps {
   cardWidth?: number;
   /** Hauteur image = width * ratio (ex: 1.0 ou 1.2) */
   imageRatio?: number;
+  /** Priorité de chargement de l'image (visible en premier sur le feed). */
+  imagePriority?: ImagePriority;
 }
 
-export function ProductCard({
+function ProductCardComponent({
   listingId,
   sellerId = null,
-  sellerName = null,
-  sellerAvatarUrl = null,
-  sellerIsInfluencer = false,
   title,
   price,
   currency = 'CHF',
   brand,
   size,
-  condition,
   imageUrl,
   likedCount = 0,
   onPress,
   style,
   cardWidth,
-  imageRatio = 1
+  imageRatio = 1,
+  imagePriority = 'normal'
 }: ProductCardProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
 
@@ -69,15 +71,16 @@ export function ProductCard({
 
   const [toggling, setToggling] = useState<boolean>(false);
   const likedByMe = useLikesStore((s) => !!s.likedIds[listingId]);
-  const likesCount = useLikesStore((s) => s.countsByListingId[listingId] ?? likedCount);
   const likeOptimistic = useLikesStore((s) => s.likeOptimistic);
   const unlikeOptimistic = useLikesStore((s) => s.unlikeOptimistic);
   const rollback = useLikesStore((s) => s.rollback);
 
-  const formattedPrice = `${price.toFixed(2)} ${currency}`;
-  const formattedPriceIncl = `${(price * 1.08).toFixed(2)} ${currency} incl.`;
-  const sellerDisplayName = (sellerName ?? '').trim();
-  const sellerInitial = sellerDisplayName ? sellerDisplayName[0]!.toUpperCase() : '';
+  const safePrice = Number(price);
+  const formattedPrice = `${(Number.isFinite(safePrice) ? safePrice : 0).toFixed(2)} ${currency}`;
+  const fees = safePrice > 0 && !isNaN(safePrice) ? computeBuyerFees(safePrice) : null;
+  const formattedPriceIncl = fees
+    ? `${fees.finalPriceChf.toFixed(2)} ${currency} ${t('feed.pricing.priceIncl')}`
+    : null;
 
   const heartIcon = useMemo(() => {
     if (likedByMe) return { name: 'likeHeartBold' as const, color: theme.colors.primary };
@@ -130,7 +133,13 @@ export function ProductCard({
     >
       {imageUrl ? (
         <View style={[styles.imageContainer, styles.imageFrame, { height: effectiveImageHeight }]}>
-          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+          <ListingCoverImage
+            uri={imageUrl}
+            widthDp={effectiveWidth}
+            heightDp={effectiveImageHeight}
+            recyclingKey={listingId}
+            priority={imagePriority}
+          />
           <View style={styles.imageOverlayTopRight}>
             {isOwnListing ? (
               <View style={styles.likeOverlayButton}>
@@ -152,42 +161,22 @@ export function ProductCard({
               </TouchableOpacity>
             )}
           </View>
-          <View style={styles.imageOverlayBottomLeft}>
-            <View style={styles.sellerOverlayRow}>
-              {sellerAvatarUrl ? (
-                <Image source={{ uri: sellerAvatarUrl }} style={styles.sellerAvatar} resizeMode="cover" />
-              ) : (
-                <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
-                  <Text variant="captionSm" style={styles.sellerAvatarInitials}>
-                    {sellerInitial}
-                  </Text>
-                </View>
-              )}
-              {sellerIsInfluencer ? (
-                <View style={styles.sellerNameBadgeRow}>
-                  <InfluencerBadge size={13} />
-                </View>
-              ) : null}
-            </View>
-          </View>
         </View>
       ) : (
         <View style={[styles.imageContainer, { height: effectiveImageHeight }]}>
           <Text variant="caption" color="textSecondary">
-            Pas d&apos;image
+            {t('common.noImage')}
           </Text>
         </View>
       )}
 
       <View style={styles.body}>
-        {/* Titre */}
         {title && (
           <Text variant="captionSm" numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
             {title}
           </Text>
         )}
 
-        {/* Marque + taille sur la même ligne */}
         {(brand || size) && (
           <Text
             variant="captionSm"
@@ -202,26 +191,28 @@ export function ProductCard({
           </Text>
         )}
 
-        {/* Prix */}
         <View style={styles.priceBlock}>
           <Text variant="captionSm" style={styles.priceMain} numberOfLines={1} ellipsizeMode="tail">
             {formattedPrice}
           </Text>
-          <Text
-            variant="captionSm"
-            color="primary"
-            style={styles.priceIncl}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {formattedPriceIncl}
-          </Text>
+          {formattedPriceIncl ? (
+            <Text
+              variant="captionSm"
+              color="primary"
+              style={styles.priceIncl}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {formattedPriceIncl}
+            </Text>
+          ) : null}
         </View>
-
       </View>
     </TouchableOpacity>
   );
 }
+
+export const ProductCard = React.memo(ProductCardComponent);
 
 const RADIUS = 8;
 
@@ -245,18 +236,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#F5F5F5'
   },
-  image: {
-    width: '100%',
-    height: '100%'
-  },
   imageOverlayTopRight: {
     position: 'absolute',
-    top: 8,
-    right: 8
-  },
-  imageOverlayBottomLeft: {
-    position: 'absolute',
-    left: 8,
     top: 8,
     right: 8
   },
@@ -266,42 +247,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 20,
     padding: 4
-  },
-  sellerOverlayRow: {
-    alignItems: 'flex-start'
-  },
-  sellerNameBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-    maxWidth: '100%'
-  },
-  sellerNameFlex: {
-    flexShrink: 1
-  },
-  sellerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: theme.colors.googleWhite
-  },
-  sellerAvatarFallback: {
-    backgroundColor: '#E5E5E5',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  sellerAvatarInitials: {
-    color: '#000000',
-    fontFamily: theme.fontFamily.semiBold
-  },
-  sellerNameOverlay: {
-    marginTop: 4,
-    color: theme.colors.googleWhite,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2
   },
   body: {
     paddingHorizontal: 8,
@@ -334,7 +279,5 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.semiBold,
     color: '#171819',
     flexShrink: 0
-  },
-  
+  }
 });
-

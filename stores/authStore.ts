@@ -1,18 +1,24 @@
 import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { ensureProfileExists } from '../lib/profile';
 import { useNotificationsBadgeStore } from './notificationsBadgeStore';
 import { useUnreadMessagesStore } from './unreadMessagesStore';
+
+export const GUEST_BROWSE_STORAGE_KEY = 'bloomi_guest_browse_v1';
 
 type AuthState = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
   initialized: boolean;
+  /** Parcours sans compte (persisté avec GUEST_BROWSE_STORAGE_KEY tant qu’aucune session). */
+  isGuest: boolean;
   setAuthFromSession: (session: Session | null) => void;
   restoreSession: () => Promise<void>;
   signOut: () => Promise<void>;
+  enterGuestMode: () => Promise<void>;
   setMockSession: () => void; // Pour le développement - à supprimer plus tard
 };
 
@@ -21,28 +27,36 @@ export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   isLoading: true,
   initialized: false,
+  isGuest: false,
 
   setAuthFromSession: (session) => {
     if (!session?.user) {
       useNotificationsBadgeStore.getState().setUnreadCount(0);
       useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
     }
-    set({
+    set((prev) => ({
+      ...prev,
       session,
       user: session?.user ?? null,
       isLoading: false,
-      initialized: true
-    });
+      initialized: true,
+      ...(session?.user ? { isGuest: false } : {})
+    }));
+    if (session?.user) {
+      void AsyncStorage.removeItem(GUEST_BROWSE_STORAGE_KEY);
+    }
   },
 
   restoreSession: async () => {
     set({ isLoading: true });
+    const guestRaw = await AsyncStorage.getItem(GUEST_BROWSE_STORAGE_KEY);
     const { data, error } = await supabase.auth.getSession();
 
     if (error) {
       set({
         session: null,
         user: null,
+        isGuest: guestRaw === 'true',
         isLoading: false,
         initialized: true
       });
@@ -51,11 +65,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     if (data.session) {
       await ensureProfileExists(data.session);
+      await AsyncStorage.removeItem(GUEST_BROWSE_STORAGE_KEY);
     }
 
     set({
       session: data.session,
       user: data.session?.user ?? null,
+      isGuest: data.session?.user ? false : guestRaw === 'true',
       isLoading: false,
       initialized: true
     });
@@ -66,11 +82,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     await supabase.auth.signOut();
     useNotificationsBadgeStore.getState().setUnreadCount(0);
     useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
+    await AsyncStorage.setItem(GUEST_BROWSE_STORAGE_KEY, 'true');
     set({
       session: null,
       user: null,
-      isLoading: false
+      isLoading: false,
+      isGuest: true
     });
+  },
+
+  enterGuestMode: async () => {
+    await AsyncStorage.setItem(GUEST_BROWSE_STORAGE_KEY, 'true');
+    set({ isGuest: true });
   },
 
   // TEMPORAIRE: Crée une session mock pour le développement
@@ -104,7 +127,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       session: mockSession,
       user: mockUser,
       isLoading: false,
-      initialized: true
+      initialized: true,
+      isGuest: false
     });
   }
 }));

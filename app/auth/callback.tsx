@@ -6,6 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
+import { navigateAfterStripeConnectReturn } from '../../lib/navigation/navigateInTabs';
+import { mergeAuthCallback } from '../../lib/auth/authCallbackUrl';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -14,98 +16,119 @@ export default function AuthCallbackScreen() {
     refresh_token?: string;
     type?: string;
     token?: string;
+    token_hash?: string;
     email?: string;
     rawUrl?: string;
   }>();
 
   useEffect(() => {
     const handleCallback = async () => {
-      try {
-        // 0) Essayer de récupérer les tokens dans le fragment (#) de l'URL profonde
-        const rawUrlParam = typeof params.rawUrl === 'string' ? params.rawUrl : null;
-        const initialUrl = rawUrlParam || (await Linking.getInitialURL());
+      const rawUrlParam = typeof params.rawUrl === 'string' ? params.rawUrl : null;
+      const initialUrl = rawUrlParam || (await Linking.getInitialURL());
 
-        if (initialUrl?.toLowerCase().includes('profile')) {
-          router.replace('/tabs/profile/activate-seller-account');
+      if (initialUrl?.toLowerCase().includes('profile')) {
+        navigateAfterStripeConnectReturn();
+        return;
+      }
+
+      const parsed = mergeAuthCallback(initialUrl, {
+        type: typeof params.type === 'string' ? params.type : undefined,
+        access_token: typeof params.access_token === 'string' ? params.access_token : undefined,
+        refresh_token: typeof params.refresh_token === 'string' ? params.refresh_token : undefined,
+        token: typeof params.token === 'string' ? params.token : undefined,
+        token_hash: typeof params.token_hash === 'string' ? params.token_hash : undefined,
+        email: typeof params.email === 'string' ? params.email : undefined
+      });
+
+      const isRecovery = parsed.intent === 'recovery';
+
+      const goAfterSession = (hasPhone: boolean) => {
+        if (isRecovery) {
+          router.replace('/auth/reset-password');
+          return;
+        }
+        if (!hasPhone) {
+          router.replace('/auth/verify-phone');
+          return;
+        }
+        router.replace('/auth/verify-phone');
+      };
+
+      try {
+        if (parsed.errorCode) {
+          console.warn('Auth callback error:', parsed.errorCode);
+          router.replace(isRecovery ? '/auth/reset-password' : '/auth/login');
           return;
         }
 
-        if (initialUrl && initialUrl.includes('#')) {
-          const [, hashPart] = initialUrl.split('#');
-          const search = new URLSearchParams(hashPart);
-          const fragmentAccessToken = search.get('access_token');
-          const fragmentRefreshToken = search.get('refresh_token');
-          const fragmentType = search.get('type');
-
-          if (fragmentAccessToken && fragmentRefreshToken) {
-            const { data, error } = await supabase.auth.setSession({
-              access_token: fragmentAccessToken,
-              refresh_token: fragmentRefreshToken
-            });
-
-            if (!error && data.session) {
-              if (fragmentType === 'recovery') {
-                router.replace('/auth/reset-password');
-                return;
-              }
-              router.replace('/auth/verify-phone');
-              return;
-            }
-          }
-        }
-
-        const typeParam = typeof params.type === 'string' ? params.type : null;
-        const accessToken = typeof params.access_token === 'string' ? params.access_token : null;
-        const refreshToken =
-          typeof params.refresh_token === 'string' ? params.refresh_token : null;
-
-        // 1) Cas : Supabase renvoie directement access/refresh token dans l'URL
-        if (accessToken && refreshToken) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
+        // PKCE / template : token_hash + type=recovery
+        if (isRecovery && parsed.tokenHash) {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: parsed.tokenHash,
+            type: 'recovery'
           });
-
           if (!error && data.session) {
-            if (typeParam === 'recovery') {
-              router.replace('/auth/reset-password');
-              return;
-            }
-            router.replace('/auth/verify-phone');
+            goAfterSession(Boolean(data.session.user.phone?.trim()));
             return;
           }
         }
 
-        // 2) Cas classique : lien d'email avec token + type=signup, on vérifie nous-mêmes
-        const email = typeof params.email === 'string' ? params.email : null;
-        const emailToken = typeof params.token === 'string' ? params.token : null;
-        if (typeParam === 'signup' && email && emailToken) {
+        // Implicit : access_token + refresh_token (fragment ou query)
+        if (parsed.accessToken && parsed.refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: parsed.accessToken,
+            refresh_token: parsed.refreshToken
+          });
+
+          if (!error && data.session) {
+            goAfterSession(Boolean(data.session.user.phone?.trim()));
+            return;
+          }
+        }
+
+        // Signup : token + email
+        if (parsed.intent === 'signup' && parsed.email && parsed.token) {
           const { data, error } = await supabase.auth.verifyOtp({
-            email,
-            token: emailToken,
+            email: parsed.email,
+            token: parsed.token,
             type: 'signup'
           });
 
           if (!error && data.session) {
-            router.replace('/auth/verify-phone');
+            goAfterSession(Boolean(data.session.user.phone?.trim()));
             return;
           }
         }
 
-        // 3) Fallback : essayer de récupérer une éventuelle session existante
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          router.replace('/auth/verify-phone');
+        // Intent recovery explicite mais tokens absents (session peut déjà être en recovery)
+        if (isRecovery) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            router.replace('/auth/reset-password');
+            return;
+          }
+          router.replace('/auth/login');
           return;
         }
 
-        // Fallback final : dans tous les cas, on envoie l'utilisateur
-        // vers la vérification du téléphone, pas vers login.
-        router.replace('/auth/verify-phone');
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          goAfterSession(Boolean(data.session.user.phone?.trim()));
+          return;
+        }
+
+        router.replace('/auth/login');
       } catch {
-        // En cas d'erreur inattendue, même stratégie :
-        // on emmène l'utilisateur sur verify-phone pour continuer le flow.
-        router.replace('/auth/verify-phone');
+        if (isRecovery) {
+          router.replace('/auth/reset-password');
+          return;
+        }
+        const { data } = await supabase.auth.getSession();
+        if (data.session && !data.session.user.phone?.trim()) {
+          router.replace('/auth/verify-phone');
+          return;
+        }
+        router.replace('/auth/login');
       }
     };
 
@@ -116,6 +139,7 @@ export default function AuthCallbackScreen() {
     params.refresh_token,
     params.email,
     params.token,
+    params.token_hash,
     params.type,
     params.rawUrl
   ]);
@@ -143,4 +167,3 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   }
 });
-

@@ -94,8 +94,8 @@ Deno.serve(async (req) => {
 
   const tn = String(row.tracking_number ?? "").trim();
   const messageBody = tn
-    ? `📦 Colis expédié ! [${tn}] — Ton colis est en route.`
-    : `📦 Colis expédié ! — Ton colis est en route.`;
+    ? `📦 Shipped! [${tn}] — Your parcel is on its way.`
+    : `📦 Shipped! — Your parcel is on its way.`;
 
   try {
     const threadId = await findOrCreateThreadForOrderChat(supabaseAdmin, {

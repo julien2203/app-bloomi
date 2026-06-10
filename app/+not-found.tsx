@@ -1,21 +1,21 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 
 export default function NotFoundScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Page not found</Text>
-      <Text style={styles.message}>
-        The page you are looking for does not exist or has been moved.
-      </Text>
+      <Text style={styles.title}>{t('errors.pageNotFound.title')}</Text>
+      <Text style={styles.message}>{t('errors.pageNotFound.message')}</Text>
       <TouchableOpacity
         style={styles.button}
         onPress={() => router.replace('/')}
       >
-        <Text style={styles.buttonText}>Back to home</Text>
+        <Text style={styles.buttonText}>{t('navigation.backToHome')}</Text>
       </TouchableOpacity>
     </View>
   );

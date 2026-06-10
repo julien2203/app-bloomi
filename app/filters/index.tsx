@@ -1,7 +1,9 @@
 import React, { useMemo } from 'react';
+import { useFilterSummaryLabels } from '../../lib/useFilterSummaryLabels';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
@@ -13,6 +15,7 @@ import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 
 export default function FiltersIndexScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
@@ -25,36 +28,26 @@ export default function FiltersIndexScreen() {
   }>();
   const { filters } = useFiltersScreenStore();
   const stackBase = useFiltersStackBase();
+  const { categoryLabel, brandLabel, sizeLabel, colorLabel, conditionLabel } =
+    useFilterSummaryLabels(filters);
 
-  const headerTitle = params.title || 'Filters';
+  const headerTitle = params.title || t('navigation.filters');
 
   const sortLabel = useMemo(() => {
     const current: FeedSort = (filters.sortBy as FeedSort | undefined) ?? 'recent';
     switch (current) {
       case 'price_asc':
-        return 'Price low to high';
+        return t('filters.sortPriceAsc');
       case 'price_desc':
-        return 'Price high to low';
+        return t('filters.sortPriceDesc');
       case 'relevance':
-        return 'Relevance';
+        return t('filters.sortRelevance');
       case 'recent':
       default:
-        return 'Newest First';
+        return t('filters.sortRecent');
     }
-  }, [filters.sortBy]);
+  }, [filters.sortBy, t]);
 
-  const formatMultiValue = (values?: string[] | null) => {
-    if (!values || values.length === 0) return undefined;
-    const joined = values.join(', ');
-    if (joined.length <= 24) return joined;
-    return `${joined.slice(0, 21)}…`;
-  };
-
-  const categoryValue = filters.categoryId ?? undefined;
-  const sizeValue = formatMultiValue(filters.sizeIds);
-  const brandValue = formatMultiValue(filters.brandIds);
-  const conditionValue = formatMultiValue(filters.conditionIds);
-  const colorValue = formatMultiValue(filters.colorIds);
 
   const priceValue = useMemo(() => {
     if (filters.priceMin == null && filters.priceMax == null) return undefined;
@@ -64,13 +57,13 @@ export default function FiltersIndexScreen() {
       return `${min} - ${max} CHF`;
     }
     if (min != null) {
-      return `From ${min} CHF`;
+      return t('filters.fromChf', { value: min });
     }
     if (max != null) {
-      return `Up to ${max} CHF`;
+      return t('filters.upToChf', { value: max });
     }
     return undefined;
-  }, [filters.priceMin, filters.priceMax]);
+  }, [filters.priceMin, filters.priceMax, t]);
 
   const goToFilterScreen = (segment: string) => {
     router.push({
@@ -113,7 +106,7 @@ export default function FiltersIndexScreen() {
         <View style={styles.content}>
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('sort')}>
             <Text variant="body" style={styles.rowLabel}>
-              Sort by
+              {t('filters.sortBy')}
             </Text>
             <View style={styles.rowValueContainer}>
               <View style={styles.pill}>
@@ -127,22 +120,22 @@ export default function FiltersIndexScreen() {
 
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('category')}>
             <Text variant="body" style={styles.rowLabel}>
-              Category
+              {t('filters.category')}
             </Text>
             <View style={styles.rowValueContainer}>
-              {categoryValue ? (
+              {categoryLabel ? (
                 <View style={styles.pill}>
                   <Text variant="captionSm" style={styles.pillText} numberOfLines={1}>
-                    {categoryValue}
+                    {categoryLabel}
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.placeholderText}>All</Text>
+                <Text style={styles.placeholderText}>{t('common.all')}</Text>
               )}
               <Text
                 style={[
                   styles.chevron,
-                  !categoryValue && styles.chevronPlaceholder
+                  !categoryLabel && styles.chevronPlaceholder
                 ]}
               >
                 {'›'}
@@ -152,24 +145,24 @@ export default function FiltersIndexScreen() {
 
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('size')}>
             <Text variant="body" style={styles.rowLabel}>
-              Size
+              {t('filters.size')}
             </Text>
             <View style={styles.rowValueContainer}>
-              {sizeValue ? (
+              {sizeLabel ? (
                 <View style={styles.pill}>
                   <Text
                     variant="captionSm"
                     style={styles.pillText}
                     numberOfLines={1}
                   >
-                    {sizeValue}
+                    {sizeLabel}
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.placeholderText}>All</Text>
+                <Text style={styles.placeholderText}>{t('common.all')}</Text>
               )}
               <Text
-                style={[styles.chevron, !sizeValue && styles.chevronPlaceholder]}
+                style={[styles.chevron, !sizeLabel && styles.chevronPlaceholder]}
               >
                 {'›'}
               </Text>
@@ -178,24 +171,24 @@ export default function FiltersIndexScreen() {
 
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('brand-gender')}>
             <Text variant="body" style={styles.rowLabel}>
-              Brand
+              {t('filters.searchBrands')}
             </Text>
             <View style={styles.rowValueContainer}>
-              {brandValue ? (
+              {brandLabel ? (
                 <View style={styles.pill}>
                   <Text
                     variant="captionSm"
                     style={styles.pillText}
                     numberOfLines={1}
                   >
-                    {brandValue}
+                    {brandLabel}
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.placeholderText}>All</Text>
+                <Text style={styles.placeholderText}>{t('common.all')}</Text>
               )}
               <Text
-                style={[styles.chevron, !brandValue && styles.chevronPlaceholder]}
+                style={[styles.chevron, !brandLabel && styles.chevronPlaceholder]}
               >
                 {'›'}
               </Text>
@@ -204,26 +197,26 @@ export default function FiltersIndexScreen() {
 
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('condition')}>
             <Text variant="body" style={styles.rowLabel}>
-              Condition
+              {t('filters.condition')}
             </Text>
             <View style={styles.rowValueContainer}>
-              {conditionValue ? (
+              {conditionLabel ? (
                 <View style={styles.pill}>
                   <Text
                     variant="captionSm"
                     style={styles.pillText}
                     numberOfLines={1}
                   >
-                    {conditionValue}
+                    {conditionLabel}
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.placeholderText}>All</Text>
+                <Text style={styles.placeholderText}>{t('common.all')}</Text>
               )}
               <Text
                 style={[
                   styles.chevron,
-                  !conditionValue && styles.chevronPlaceholder
+                  !conditionLabel && styles.chevronPlaceholder
                 ]}
               >
                 {'›'}
@@ -233,24 +226,24 @@ export default function FiltersIndexScreen() {
 
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('color')}>
             <Text variant="body" style={styles.rowLabel}>
-              Color
+              {t('filters.color')}
             </Text>
             <View style={styles.rowValueContainer}>
-              {colorValue ? (
+              {colorLabel ? (
                 <View style={styles.pill}>
                   <Text
                     variant="captionSm"
                     style={styles.pillText}
                     numberOfLines={1}
                   >
-                    {colorValue}
+                    {colorLabel}
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.placeholderText}>All</Text>
+                <Text style={styles.placeholderText}>{t('common.all')}</Text>
               )}
               <Text
-                style={[styles.chevron, !colorValue && styles.chevronPlaceholder]}
+                style={[styles.chevron, !colorLabel && styles.chevronPlaceholder]}
               >
                 {'›'}
               </Text>
@@ -259,7 +252,7 @@ export default function FiltersIndexScreen() {
 
           <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('price')}>
             <Text variant="body" style={styles.rowLabel}>
-              Price
+              {t('filters.price')}
             </Text>
             <View style={styles.rowValueContainer}>
               {priceValue ? (
@@ -273,7 +266,7 @@ export default function FiltersIndexScreen() {
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.placeholderText}>All</Text>
+                <Text style={styles.placeholderText}>{t('common.all')}</Text>
               )}
               <Text
                 style={[styles.chevron, !priceValue && styles.chevronPlaceholder]}
@@ -291,7 +284,7 @@ export default function FiltersIndexScreen() {
           ]}
         >
           <Button
-            title="Show result"
+            title={t('filters.showResult')}
             onPress={handleShowResult}
             variant="primary"
             style={styles.showResultButton}

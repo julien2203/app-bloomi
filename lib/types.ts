@@ -12,6 +12,7 @@ import type { Database } from './supabase';
 export type ListingStatus = 'draft' | 'published' | 'sold' | 'archived' | 'reserved' | 'deleted';
 export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
 export type DeliveryMode = 'pickup' | 'shipping' | 'both';
+export type ParcelSize = 'small' | 'large' | 'xlarge';
 
 // ============================================
 // PROFILES
@@ -45,8 +46,10 @@ export interface Listing {
   price: number;
   status: ListingStatus;
   category: string | null;
+  category_id?: number | null;
   condition: string | null;
   delivery_mode: DeliveryMode;
+  parcel_size?: ParcelSize | null;
   latitude: number | null;
   longitude: number | null;
   city: string | null;
@@ -160,6 +163,8 @@ export interface MessageWithRelations extends Message {
 // ORDERS
 // ============================================
 
+export type SellerProfileTypeAtSale = 'individual' | 'influencer' | 'pro';
+
 export interface Order {
   id: string;
   listing_id: string;
@@ -172,6 +177,11 @@ export interface Order {
   shipping_postal_code: string | null;
   shipping_country: string | null;
   tracking_number: string | null;
+  seller_commission_chf?: number | null;
+  seller_fee_rate?: number | null;
+  buyer_protection_chf?: number | null;
+  buyer_banking_fee_chf?: number | null;
+  seller_profile_type?: SellerProfileTypeAtSale | null;
   created_at: string;
   confirmed_at: string | null;
   shipped_at: string | null;

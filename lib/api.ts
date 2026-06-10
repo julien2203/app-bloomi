@@ -67,6 +67,7 @@ export type FeedListing = {
   likes_count?: number | null;
   status: string;
   category: string | null;
+  category_id?: number | null;
   condition: string | null;
   brand?: string | null;
   delivery_mode: string;
@@ -85,7 +86,25 @@ export type FeedListing = {
   listing_country: string;
 };
 
-async function getBlockedSellerIdsForCurrentUser(): Promise<string[]> {
+function applyFeedListingFilters(
+  query: any,
+  filters: FeedFilters | undefined,
+  labels: { brandLabels: string[]; sizeLabels: string[]; colorLabels: string[] }
+) {
+  let q = query;
+  if (filters?.categoryIds && filters.categoryIds.length > 0) {
+    q = q.in('category_id', filters.categoryIds.map((id) => Number(id)));
+  }
+  if (filters?.conditionIds && filters.conditionIds.length > 0) q = q.in('condition', filters.conditionIds);
+  if (filters?.priceMin != null) q = q.gte('price', filters.priceMin);
+  if (filters?.priceMax != null) q = q.lte('price', filters.priceMax);
+  if (labels.brandLabels.length > 0) q = q.in('brand', labels.brandLabels);
+  if (labels.sizeLabels.length > 0) q = q.in('size', labels.sizeLabels);
+  if (labels.colorLabels.length > 0) q = q.in('color', labels.colorLabels);
+  return q;
+}
+
+export async function getBlockedSellerIdsForCurrentUser(): Promise<string[]> {
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -100,6 +119,106 @@ async function getBlockedSellerIdsForCurrentUser(): Promise<string[]> {
   return (data || [])
     .map((row: any) => String(row.blocked_id ?? ''))
     .filter(Boolean);
+}
+
+export type BlockedUserRow = {
+  blocked_id: string;
+  blocked_at: string;
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
+export async function getBlockedUsersForCurrentUser(): Promise<
+  ApiResponse<BlockedUserRow[]>
+> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user?.id) {
+    return { data: [], error: 'User not signed in' };
+  }
+
+  const { data: blocks, error: blocksError } = await supabase
+    .from('blocked_users')
+    .select('blocked_id, created_at')
+    .eq('blocker_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (blocksError) {
+    return { data: [], error: blocksError.message };
+  }
+
+  const rows = (blocks || []) as Array<{ blocked_id: string; created_at: string }>;
+  if (rows.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const blockedIds = rows.map((r) => String(r.blocked_id)).filter(Boolean);
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, display_name, avatar_url')
+    .in('id', blockedIds);
+
+  if (profilesError) {
+    return { data: [], error: profilesError.message };
+  }
+
+  const profileById = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+  for (const p of (profiles || []) as any[]) {
+    profileById.set(String(p.id), {
+      display_name: (p.display_name as string | null) ?? null,
+      avatar_url: (p.avatar_url as string | null) ?? null
+    });
+  }
+
+  const result: BlockedUserRow[] = rows.map((row) => {
+    const id = String(row.blocked_id);
+    const profile = profileById.get(id);
+    return {
+      blocked_id: id,
+      blocked_at: row.created_at,
+      display_name: profile?.display_name ?? null,
+      avatar_url: profile?.avatar_url ?? null
+    };
+  });
+
+  return { data: result, error: null };
+}
+
+export async function unblockUser(blockedId: string): Promise<ApiResponse<{ success: true }>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user?.id) {
+    return { data: null, error: 'User not signed in' };
+  }
+
+  const id = String(blockedId ?? '').trim();
+  if (!id) {
+    return { data: null, error: 'Invalid user id' };
+  }
+
+  const { error } = await supabase
+    .from('blocked_users')
+    .delete()
+    .eq('blocker_id', user.id)
+    .eq('blocked_id', id);
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: { success: true }, error: null };
+}
+
+/** Client-side filter when blocked seller IDs are known (feed, search, favorites). */
+export function excludeBlockedSellers<T extends { seller_id?: string | null }>(
+  rows: T[],
+  blockedIds: string[]
+): T[] {
+  if (!blockedIds.length) return rows;
+  const blocked = new Set(blockedIds);
+  return rows.filter((row) => !blocked.has(String(row.seller_id ?? '')));
 }
 
 // ============================================
@@ -149,10 +268,16 @@ export async function getFeedListings(params?: {
       });
       if (error) return { data: [], error: new Error(error.message) };
       const rows = (data || []) as FeedListing[];
+      const categoryFilteredRows =
+        filters?.categoryIds && filters.categoryIds.length > 0
+          ? rows.filter((row) =>
+              filters.categoryIds.some((id) => Number((row as any).category_id) === Number(id))
+            )
+          : rows;
       const filteredRows =
         blockedSellerIds.length > 0
-          ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
-          : rows;
+          ? categoryFilteredRows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+          : categoryFilteredRows;
       return { data: filteredRows, error: null };
       }
     }
@@ -164,13 +289,19 @@ export async function getFeedListings(params?: {
       } = await supabase.auth.getUser();
 
       if (!user?.id) {
-        const { data, error } = await supabase
+        let baseQuery = supabase
           .from('v_feed_listings')
           .select('*')
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
-        if (error) return { data: [], error: new Error(error.message) };
-        const rows = (data || []) as FeedListing[];
+        baseQuery = applyFeedListingFilters(
+          baseQuery,
+          filters,
+          { brandLabels, sizeLabels, colorLabels }
+        );
+        const { data: rowsData, error: rowsError } = await baseQuery;
+        if (rowsError) return { data: [], error: new Error(rowsError.message) };
+        const rows = (rowsData || []) as FeedListing[];
         const filteredRows =
           blockedSellerIds.length > 0
             ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
@@ -185,13 +316,19 @@ export async function getFeedListings(params?: {
         .order('created_at', { ascending: false })
         .limit(500);
       if (likesErr) {
-        const { data, error } = await supabase
+        let baseQuery = supabase
           .from('v_feed_listings')
           .select('*')
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
-        if (error) return { data: [], error: new Error(error.message) };
-        const rows = (data || []) as FeedListing[];
+        baseQuery = applyFeedListingFilters(
+          baseQuery,
+          filters,
+          { brandLabels, sizeLabels, colorLabels }
+        );
+        const { data: rowsData, error: rowsError } = await baseQuery;
+        if (rowsError) return { data: [], error: new Error(rowsError.message) };
+        const rows = (rowsData || []) as FeedListing[];
         const filteredRows =
           blockedSellerIds.length > 0
             ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
@@ -203,11 +340,13 @@ export async function getFeedListings(params?: {
         .map((r: any) => String(r.listing_id))
         .filter(Boolean);
       if (likedIds.length === 0) {
-        const { data, error } = await supabase
+        let baseQuery = supabase
           .from('v_feed_listings')
           .select('*')
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
+        baseQuery = applyFeedListingFilters(baseQuery, filters, { brandLabels, sizeLabels, colorLabels });
+        const { data, error } = await baseQuery;
         if (error) return { data: [], error: new Error(error.message) };
         const rows = (data || []) as FeedListing[];
         const filteredRows =
@@ -219,12 +358,7 @@ export async function getFeedListings(params?: {
 
       // Liked items matching current filters
       let likedQ = supabase.from('v_feed_listings').select('*').in('id', likedIds);
-      if (filters?.conditionIds && filters.conditionIds.length > 0) likedQ = likedQ.in('condition', filters.conditionIds);
-      if (filters?.priceMin != null) likedQ = likedQ.gte('price', filters.priceMin);
-      if (filters?.priceMax != null) likedQ = likedQ.lte('price', filters.priceMax);
-      if (brandLabels.length > 0) likedQ = likedQ.in('brand', brandLabels);
-      if (sizeLabels.length > 0) likedQ = likedQ.in('size', sizeLabels);
-      if (colorLabels.length > 0) likedQ = likedQ.in('color', colorLabels);
+      likedQ = applyFeedListingFilters(likedQ, filters, { brandLabels, sizeLabels, colorLabels });
 
       const { data: likedData, error: likedErr } = await likedQ;
       if (likedErr) return { data: [], error: new Error(likedErr.message) };
@@ -238,7 +372,11 @@ export async function getFeedListings(params?: {
       const remaining = Math.max(0, limit - likedSlice.length);
 
       if (remaining === 0) {
-        return { data: likedSlice, error: null };
+        const data =
+          blockedSellerIds.length > 0
+            ? likedSlice.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+            : likedSlice;
+        return { data, error: null };
       }
 
       // Rest of feed, newest first, excluding liked
@@ -248,13 +386,7 @@ export async function getFeedListings(params?: {
         .select('*')
         .order('created_at', { ascending: false })
         .range(restOffset, restOffset + remaining - 1);
-
-      if (filters?.conditionIds && filters.conditionIds.length > 0) restQ = restQ.in('condition', filters.conditionIds);
-      if (filters?.priceMin != null) restQ = restQ.gte('price', filters.priceMin);
-      if (filters?.priceMax != null) restQ = restQ.lte('price', filters.priceMax);
-      if (brandLabels.length > 0) restQ = restQ.in('brand', brandLabels);
-      if (sizeLabels.length > 0) restQ = restQ.in('size', sizeLabels);
-      if (colorLabels.length > 0) restQ = restQ.in('color', colorLabels);
+      restQ = applyFeedListingFilters(restQ, filters, { brandLabels, sizeLabels, colorLabels });
 
       const quoted = likedIds.map((x) => `"${x}"`).join(',');
       restQ = restQ.not('id', 'in', `(${quoted})`);
@@ -294,19 +426,7 @@ export async function getFeedListings(params?: {
       .select('*')
       .order(orderColumn, { ascending })
       .range(offset, offset + limit - 1);
-
-    if (filters?.conditionIds && filters.conditionIds.length > 0) {
-      query = query.in('condition', filters.conditionIds);
-    }
-    if (filters?.priceMin != null) {
-      query = query.gte('price', filters.priceMin);
-    }
-    if (filters?.priceMax != null) {
-      query = query.lte('price', filters.priceMax);
-    }
-    if (brandLabels.length > 0) query = query.in('brand', brandLabels);
-    if (sizeLabels.length > 0) query = query.in('size', sizeLabels);
-    if (colorLabels.length > 0) query = query.in('color', colorLabels);
+    query = applyFeedListingFilters(query, filters, { brandLabels, sizeLabels, colorLabels });
 
     const { data, error } = await query;
 
@@ -323,7 +443,7 @@ export async function getFeedListings(params?: {
   } catch (err) {
     return {
       data: [],
-      error: err instanceof Error ? err : new Error('Erreur inconnue')
+      error: err instanceof Error ? err : new Error('Unknown error')
     };
   }
 }
@@ -338,6 +458,9 @@ export async function getPriceBounds(filters?: FeedFilters): Promise<{
     // Base query helper pour appliquer les filtres existants
     const applyFilters = (q: any) => {
       let query = q;
+      if (filters?.categoryIds && filters.categoryIds.length > 0) {
+        query = query.in('category_id', filters.categoryIds.map((id) => Number(id)));
+      }
       if (filters?.conditionIds && filters.conditionIds.length > 0) {
         query = query.in('condition', filters.conditionIds);
       }
@@ -387,7 +510,7 @@ export async function getPriceBounds(filters?: FeedFilters): Promise<{
     return {
       min: null,
       max: null,
-      error: err instanceof Error ? err : new Error('Erreur inconnue')
+      error: err instanceof Error ? err : new Error('Unknown error')
     };
   }
 }
@@ -457,7 +580,7 @@ export async function getPublishedListings(
   const { data, error, count } = await queryBuilder;
 
   if (error) {
-    throw new Error(`Erreur lors de la récupération des annonces: ${error.message}`);
+    throw new Error(`Error while fetching listings: ${error.message}`);
   }
 
   return {
@@ -480,6 +603,7 @@ export type ListingDetail = {
   price: number;
   status: string;
   category: string | null;
+  category_id?: number | null;
   condition: string | null;
   delivery_mode: string;
   latitude: number | null;
@@ -556,7 +680,7 @@ export async function getListingById(id: string): Promise<{ data: ListingDetail 
   } catch (err) {
     return {
       data: null,
-      error: err instanceof Error ? err : new Error('Erreur inconnue')
+      error: err instanceof Error ? err : new Error('Unknown error')
     };
   }
 }
@@ -581,7 +705,7 @@ export async function getPublishedListingsCountForSeller(
   } catch (err) {
     return {
       count: 0,
-      error: err instanceof Error ? err : new Error('Erreur inconnue')
+      error: err instanceof Error ? err : new Error('Unknown error')
     };
   }
 }
@@ -615,9 +739,22 @@ export async function getListingByIdWithRelations(id: string): Promise<ApiRespon
 export async function createListing(
   payload: ListingInsert
 ): Promise<ApiResponse<Listing>> {
+  const normalizedPayload: ListingInsert = { ...payload };
+
+  if (
+    (normalizedPayload as any).category_id == null &&
+    typeof normalizedPayload.category === 'string' &&
+    normalizedPayload.category.trim().length > 0
+  ) {
+    const resolvedCategoryId = await resolveCategoryIdByLabel(normalizedPayload.category);
+    if (resolvedCategoryId != null) {
+      (normalizedPayload as any).category_id = resolvedCategoryId;
+    }
+  }
+
   const { data, error } = await supabase
     .from('listings')
-    .insert(payload)
+    .insert(normalizedPayload as any)
     .select()
     .single();
 
@@ -671,14 +808,14 @@ export async function uploadListingPhoto(
       .getPublicUrl(filePath);
 
     if (!urlData?.publicUrl) {
-      return { data: null, error: new Error("Impossible de récupérer l'URL publique") };
+      return { data: null, error: new Error('Unable to retrieve the public URL') };
     }
 
     return { data: urlData.publicUrl, error: null };
   } catch (err) {
     return {
       data: null,
-      error: err instanceof Error ? err : new Error('Erreur lors de l\'upload')
+      error: err instanceof Error ? err : new Error('Upload error')
     };
   }
 }
@@ -715,7 +852,7 @@ export async function getMyListings(): Promise<ApiResponse<Listing[]>> {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: 'Utilisateur non connecté' };
+    return { data: [], error: 'User not signed in' };
   }
 
   const { data, error } = await supabase
@@ -741,7 +878,7 @@ export async function getMyListingsFeed(): Promise<ApiResponse<FeedListing[]>> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: 'Utilisateur non connecté' };
+    return { data: [], error: 'User not signed in' };
   }
 
   const { data, error } = await supabase
@@ -769,12 +906,25 @@ export async function updateListing(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
+  }
+
+  const normalizedPayload: ListingUpdate = { ...payload };
+
+  if (
+    (normalizedPayload as any).category_id == null &&
+    typeof normalizedPayload.category === 'string' &&
+    normalizedPayload.category.trim().length > 0
+  ) {
+    const resolvedCategoryId = await resolveCategoryIdByLabel(normalizedPayload.category);
+    if (resolvedCategoryId != null) {
+      (normalizedPayload as any).category_id = resolvedCategoryId;
+    }
   }
 
   const { data, error } = await supabase
     .from('listings')
-    .update(payload)
+    .update(normalizedPayload as any)
     .eq('id', id)
     .eq('seller_id', user.id)
     .select()
@@ -787,13 +937,42 @@ export async function updateListing(
   return { data: data as Listing, error: null };
 }
 
+async function resolveCategoryIdByLabel(categoryLabel: string): Promise<number | null> {
+  const normalized = categoryLabel.trim();
+  if (!normalized) return null;
+
+  const { data: slugMatch } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('slug', normalized)
+    .limit(1)
+    .maybeSingle();
+
+  if (slugMatch?.id != null) {
+    return Number(slugMatch.id);
+  }
+
+  const { data: nameMatch } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('name', normalized)
+    .limit(1)
+    .maybeSingle();
+
+  if (nameMatch?.id != null) {
+    return Number(nameMatch.id);
+  }
+
+  return null;
+}
+
 /** Ancien libellé (rétrocompatibilité des écrans qui proposent « Désactiver »). */
 export const LISTING_DELETE_BLOCKED_BY_ORDERS_MESSAGE =
-  'Impossible de supprimer cette annonce car elle est liée à des commandes. Vous pouvez la désactiver à la place.';
+  'This listing cannot be deleted because it is linked to orders. You can deactivate it instead.';
 
 /** Commande encore active (pending / shipped) : pas de suppression physique. */
 export const LISTING_DELETE_BLOCKED_ACTIVE_ORDERS_MESSAGE =
-  'Impossible de supprimer : une commande est en cours pour cette annonce.';
+  'Cannot delete: an order is still in progress for this listing.';
 
 export function isListingDeleteBlockedByOrders(error: string | null): boolean {
   return (
@@ -909,7 +1088,7 @@ export async function deleteListing(id: string): Promise<ApiResponse<void>> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
   }
 
   const { data: row, error: verifyErr } = await supabase
@@ -923,7 +1102,7 @@ export async function deleteListing(id: string): Promise<ApiResponse<void>> {
     return { data: null, error: verifyErr.message };
   }
   if (!row) {
-    return { data: null, error: 'Annonce introuvable ou accès refusé' };
+    return { data: null, error: 'Listing not found or access denied' };
   }
 
   const { count: activeOrderCount, error: ordersErr } = await supabase
@@ -1003,7 +1182,7 @@ export async function likeListing(listingId: string): Promise<ApiResponse<{ id: 
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
   }
 
   const { data: listingRow, error: listingErr } = await supabase
@@ -1036,8 +1215,8 @@ export async function likeListing(listingId: string): Promise<ApiResponse<{ id: 
   if (sellerId) {
     void sendPushNotificationWithUserJwt({
       user_id: sellerId,
-      title: '❤️ Ton article a été liké !',
-      body: "Quelqu'un s'intéresse à ton article. C'est le moment de baisser le prix !",
+      title: '❤️ Someone liked your listing!',
+      body: 'Someone is interested in your item. It might be a good time to adjust the price!',
       data: { listing_id: listingId }
     });
   }
@@ -1051,7 +1230,7 @@ export async function unlikeListing(listingId: string): Promise<ApiResponse<{ su
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
   }
 
   const { error } = await supabase
@@ -1073,8 +1252,10 @@ export async function getMyLikedListings(): Promise<ApiResponse<LikedListingCard
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: 'Utilisateur non connecté' };
+    return { data: [], error: 'User not signed in' };
   }
+
+  const blockedIds = await getBlockedSellerIdsForCurrentUser();
 
   const { data, error } = await supabase
     .from('likes')
@@ -1127,7 +1308,7 @@ export async function getMyLikedListings(): Promise<ApiResponse<LikedListingCard
       };
     });
 
-  return { data: cards, error: null };
+  return { data: excludeBlockedSellers(cards, blockedIds), error: null };
 }
 
 export async function getMyLikedListingIds(): Promise<ApiResponse<string[]>> {
@@ -1136,7 +1317,7 @@ export async function getMyLikedListingIds(): Promise<ApiResponse<string[]>> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: 'Utilisateur non connecté' };
+    return { data: [], error: 'User not signed in' };
   }
 
   const { data, error } = await supabase
@@ -1228,7 +1409,7 @@ export async function getThreads(): Promise<ApiResponse<ThreadWithRelations[]>> 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: 'Utilisateur non connecté' };
+    return { data: [], error: 'User not signed in' };
   }
 
   const { data, error } = await supabase
@@ -1264,11 +1445,11 @@ export async function createOrGetThreadForListing(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
   }
 
   if (user.id === sellerId) {
-    return { data: null, error: 'Le vendeur ne peut pas se contacter lui-même' };
+    return { data: null, error: 'Sellers cannot message themselves' };
   }
 
   try {
@@ -1308,7 +1489,7 @@ export async function createOrGetThreadForListing(
   } catch (err) {
     return {
       data: null,
-      error: err instanceof Error ? err.message : 'Erreur lors de la création du thread'
+      error: err instanceof Error ? err.message : 'Error creating conversation'
     };
   }
 }
@@ -1349,7 +1530,7 @@ export async function sendMessage(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
   }
 
   const { data, error } = await supabase
@@ -1391,7 +1572,7 @@ export async function sendOfferMessage(params: {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: null, error: 'Utilisateur non connecté' };
+    return { data: null, error: 'User not signed in' };
   }
 
   const fallbackBody = `Offer: ${amount.toFixed(2)} ${currency} (status: pending)`;
@@ -1440,7 +1621,7 @@ export async function getOrders(): Promise<ApiResponse<Order[]>> {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { data: [], error: 'Utilisateur non connecté' };
+    return { data: [], error: 'User not signed in' };
   }
 
   const { data, error } = await supabase

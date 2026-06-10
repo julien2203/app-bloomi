@@ -14,6 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/ui/Screen';
 import { Text as UiText } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
@@ -34,14 +35,15 @@ type PriceOption = {
   max?: number;
 };
 
-const PRICE_OPTIONS: PriceOption[] = [
-  { label: 'Less than 50CHF', max: 50 },
-  { label: '50CHF - 100CHF', min: 50, max: 100 },
-  { label: '+ 100CHF', min: 100 }
-];
-
 export default function PriceFilterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const PRICE_OPTIONS: PriceOption[] = [
+    { label: t('filters.lessThan50'), max: 50 },
+    { label: t('filters.range50to100'), min: 50, max: 100 },
+    { label: t('filters.moreThan100'), min: 100 }
+  ];
+
   const params = useLocalSearchParams<{
     returnTo?: string;
     resultsSection?: string;
@@ -122,7 +124,7 @@ export default function PriceFilterScreen() {
           setMaxPlaceholder(maxPrice.toFixed(2));
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Unable to load price range.');
+        setError(e instanceof Error ? e.message : t('filters.priceLoadError'));
       } finally {
         setLoadingBounds(false);
       }
@@ -130,7 +132,7 @@ export default function PriceFilterScreen() {
 
     void loadBounds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.categoryId, filters.conditionIds, filters.brandIds, filters.sizeIds, filters.colorIds]);
+  }, [filters.categoryIds, filters.conditionIds, filters.brandIds, filters.sizeIds, filters.colorIds]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
@@ -144,10 +146,10 @@ export default function PriceFilterScreen() {
             <View style={styles.headerSide}>
               <HeaderBackButton onPress={() => router.back()} />
             </View>
-            <Text style={styles.headerTitle}>Price</Text>
+            <Text style={styles.headerTitle}>{t('filters.price')}</Text>
             <View style={[styles.headerSide, styles.headerSideRight]}>
               <TouchableOpacity activeOpacity={0.7} onPress={handleClearAll} hitSlop={12}>
-                <Text style={styles.clearAllText}>Clear all</Text>
+                <Text style={styles.clearAllText}>{t('filters.clearAll')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -168,7 +170,7 @@ export default function PriceFilterScreen() {
             contentContainerStyle={styles.scrollContent}
           >
             <View>
-              <Text style={styles.labelFrom}>Price from</Text>
+              <Text style={styles.labelFrom}>{t('filters.priceFrom')}</Text>
               <View style={styles.valuePad}>
                 {loadingBounds ? (
                   <View style={styles.skeletonInputRow}>
@@ -195,7 +197,7 @@ export default function PriceFilterScreen() {
             </View>
 
             <View style={styles.blockAfterFrom}>
-              <Text style={styles.labelTo}>To</Text>
+              <Text style={styles.labelTo}>{t('filters.priceTo')}</Text>
               <View style={styles.valuePad}>
                 {loadingBounds ? (
                   <View style={styles.skeletonInputRow}>
@@ -260,7 +262,7 @@ export default function PriceFilterScreen() {
             ]}
           >
             <Button
-              title="Show result"
+            title={t('filters.showResult')}
               onPress={handleShowResult}
               variant="primary"
               style={styles.showResultButton}

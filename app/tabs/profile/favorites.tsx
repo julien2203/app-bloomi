@@ -3,7 +3,6 @@ import {
   Animated,
   Dimensions,
   FlatList,
-  Image,
   StyleSheet,
   TouchableOpacity,
   View
@@ -20,16 +19,21 @@ import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
+import { useTranslation } from 'react-i18next';
+import { ListingCoverImage } from '../../../components/ui/ListingCoverImage';
+import { getCardImagePriority, LIST_IMAGE_PERF_PROPS } from '../../../lib/cardImagePriority';
+import { formatBuyerFinalPrice } from '../../../lib/formatBuyerPrice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_PADDING_H = 12;
 const GAP = 12;
 const ITEM_WIDTH = (SCREEN_WIDTH - GRID_PADDING_H * 2 - GAP) / 2;
-const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.2);
+const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.3);
 
 type Item = LikedListingCard;
 
 export default function FavoritesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
@@ -54,7 +58,7 @@ export default function FavoritesScreen() {
   const load = async () => {
     setLoading(true);
     const { data } = await getMyLikedListings();
-    setItems(data ?? []);
+    setItems((data ?? []).map((item) => ({ ...item })));
     setLoading(false);
   };
 
@@ -141,17 +145,17 @@ export default function FavoritesScreen() {
     <View style={styles.empty}>
       <AppIcon name="likeHeartOutline" size={48} color="#AAAAAA" />
       <Text variant="body" style={styles.emptyTitle}>
-        No favorites yet
+        {t('profile.favorites.empty')}
       </Text>
       <Text variant="captionSm" style={styles.emptySubtitle}>
-        Items you like will appear here
+        {t('profile.favorites.emptyHint')}
       </Text>
     </View>
   );
 
-  const renderItem = ({ item }: { item: Item }) => {
+  const renderItem = ({ item, index }: { item: Item; index: number }) => {
     const price = `${item.price.toFixed(2)} CHF`;
-    const priceIncl = `${(item.price * 1.08).toFixed(2)} CHF`;
+    const priceIncl = `${formatBuyerFinalPrice(item.price)} ${t('feed.pricing.priceIncl')}`;
 
     return (
       <TouchableOpacity
@@ -160,7 +164,14 @@ export default function FavoritesScreen() {
         style={styles.card}
       >
         {item.cover_photo_url ? (
-          <Image source={{ uri: item.cover_photo_url }} style={styles.image} />
+          <ListingCoverImage
+            uri={item.cover_photo_url}
+            widthDp={ITEM_WIDTH}
+            heightDp={ITEM_HEIGHT}
+            recyclingKey={item.id}
+            priority={getCardImagePriority(index)}
+            style={styles.image}
+          />
         ) : (
           <View style={styles.imagePlaceholder} />
         )}
@@ -210,7 +221,7 @@ export default function FavoritesScreen() {
       <View style={styles.header}>
         <HeaderBackButton onPress={() => router.back()} />
         <Text variant="body" style={styles.headerTitle}>
-          Favorites items
+          {t('profile.favorites.title')}
         </Text>
         <View style={styles.headerRightPlaceholder} />
       </View>
@@ -225,6 +236,7 @@ export default function FavoritesScreen() {
           data={items}
           keyExtractor={(x) => x.id}
           numColumns={2}
+          {...LIST_IMAGE_PERF_PROPS}
           renderItem={renderItem}
           contentContainerStyle={{
             marginTop: 20,

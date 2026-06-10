@@ -1,6 +1,5 @@
 /**
  * Écran Verify Phone Info
- * Titre "Please verify your information" + input phone + bouton "Verify phone number" + clavier numérique visuel en bas
  */
 
 import React, { useState } from 'react';
@@ -8,12 +7,14 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { Keypad } from '../../components/ui/Keypad';
 import { theme } from '../../lib/theme';
 
 export default function VerifyPhoneInfoScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [phone, setPhone] = useState('');
 
@@ -26,7 +27,6 @@ export default function VerifyPhoneInfoScreen() {
   };
 
   const handleVerify = () => {
-    // TODO: Implémenter la vérification
     router.push('/auth/verify-phone-code');
   };
 
@@ -36,18 +36,16 @@ export default function VerifyPhoneInfoScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Please verify your information</Text>
-            <Text style={styles.subtitle}>
-              Enter your phone number to continue
-            </Text>
+            <Text style={styles.title}>{t('auth.verifyPhoneInfo.pleaseVerifyTitle')}</Text>
+            <Text style={styles.subtitle}>{t('auth.verifyPhoneInfo.subtitle')}</Text>
           </View>
 
           <View style={styles.inputContainer}>
             <TextField
-              label="Phone number"
+              label={t('auth.verifyPhoneInfo.phoneNumber')}
               value={phone}
               onChangeText={setPhone}
-              placeholder="+41 79 123 45 67"
+              placeholder={t('auth.verifyPhoneInfo.phonePlaceholder')}
               keyboardType="phone-pad"
               editable={false}
             />
@@ -59,7 +57,7 @@ export default function VerifyPhoneInfoScreen() {
 
           <View style={styles.footer}>
             <Button
-              title="Verify phone number"
+              title={t('auth.verifyPhoneInfo.title')}
               onPress={handleVerify}
               variant="primary-green"
               disabled={!phone}
@@ -77,15 +75,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.backgroundWhite
   },
   content: {
-    flex: 1
+    flex: 1,
+    paddingHorizontal: theme.spacing.horizontalPadding
   },
   header: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingTop: 48,
-    paddingBottom: 32
+    paddingTop: 24,
+    paddingBottom: 16
   },
   title: {
-    ...theme.typography.h1,
+    ...theme.typography.h2,
     color: theme.colors.textPrimary,
     marginBottom: 8
   },
@@ -94,16 +92,13 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary
   },
   inputContainer: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    marginBottom: 24
+    marginBottom: 16
   },
   keypadContainer: {
     flex: 1,
-    justifyContent: 'flex-end'
+    justifyContent: 'center'
   },
   footer: {
-    paddingHorizontal: theme.spacing.horizontalPadding,
-    paddingBottom: 32,
-    paddingTop: 16
+    paddingBottom: 24
   }
 });

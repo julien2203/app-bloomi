@@ -89,21 +89,24 @@ export async function getCategoryFilterContext(
   return { gender, type, slugs };
 }
 
-/** Libellé FR pour section « Popular for … » */
-export function genderDisplayLabelFr(gender: string | null): string {
+/** Section label for “Popular for …” (English UI). */
+export function genderDisplayLabel(gender: string | null): string {
   switch (gender) {
     case 'femme':
-      return 'Femme';
+      return 'Women';
     case 'homme':
-      return 'Homme';
+      return 'Men';
     case 'enfant':
-      return 'Enfant';
+      return 'Kids';
     case 'bebe':
-      return 'Bébé';
+      return 'Baby';
     default:
       return '—';
   }
 }
+
+/** @deprecated Use {@link genderDisplayLabel} */
+export const genderDisplayLabelFr = genderDisplayLabel;
 
 /**
  * Compte des annonces par nom de marque dans une catégorie donnée.
@@ -153,6 +156,36 @@ export async function getChildCategories(parentId: string | number) {
     .eq('parent_id', id)
     .order('name');
   return data ?? [];
+}
+
+export async function getDescendantCategoryIds(
+  rootIds: Array<string | number>
+): Promise<string[]> {
+  const queue = rootIds
+    .map((id) => String(id).trim())
+    .filter(Boolean);
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('parent_id', currentId);
+    if (error || !data || data.length === 0) continue;
+
+    for (const row of data as Array<{ id: string | number }>) {
+      const childId = String(row.id).trim();
+      if (childId && !visited.has(childId)) {
+        queue.push(childId);
+      }
+    }
+  }
+
+  return Array.from(visited);
 }
 
 /**

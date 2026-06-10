@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { TextField } from '../../components/ui/TextField';
 import { Button } from '../../components/ui/Button';
 import { DividerOr } from '../../components/ui/DividerOr';
@@ -23,9 +24,12 @@ import {
   signInWithOAuthProvider,
   type OAuthProvider
 } from '../../lib/socialAuth';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const enterGuestMode = useAuthStore((s) => s.enterGuestMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -132,23 +136,23 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.content}>
-              <Text style={styles.title}>Log in</Text>
+              <Text style={styles.title}>{t('auth.login.title')}</Text>
 
               <TextField
-                label="Email"
+                label={t('auth.login.email')}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="your@email.com"
+                placeholder={t('auth.login.emailPlaceholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
               />
 
               <TextField
-                label="Password"
+                label={t('auth.login.password')}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Enter your password"
+                placeholder={t('auth.login.passwordPlaceholder')}
                 secureTextEntry
                 showToggle
               />
@@ -157,7 +161,7 @@ export default function LoginScreen() {
                 onPress={() => router.push('/auth/forgot-password')}
                 style={styles.forgotLink}
               >
-                <Text style={styles.forgotLinkText}>Forgot password?</Text>
+                <Text style={styles.forgotLinkText}>{t('auth.login.forgotPassword')}</Text>
               </TouchableOpacity>
 
               {error ? (
@@ -174,7 +178,7 @@ export default function LoginScreen() {
               ) : null}
 
               <Button
-                title="Log in"
+                title={t('auth.login.submit')}
                 onPress={handleLogin}
                 variant="primary-green"
                 loading={loading}
@@ -185,7 +189,7 @@ export default function LoginScreen() {
               <DividerOr />
 
               <Button
-                title="Continue with Apple"
+                title={t('auth.login.continueApple')}
                 onPress={() => void handleSocialLogin('apple')}
                 variant="apple-black"
                 style={styles.socialButton}
@@ -193,7 +197,7 @@ export default function LoginScreen() {
                 disabled={oauthLoading || loading}
               />
               <Button
-                title="Continue with Google"
+                title={t('auth.login.continueGoogle')}
                 onPress={() => void handleSocialLogin('google')}
                 variant="google-white"
                 style={styles.socialButton}
@@ -201,7 +205,7 @@ export default function LoginScreen() {
                 disabled={oauthLoading || loading}
               />
               <Button
-                title="Continue with Facebook"
+                title={t('auth.login.continueFacebook')}
                 onPress={() => void handleSocialLogin('facebook')}
                 variant="facebook-blue"
                 style={styles.socialButton}
@@ -210,15 +214,28 @@ export default function LoginScreen() {
 
               <View style={styles.signupLink}>
                 <Text style={styles.signupLinkText}>
-                  Don't have an account?{' '}
+                  {`${t('auth.login.noAccount')} `}
                   <Text
                     style={styles.signupLinkButton}
                     onPress={() => router.push('/auth/sign-up')}
                   >
-                    Sign up
+                    {t('auth.login.signUpLink')}
                   </Text>
                 </Text>
               </View>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  void (async () => {
+                    await enterGuestMode();
+                    router.replace('/tabs/feed');
+                  })();
+                }}
+                style={styles.guestLink}
+              >
+                <Text style={styles.guestLinkText}>{t('auth.login.continueGuest')}</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -283,5 +300,15 @@ const styles = StyleSheet.create({
   signupLinkButton: {
     color: theme.colors.primary,
     fontWeight: '600'
+  },
+  guestLink: {
+    marginTop: 20,
+    alignItems: 'center',
+    paddingVertical: 8
+  },
+  guestLinkText: {
+    ...theme.typography.body,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'underline'
   }
 });

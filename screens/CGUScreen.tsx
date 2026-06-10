@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../components/ui/Text';
 import { theme } from '../lib/theme';
 
-export default function CGUScreen() {
+function CGUScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -26,10 +26,7 @@ export default function CGUScreen() {
           contact@bloomi.ch; we are here to help.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>1. Who is Bloomi?</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="1. Who is Bloomi?" />
         <Text style={styles.paragraph}>
           Bloomi is a Swiss platform that connects buyers and sellers of second-hand fashion. It is operated by
           Bloomi Sàrl, a limited liability company governed by Swiss law. Our details are as follows:
@@ -44,10 +41,7 @@ export default function CGUScreen() {
           do not guarantee the quality of each listing.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>2. Who may use Bloomi?</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="2. Who may use Bloomi?" />
         <Text style={styles.h2}>2.1 Eligibility</Text>
         <Text style={styles.paragraph}>
           Bloomi is open to any natural person with legal capacity under Swiss law. If you are a minor, you must obtain
@@ -101,10 +95,7 @@ export default function CGUScreen() {
           </Text>
         </View>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>3. What may be sold</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="3. What may be sold" />
         <Text style={styles.h2}>3.1 Permitted items</Text>
         <Text style={styles.paragraph}>Bloomi is dedicated to second-hand fashion. The following are permitted:</Text>
         <Text style={styles.bullet}>• Clothing (new, pre-owned, or never worn),</Text>
@@ -131,10 +122,7 @@ export default function CGUScreen() {
           • not publish content that is harmful, discriminatory, or unlawful.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>4. How does a sale work?</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="4. How does a sale work?" />
         <Text style={styles.h2}>4.1 The contract is between you</Text>
         <Text style={styles.paragraph}>
           When a buyer pays for an item, a sale contract is concluded directly between the buyer and the seller. Bloomi
@@ -181,10 +169,7 @@ export default function CGUScreen() {
           • You cancel because the item is no longer available: the buyer receives a full refund.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>5. Returns</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="5. Returns" />
         <Text style={styles.paragraph}>
           Important: This section applies only to transactions between private individuals. For purchases from a
           professional shop, the shop&apos;s return conditions apply. Bloomi does not intervene in those cases.
@@ -223,10 +208,7 @@ export default function CGUScreen() {
           </Text>
         </View>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>6. Delivery</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="6. Delivery" />
         <Text style={styles.h2}>6.1 Available delivery methods</Text>
         <Text style={styles.paragraph}>
           As a seller, you choose at listing how you wish to ship your item:
@@ -259,10 +241,7 @@ export default function CGUScreen() {
           </Text>
         </View>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>7. Fees and commissions</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="7. Fees and commissions" />
         <Text style={styles.h2}>7.1 Bloomi commission</Text>
         <Text style={styles.paragraph}>
           Bloomi charges a commission on each sale completed through the platform. The exact scale is available at all
@@ -291,10 +270,7 @@ export default function CGUScreen() {
           timeframe precisely. Available funds may also be used directly to make purchases on Bloomi.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>8. What Bloomi cannot guarantee</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="8. What Bloomi cannot guarantee" />
         <Text style={styles.h2}>8.1 Our role remains technical</Text>
         <Text style={styles.paragraph}>
           Bloomi is not a shop, a bank, or a custodian of funds. We connect buyers and sellers. We do not guarantee the
@@ -320,10 +296,7 @@ export default function CGUScreen() {
           Swiss law.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>9. Your content and our rights</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="9. Your content and our rights" />
         <Text style={styles.h2}>9.1 The Bloomi brand and platform belong to us</Text>
         <Text style={styles.paragraph}>
           The Bloomi name, our logo, our design, our code, and all elements of the platform are the exclusive property
@@ -338,10 +311,7 @@ export default function CGUScreen() {
           </Text>
         </View>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>10. Personal data</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="10. Personal data" />
         <Text style={styles.paragraph}>
           At Bloomi, trust also means respecting your privacy. We process your data in accordance with the Swiss
           Federal Act on Data Protection (FADP) and our Privacy Policy, available on the platform.
@@ -354,10 +324,7 @@ export default function CGUScreen() {
           You may at any time access, correct, or request deletion of your data by writing to us at contact@bloomi.ch.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>11. Your account and closure</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="11. Your account and closure" />
         <Text style={styles.h2}>11.1 When you wish to leave</Text>
         <Text style={styles.paragraph}>
           You may delete your Bloomi account at any time from the app or the website. Deletion is permanent: you lose
@@ -375,10 +342,7 @@ export default function CGUScreen() {
           your balance in accordance with Stripe&apos;s conditions.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>12. Changes to the Terms</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="12. Changes to the Terms" />
         <Text style={styles.paragraph}>
           Bloomi is a living platform; these Terms may change. In the event of a material change, we will notify you via
           an in-app notice or by email before the changes take effect.
@@ -387,10 +351,7 @@ export default function CGUScreen() {
           Changes do not apply to transactions already in progress at the time they are published.
         </Text>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>13. Governing law</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="13. Governing law" />
         <Text style={styles.h2}>13.1 Swiss law applies</Text>
         <Text style={styles.paragraph}>
           These Terms and any relationship between Bloomi and its users are governed exclusively by Swiss law.
@@ -404,10 +365,7 @@ export default function CGUScreen() {
           </Text>
         </View>
 
-        <View style={styles.articleHeader}>
-          <Text style={styles.articleTitle}>14. Contact us</Text>
-          <View style={styles.separator} />
-        </View>
+        <LegalArticleTitle title="14. Contact us" />
         <Text style={styles.paragraph}>
           A question about these Terms? Uncertainty about a transaction? We are here to help.
         </Text>
@@ -449,7 +407,9 @@ const styles = StyleSheet.create({
   },
   articleHeader: {
     marginTop: theme.spacing.gapLg,
-    marginBottom: theme.spacing.gapSm
+    marginBottom: theme.spacing.gapSm,
+    alignSelf: 'flex-start',
+    maxWidth: '100%'
   },
   articleTitle: {
     ...theme.typography.h3,
@@ -457,8 +417,9 @@ const styles = StyleSheet.create({
   },
   separator: {
     marginTop: 8,
-    width: 56,
     height: 3,
+    alignSelf: 'flex-start',
+    width: 0,
     borderRadius: 999,
     backgroundColor: theme.colors.lime
   },
@@ -506,3 +467,20 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.gapLg
   }
 });
+
+function LegalArticleTitle({ title }: { title: string }) {
+  const [underlineWidth, setUnderlineWidth] = useState(0);
+  return (
+    <View style={styles.articleHeader}>
+      <Text
+        style={styles.articleTitle}
+        onLayout={(e) => setUnderlineWidth(Math.ceil(e.nativeEvent.layout.width))}
+      >
+        {title}
+      </Text>
+      <View style={[styles.separator, { width: underlineWidth }]} />
+    </View>
+  );
+}
+
+export default CGUScreen;

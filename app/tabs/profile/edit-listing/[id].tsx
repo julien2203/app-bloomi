@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,11 +22,40 @@ import { Button } from '../../../../components/ui/Button';
 import { AppIcon } from '../../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { theme } from '../../../../lib/theme';
-import { getListingById, updateListing, type ListingDetail } from '../../../../lib/api';
-import { useSellFormStore } from '../../../../lib/store/sellForm';
+import {
+  addListingPhoto,
+  cloneListingDetail,
+  getListingById,
+  updateListing,
+  uploadListingPhoto,
+  type ListingDetail
+} from '../../../../lib/api';
+import { useEditListingFormStore } from '../../../../lib/store/editListingForm';
+import { getCategoryFilterContext } from '../../../../lib/api/filters';
+import type { ParcelSizeValue, SellCategoryType } from '../../../../lib/store/sellForm';
+import {
+  normalizeEditBrand,
+  normalizeEditCategory,
+  normalizeEditSize,
+  resolveListingId
+} from '../../../../lib/edit-listing/normalize';
+import { useAuthStore } from '../../../../stores/authStore';
+import { useTranslation } from 'react-i18next';
+import { translateConditionLabel } from '../../../../lib/conditionI18n';
 
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 300;
+
+const PARCEL_SIZE_OPTIONS: { value: ParcelSizeValue; labelKey: string }[] = [
+  { value: 'small', labelKey: 'sell.parcelSize.small' },
+  { value: 'large', labelKey: 'sell.parcelSize.large' },
+  { value: 'xlarge', labelKey: 'sell.parcelSize.xlarge' }
+];
+
+function deliveryModeIncludesShipping(mode: string | undefined): boolean {
+  const dm = String(mode ?? 'both').toLowerCase();
+  return dm === 'shipping' || dm === 'both';
+}
 
 type Photo = {
   uri: string;
@@ -36,24 +65,102 @@ type Photo = {
 };
 
 export default function EditListingScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { values: sellValues, setField, resetForm } = useSellFormStore();
+  const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
+  const listingId = resolveListingId(idParam);
+  const { user } = useAuthStore();
+  const { values: formValues, setField, resetForm } = useEditListingFormStore();
+  const listingSnapshotRef = useRef<ListingDetail | null>(null);
 
   const [listing, setListing] = useState<ListingDetail | null>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [city, setCity] = useState('');
+  const [title, setTitle] = useState(formValues.draftTitle ?? '');
+  const [description, setDescription] = useState(formValues.draftDescription ?? '');
+  const [price, setPrice] = useState(formValues.draftPriceText ?? '');
+  const [city, setCity] = useState(formValues.draftCity ?? '');
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [parcelSizeError, setParcelSizeError] = useState<string | undefined>();
+  const selectedCategoryLabel =
+    formValues.category?.name || listing?.category || null;
+  const selectedBrandLabel = formValues.brand?.name || listing?.brand || null;
+  const selectedSizeLabel = formValues.size?.label || listing?.size || null;
+  const selectedConditionLabel = formValues.condition
+    ? translateConditionLabel(formValues.condition, t)
+    : null;
+  const deliveryMode =
+    formValues.delivery_mode ?? String(listing?.delivery_mode ?? 'both').toLowerCase();
+  const showParcelSizeSection = deliveryModeIncludesShipping(deliveryMode);
 
   useEffect(() => {
-    if (!id) {
-      setError(new Error('Missing ID'));
+    if (typeof formValues.price === 'number' && Number.isFinite(formValues.price)) {
+      setPrice(String(formValues.price));
+    }
+  }, [formValues.price]);
+
+  useEffect(() => {
+    setField('draftTitle', title);
+  }, [setField, title]);
+  useEffect(() => {
+    setField('draftDescription', description);
+  }, [setField, description]);
+  useEffect(() => {
+    setField('draftPriceText', price);
+  }, [setField, price]);
+  useEffect(() => {
+    setField('draftCity', city);
+  }, [setField, city]);
+  useEffect(() => {
+    setField('draftPhotos', photos);
+  }, [setField, photos]);
+
+  useEffect(() => {
+    if (!listingId) {
+      setError(new Error(t('common.error')));
       setLoading(false);
+      return;
+    }
+
+    const restoreFromDrafts = () => {
+      const snapshot = listingSnapshotRef.current;
+      const state = useEditListingFormStore.getState().values;
+      if (snapshot) {
+        setListing(snapshot);
+      }
+      setTitle(state.draftTitle ?? snapshot?.title ?? '');
+      setDescription(state.draftDescription ?? snapshot?.description ?? '');
+      setPrice(
+        state.draftPriceText ??
+          (typeof state.price === 'number'
+            ? String(state.price)
+            : snapshot
+              ? String(snapshot.price)
+              : '')
+      );
+      setCity(state.draftCity ?? snapshot?.city ?? '');
+      if (state.draftPhotos.length > 0) {
+        setPhotos(
+          state.draftPhotos.map((p) => ({
+            uri: p.uri,
+            type: p.type,
+            name: p.name,
+            isNew:
+              p.isNew ??
+              (!p.uri.startsWith('http://') && !p.uri.startsWith('https://'))
+          }))
+        );
+      }
+      setLoading(false);
+      setError(null);
+    };
+
+    if (
+      useEditListingFormStore.getState().values.listingId === listingId &&
+      listingSnapshotRef.current
+    ) {
+      restoreFromDrafts();
       return;
     }
 
@@ -61,7 +168,7 @@ export default function EditListingScreen() {
       try {
         setLoading(true);
         setError(null);
-        const { data, error: apiError } = await getListingById(id);
+        const { data, error: apiError } = await getListingById(listingId);
 
         if (apiError) {
           setError(apiError);
@@ -70,34 +177,73 @@ export default function EditListingScreen() {
         }
 
         if (!data) {
-          setError(new Error('Listing not found'));
+          setError(new Error(t('feed.listingDetail.notFound')));
           setListing(null);
           return;
         }
 
-        setListing(data);
+        const listingCopy = cloneListingDetail(data);
+        listingSnapshotRef.current = listingCopy;
+        setListing(listingCopy);
         setTitle(data.title);
         setDescription(data.description ?? '');
         setPrice(String(data.price));
         setCity(data.city ?? '');
 
-        // Photos existantes (URLs déjà normalisées dans getListingById)
         const initialPhotos: Photo[] =
           data.photos?.map((photo) => ({
             uri: photo.url,
             isNew: false
           })) ?? [];
         setPhotos(initialPhotos);
+        setField('draftTitle', data.title);
+        setField('draftDescription', data.description ?? '');
+        setField('draftPriceText', String(data.price));
+        setField('draftCity', data.city ?? '');
+        setField('draftPhotos', initialPhotos);
 
-        // Pré-remplir le store Sell avec les infos de l'annonce
         resetForm();
-        setField('category', data.category ?? undefined);
-        setField('brand', data.brand ?? undefined);
+        setField('listingId', listingId);
+
+        const categoryCtx =
+          data.category_id != null
+            ? await getCategoryFilterContext(String(data.category_id))
+            : null;
+
+        const categoryGender = categoryCtx?.gender ?? '';
+        const categoryType = (categoryCtx?.type ?? undefined) as SellCategoryType | undefined;
+
+        setField(
+          'category',
+          data.category_id != null
+            ? {
+                id: Number(data.category_id),
+                name: data.category ?? '',
+                gender: categoryGender
+              }
+            : null
+        );
+        if (categoryGender) setField('categoryGender', categoryGender);
+        if (categoryType) setField('categoryType', categoryType);
+
+        setField(
+          'brand',
+          data.brand ? { id: 0, name: data.brand } : null
+        );
         setField('condition', data.condition ?? undefined);
-        setField('size', data.size ?? undefined);
+        setField(
+          'size',
+          data.size ? { id: 0, label: data.size } : null
+        );
         setField('price', data.price);
+        const dm = String(data.delivery_mode ?? 'both').toLowerCase();
+        setField('delivery_mode', dm as 'pickup' | 'shipping' | 'both');
+        const ps = data.parcel_size;
+        if (ps === 'small' || ps === 'large' || ps === 'xlarge') {
+          setField('parcel_size', ps);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Unknown error'));
+        setError(err instanceof Error ? err : new Error(t('common.error')));
         setListing(null);
       } finally {
         setLoading(false);
@@ -105,14 +251,15 @@ export default function EditListingScreen() {
     };
 
     void fetchListing();
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch uniquement si l’ID change
+  }, [listingId]);
 
   const requestPermissions = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
-        'Permission required',
-        'We need access to your photos to edit a listing.'
+        t('common.permissionRequired'),
+        t('profile.editListing.permissionPhotos')
       );
       return false;
     }
@@ -131,69 +278,131 @@ export default function EditListingScreen() {
     });
 
     if (!result.canceled && result.assets) {
-      const newPhotos = result.assets.map((asset) => ({
+      const newPhotos = result.assets.map((asset, index) => ({
         uri: asset.uri,
         type: asset.type || 'image/jpeg',
-        name: asset.fileName || `photo-${Date.now()}.jpg`,
-        isNew: true
+        name: asset.fileName || `photo-${Date.now()}-${index}.jpg`,
+        isNew: true as const
       }));
       setPhotos((prev) => [...prev, ...newPhotos]);
     }
   };
 
   const handleSave = async () => {
-    if (!id) {
+    if (!listingId) {
       return;
     }
 
-    const priceFromStore =
-      typeof sellValues.price === 'number' && Number.isFinite(sellValues.price)
-        ? sellValues.price
-        : undefined;
+    const listingBase = listing ?? listingSnapshotRef.current;
+    if (!listingBase) {
+      Alert.alert(t('common.error'), t('feed.listingDetail.notFound'));
+      return;
+    }
+
     const rawPriceNumber = Number(price.replace(/[^0-9.]/g, ''));
-    const priceNumber = priceFromStore ?? rawPriceNumber;
+    const priceNumber = rawPriceNumber;
 
     if (Number.isNaN(priceNumber) || priceNumber <= 0) {
-      Alert.alert('Error', 'Please enter a valid price.');
+      Alert.alert(t('common.error'), t('sell.invalidPrice'));
       return;
     }
 
+    const deliveryModeForSave =
+      formValues.delivery_mode ?? String(listingBase.delivery_mode ?? 'both').toLowerCase();
+    const includesShipping =
+      deliveryModeForSave === 'shipping' || deliveryModeForSave === 'both';
+    const existingParcelSize =
+      listingBase.parcel_size === 'small' ||
+      listingBase.parcel_size === 'large' ||
+      listingBase.parcel_size === 'xlarge'
+        ? listingBase.parcel_size
+        : null;
+
+    if (includesShipping && !formValues.parcel_size && !existingParcelSize) {
+      setParcelSizeError(t('sell.parcelSize.required'));
+      Alert.alert(t('sell.incompleteForm'), t('sell.parcelSize.required'));
+      return;
+    }
+
+    setParcelSizeError(undefined);
     setSaving(true);
     setError(null);
 
     try {
-      const { data, error: apiError } = await updateListing(id, {
+      const selectedCategory = normalizeEditCategory(formValues.category);
+      const nextCategoryLabel =
+        selectedCategory?.name ?? listingBase.category ?? null;
+      const nextBrand = normalizeEditBrand(formValues.brand) ?? listingBase.brand ?? null;
+      const nextSize = normalizeEditSize(formValues.size) ?? listingBase.size ?? null;
+
+      const { data, error: apiError } = await updateListing(listingId, {
         title: title.trim(),
         description: description.trim() || null,
         price: priceNumber,
         city: city.trim() || null,
-        category: sellValues.category ?? listing.category ?? null,
-        brand: sellValues.brand ?? listing.brand ?? null,
-        condition: sellValues.condition ?? listing.condition ?? null,
-        size: sellValues.size ?? listing.size ?? null
+        category: nextCategoryLabel,
+        category_id: selectedCategory?.id ?? undefined,
+        brand: nextBrand,
+        condition: formValues.condition ?? listingBase.condition ?? null,
+        size: nextSize,
+        parcel_size: includesShipping
+          ? formValues.parcel_size ?? existingParcelSize
+          : null
       });
 
       if (apiError) {
         setError(apiError);
-        Alert.alert('Error', apiError.message);
+        Alert.alert(t('common.error'), apiError.message);
         return;
       }
 
       if (!data) {
-        Alert.alert('Error', 'Unable to update listing.');
+        Alert.alert(t('common.error'), t('sell.unablePublish'));
         return;
       }
 
-      Alert.alert('Success', 'Listing updated successfully.', [
+      const newPhotos = photos.filter((p) => p.isNew);
+      if (newPhotos.length > 0) {
+        if (!user?.id) {
+          Alert.alert(t('common.error'), t('common.error'));
+          return;
+        }
+
+        const existingCount =
+          photos.filter((p) => !p.isNew).length;
+        for (let i = 0; i < newPhotos.length; i++) {
+          const photo = newPhotos[i];
+          const filename =
+            photo.name ?? `photo-${Date.now()}-${i}.jpg`;
+          const { data: photoUrl, error: uploadError } = await uploadListingPhoto(
+            photo,
+            user.id,
+            listingId,
+            filename
+          );
+          if (uploadError || !photoUrl) {
+            throw uploadError ?? new Error(t('common.error'));
+          }
+          await addListingPhoto(listingId, photoUrl, existingCount + i);
+        }
+      }
+
+      listingSnapshotRef.current = { ...listingBase, ...data, title: title.trim() };
+      setListing((prev) => (prev ? { ...prev, ...data } : prev));
+
+      Alert.alert(t('common.success'), t('profile.editListing.updatedSuccess'), [
         {
-          text: 'OK',
-          onPress: () => router.back()
+          text: t('common.ok'),
+          onPress: () => {
+            resetForm();
+            router.back();
+          }
         }
       ]);
     } catch (err) {
-      const finalError = err instanceof Error ? err : new Error('Unknown error');
+      const finalError = err instanceof Error ? err : new Error(t('common.error'));
       setError(finalError);
-      Alert.alert('Error', finalError.message);
+      Alert.alert(t('common.error'), finalError.message);
     } finally {
       setSaving(false);
     }
@@ -206,7 +415,7 @@ export default function EditListingScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Loading listing...</Text>
+            <Text style={styles.loadingText}>{t('profile.editListing.loading')}</Text>
           </View>
         </SafeAreaView>
       </>
@@ -220,10 +429,10 @@ export default function EditListingScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.centerContent}>
             <Text style={styles.errorTitle}>
-              {error?.message || 'Listing not found'}
+              {error?.message || t('feed.listingDetail.notFound')}
             </Text>
             <Button
-              title="Back"
+              title={t('common.back')}
               onPress={() => router.back()}
               variant="primary-green"
               style={styles.backButton}
@@ -244,7 +453,7 @@ export default function EditListingScreen() {
         >
           <View style={styles.header}>
             <HeaderBackButton onPress={() => router.back()} />
-            <Text style={styles.headerTitle}>Edit listing</Text>
+            <Text style={styles.headerTitle}>{t('profile.editListing.title')}</Text>
             <View style={styles.headerRightPlaceholder} />
           </View>
 
@@ -262,7 +471,7 @@ export default function EditListingScreen() {
                   activeOpacity={0.85}
                 >
                   <AppIcon name="addSquareOutline" size={20} color="#121212" />
-                  <Text style={styles.photoUploadText}>Upload photos</Text>
+                  <Text style={styles.photoUploadText}>{t('profile.editListing.uploadPhotos')}</Text>
                 </TouchableOpacity>
               ) : (
                 <ScrollView
@@ -298,7 +507,7 @@ export default function EditListingScreen() {
               )}
 
               <Text style={[styles.photoHint, { textAlign: 'center' }]}>
-                Add up to 5 photos.
+                {t('profile.editListing.addUpToPhotos')}
               </Text>
             </View>
 
@@ -306,10 +515,10 @@ export default function EditListingScreen() {
 
             {/* Title */}
             <View style={[styles.fieldGroup, { marginTop: 8 }]}>
-              <Text style={styles.fieldLabel}>Title</Text>
+              <Text style={styles.fieldLabel}>{t('sell.title')}</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="e.g. White cos sweater"
+                placeholder={t('sell.titlePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={title}
                 onChangeText={(text) => setTitle(text)}
@@ -317,7 +526,7 @@ export default function EditListingScreen() {
               />
               <View style={styles.fieldFooterRow}>
                 <Text style={styles.counterText}>
-                  {`${TITLE_MAX - title.length} character left`}
+                  {t('sell.characterLeft', { count: TITLE_MAX - title.length })}
                 </Text>
               </View>
             </View>
@@ -326,10 +535,10 @@ export default function EditListingScreen() {
 
             {/* Description */}
             <View style={[styles.fieldGroup, { marginTop: 20 }]}>
-              <Text style={styles.fieldLabel}>Description</Text>
+              <Text style={styles.fieldLabel}>{t('sell.description')}</Text>
               <TextInput
                 style={[styles.textInput, styles.descriptionInput]}
-                placeholder="e.g. Only worn a few times, true to size"
+                placeholder={t('sell.descriptionPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={description}
                 onChangeText={setDescription}
@@ -338,7 +547,7 @@ export default function EditListingScreen() {
               />
               <View style={styles.fieldFooterRow}>
                 <Text style={styles.counterText}>
-                  {`${DESCRIPTION_MAX - description.length} character left`}
+                  {t('sell.characterLeft', { count: DESCRIPTION_MAX - description.length })}
                 </Text>
               </View>
             </View>
@@ -347,7 +556,7 @@ export default function EditListingScreen() {
 
             {/* Price */}
             <View style={[styles.fieldGroup, { marginTop: 20 }]}>
-              <Text style={styles.fieldLabel}>Price (CHF)</Text>
+              <Text style={styles.fieldLabel}>{t('sell.priceChf')}</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="0"
@@ -362,10 +571,10 @@ export default function EditListingScreen() {
 
             {/* City */}
             <View style={[styles.fieldGroup, { marginTop: 20 }]}>
-              <Text style={styles.fieldLabel}>City</Text>
+              <Text style={styles.fieldLabel}>{t('sell.city')}</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="e.g. Geneva"
+                placeholder={t('profile.myAddress.cityExample')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={city}
                 onChangeText={setCity}
@@ -384,14 +593,12 @@ export default function EditListingScreen() {
               <TouchableOpacity
                 style={[styles.listRow, styles.listRowFirst]}
                 activeOpacity={0.7}
-                onPress={() => {
-                  router.push('/tabs/sell/category');
-                }}
+                onPress={() => router.push('/tabs/profile/edit-listing/category')}
               >
-                <Text style={styles.listRowLabel}>Category</Text>
+                <Text style={styles.listRowLabel}>{t('sell.category')}</Text>
                 <View style={styles.listRowRight}>
-                  {sellValues.category ? (
-                    <Text style={styles.listRowValue}>{sellValues.category}</Text>
+                  {selectedCategoryLabel ? (
+                    <Text style={styles.listRowValue}>{selectedCategoryLabel}</Text>
                   ) : null}
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </View>
@@ -400,14 +607,12 @@ export default function EditListingScreen() {
               <TouchableOpacity
                 style={styles.listRow}
                 activeOpacity={0.7}
-                onPress={() => {
-                  router.push('/tabs/sell/brand');
-                }}
+                onPress={() => router.push('/tabs/profile/edit-listing/brand')}
               >
-                <Text style={styles.listRowLabel}>Brand</Text>
+                <Text style={styles.listRowLabel}>{t('sell.brand')}</Text>
                 <View style={styles.listRowRight}>
-                  {sellValues.brand ? (
-                    <Text style={styles.listRowValue}>{sellValues.brand}</Text>
+                  {selectedBrandLabel ? (
+                    <Text style={styles.listRowValue}>{selectedBrandLabel}</Text>
                   ) : null}
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </View>
@@ -416,14 +621,12 @@ export default function EditListingScreen() {
               <TouchableOpacity
                 style={styles.listRow}
                 activeOpacity={0.7}
-                onPress={() => {
-                  router.push('/tabs/sell/condition');
-                }}
+                onPress={() => router.push('/tabs/profile/edit-listing/condition')}
               >
-                <Text style={styles.listRowLabel}>Condition</Text>
+                <Text style={styles.listRowLabel}>{t('sell.condition')}</Text>
                 <View style={styles.listRowRight}>
-                  {sellValues.condition ? (
-                    <Text style={styles.listRowValue}>{sellValues.condition}</Text>
+                  {selectedConditionLabel ? (
+                    <Text style={styles.listRowValue}>{selectedConditionLabel}</Text>
                   ) : null}
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </View>
@@ -432,14 +635,12 @@ export default function EditListingScreen() {
               <TouchableOpacity
                 style={styles.listRow}
                 activeOpacity={0.7}
-                onPress={() => {
-                  router.push('/tabs/sell/size');
-                }}
+                onPress={() => router.push('/tabs/profile/edit-listing/size')}
               >
-                <Text style={styles.listRowLabel}>Size</Text>
+                <Text style={styles.listRowLabel}>{t('sell.size')}</Text>
                 <View style={styles.listRowRight}>
-                  {sellValues.size ? (
-                    <Text style={styles.listRowValue}>{sellValues.size}</Text>
+                  {selectedSizeLabel ? (
+                    <Text style={styles.listRowValue}>{selectedSizeLabel}</Text>
                   ) : null}
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </View>
@@ -448,26 +649,71 @@ export default function EditListingScreen() {
               <TouchableOpacity
                 style={styles.listRow}
                 activeOpacity={0.7}
-                onPress={() => {
-                  router.push('/tabs/sell/price');
-                }}
+                onPress={() => router.push('/tabs/profile/edit-listing/price')}
               >
-                <Text style={styles.listRowLabel}>Price</Text>
+                <Text style={styles.listRowLabel}>{t('sell.price')}</Text>
                 <View style={styles.listRowRight}>
-                  {typeof sellValues.price === 'number' &&
-                  Number.isFinite(sellValues.price) ? (
-                    <Text style={styles.listRowValue}>{sellValues.price} CHF</Text>
+                  {typeof formValues.price === 'number' &&
+                  Number.isFinite(formValues.price) ? (
+                    <Text style={styles.listRowValue}>{formValues.price} CHF</Text>
                   ) : null}
                   <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
                 </View>
               </TouchableOpacity>
             </View>
+
+            {showParcelSizeSection ? (
+              <View style={styles.parcelSection}>
+                <Text style={styles.parcelSectionTitle}>{t('sell.parcelSize.title')}</Text>
+                {PARCEL_SIZE_OPTIONS.map((option, index) => {
+                  const isSelected = formValues.parcel_size === option.value;
+                  return (
+                    <React.Fragment key={option.value}>
+                      {index > 0 ? <View style={styles.parcelSeparator} /> : null}
+                      <TouchableOpacity
+                        style={[
+                          styles.parcelOptionRow,
+                          isSelected && styles.parcelOptionRowSelected
+                        ]}
+                        onPress={() => {
+                          setField('parcel_size', option.value);
+                          if (parcelSizeError) {
+                            setParcelSizeError(undefined);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.parcelOptionLabel,
+                            isSelected && styles.parcelOptionLabelSelected
+                          ]}
+                        >
+                          {t(option.labelKey)}
+                        </Text>
+                        <View
+                          style={[
+                            styles.parcelRadioOuter,
+                            isSelected && styles.parcelRadioOuterSelected
+                          ]}
+                        >
+                          {isSelected ? <View style={styles.parcelRadioInner} /> : null}
+                        </View>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  );
+                })}
+                {parcelSizeError ? (
+                  <Text style={styles.inlineError}>{parcelSizeError}</Text>
+                ) : null}
+              </View>
+            ) : null}
           </ScrollView>
 
           {/* Footer button */}
           <View style={styles.footer}>
             <Button
-              title={saving ? 'Enregistrement...' : 'Save changes'}
+              title={saving ? t('common.loading') : t('profile.editListing.saveChanges')}
               onPress={handleSave}
               variant="primary-green"
               loading={saving}
@@ -690,6 +936,58 @@ const styles = StyleSheet.create({
   listRowValue: {
     ...theme.typography.body,
     color: theme.colors.textSecondary
+  },
+  parcelSection: {
+    marginTop: 8,
+    marginBottom: 16
+  },
+  parcelSectionTitle: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fontFamily.semiBold,
+    marginBottom: 8
+  },
+  parcelOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8
+  },
+  parcelOptionRowSelected: {
+    borderRadius: theme.radius.cardRadius,
+    backgroundColor: '#C3EA4F'
+  },
+  parcelOptionLabel: {
+    ...theme.typography.body,
+    color: theme.colors.textPrimary,
+    flex: 1,
+    marginRight: 12
+  },
+  parcelOptionLabelSelected: {
+    fontFamily: theme.fontFamily.semiBold
+  },
+  parcelRadioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#CCCCCC',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  parcelRadioOuterSelected: {
+    borderColor: theme.colors.textPrimary
+  },
+  parcelRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.textPrimary
+  },
+  parcelSeparator: {
+    height: 1,
+    backgroundColor: theme.colors.border
   }
 });
 

@@ -11,8 +11,10 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next';
 
 export default function VerifyEmailIllustrationScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const handleLogout = () => {
@@ -27,7 +29,7 @@ export default function VerifyEmailIllustrationScreen() {
         {/* Header avec Log out */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Text style={styles.logoutText}>Log out</Text>
+            <Text style={styles.logoutText}>{t('auth.verifyEmailIllustration.logOut')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -41,14 +43,11 @@ export default function VerifyEmailIllustrationScreen() {
               <Ionicons name="mail-outline" size={80} color={theme.colors.primary} />
             </View>
 
-            <Text style={styles.title}>Verify your email</Text>
-            <Text style={styles.message}>
-              We've sent a verification link to your email address. Please check your inbox and
-              click the link to verify your account.
-            </Text>
+            <Text style={styles.title}>{t('auth.verifyEmailIllustration.title')}</Text>
+            <Text style={styles.message}>{t('auth.checkEmail.messageGeneric')}</Text>
 
             <Button
-              title="Get my verification code"
+              title={t('auth.verifyEmailIllustration.getCode')}
               onPress={() => router.push('/auth/verify-email-simple')}
               variant="primary-green"
               style={styles.button}
@@ -60,7 +59,7 @@ export default function VerifyEmailIllustrationScreen() {
               }}
               style={styles.learnMore}
             >
-              <Text style={styles.learnMoreText}>Learn more</Text>
+              <Text style={styles.learnMoreText}>{t('common.learnMore')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -72,7 +71,7 @@ export default function VerifyEmailIllustrationScreen() {
               // TODO: Ouvrir Terms
             }}
           >
-            <Text style={styles.footerLink}>Terms</Text>
+            <Text style={styles.footerLink}>{t('auth.verifyEmailIllustration.terms')}</Text>
           </TouchableOpacity>
           <Text style={styles.footerSeparator}> • </Text>
           <TouchableOpacity
@@ -80,7 +79,7 @@ export default function VerifyEmailIllustrationScreen() {
               // TODO: Ouvrir Privacy
             }}
           >
-            <Text style={styles.footerLink}>Privacy</Text>
+            <Text style={styles.footerLink}>{t('auth.verifyEmailIllustration.privacy')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

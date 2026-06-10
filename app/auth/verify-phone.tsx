@@ -6,8 +6,11 @@ import {
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +19,9 @@ import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../stores/authStore';
+import { goToMainApp } from '../../lib/navigation/goToMainApp';
+import { useTranslation } from 'react-i18next';
 
 const ALLOWED_PREFIXES = ['+41', '+33', '+49', '+39'] as const;
 type AllowedPrefix = (typeof ALLOWED_PREFIXES)[number];
@@ -23,7 +29,9 @@ type AllowedPrefix = (typeof ALLOWED_PREFIXES)[number];
 type Step = 1 | 2;
 
 export default function VerifyPhoneScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const signOut = useAuthStore((s) => s.signOut);
 
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -40,6 +48,10 @@ export default function VerifyPhoneScreen() {
   const [verifying, setVerifying] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
 
+  const [abandonModalVisible, setAbandonModalVisible] = useState(false);
+  const [abandonDeleting, setAbandonDeleting] = useState(false);
+  const [abandonModalError, setAbandonModalError] = useState<string | null>(null);
+
   const canResend = secondsLeft === 0 && !!formattedPhone;
 
   const formatPhoneE164 = (pfx: AllowedPrefix, local: string): string => {
@@ -50,13 +62,13 @@ export default function VerifyPhoneScreen() {
 
   const handleSendCode = async () => {
     if (!ALLOWED_PREFIXES.includes(prefix)) {
-      setError('Bloomi is only available in Switzerland, France, Germany, and Italy.');
+      setError(t('auth.verifyPhone.regionOnly'));
       return;
     }
 
     const digits = phoneLocal.replace(/\D/g, '');
     if (!digits) {
-      setError('Please enter a valid phone number.');
+      setError(t('auth.verifyPhone.validPhone'));
       return;
     }
 
@@ -80,7 +92,7 @@ export default function VerifyPhoneScreen() {
       setOtpDigits(Array(6).fill(''));
       setSecondsLeft(60);
     } catch {
-      setError('Something went wrong sending the code. Please try again.');
+      setError(t('auth.verifyPhone.sendCodeError'));
     } finally {
       setLoading(false);
     }
@@ -88,13 +100,13 @@ export default function VerifyPhoneScreen() {
 
   const handleVerifyCode = async () => {
     if (!formattedPhone) {
-      setError('Phone number missing. Please go back to the previous step.');
+      setError(t('auth.verifyPhone.phoneMissing'));
       return;
     }
 
     const token = otpDigits.join('');
     if (token.length !== 6) {
-      setError('Please enter all 6 digits of the code.');
+      setError(t('auth.verifyPhone.enterAllDigits'));
       return;
     }
 
@@ -111,18 +123,18 @@ export default function VerifyPhoneScreen() {
       if (verifyError) {
         const msg = verifyError.message.toLowerCase();
         if (msg.includes('expired')) {
-          setError('The code has expired. Please request a new one.');
+          setError(t('auth.verifyPhone.codeExpired'));
         } else if (msg.includes('invalid')) {
-          setError('The code is incorrect. Please try again.');
+          setError(t('auth.verifyPhone.codeIncorrect'));
         } else {
           setError(verifyError.message);
         }
         return;
       }
 
-      router.replace('/tabs/feed');
+      await goToMainApp({ phone: formattedPhone });
     } catch {
-      setError('Something went wrong verifying the code. Please try again.');
+      setError(t('auth.verifyPhone.verifyCodeError'));
     } finally {
       setVerifying(false);
     }
@@ -146,7 +158,7 @@ export default function VerifyPhoneScreen() {
 
       setSecondsLeft(60);
     } catch {
-      setError('Something went wrong sending the code. Please try again.');
+      setError(t('auth.verifyPhone.sendCodeError'));
     } finally {
       setLoading(false);
     }
@@ -159,6 +171,39 @@ export default function VerifyPhoneScreen() {
     }, 1000);
     return () => clearTimeout(timer);
   }, [secondsLeft]);
+
+  const handleHeaderBack = () => {
+    if (step === 2) {
+      setStep(1);
+      setOtpDigits(Array(6).fill(''));
+      setError(null);
+      return;
+    }
+    setAbandonModalError(null);
+    setAbandonModalVisible(true);
+  };
+
+  const handleConfirmAbandonRegistration = async () => {
+    if (abandonDeleting) return;
+    setAbandonDeleting(true);
+    setAbandonModalError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('delete_user');
+      if (rpcError) {
+        setAbandonModalError(rpcError.message);
+        return;
+      }
+      setAbandonModalVisible(false);
+      await signOut();
+      router.replace('/onboarding/splash');
+    } catch {
+      setAbandonModalError(
+        t('auth.verifyPhone.deleteAccountError')
+      );
+    } finally {
+      setAbandonDeleting(false);
+    }
+  };
 
   const handleChangeOtpDigit = (index: number, value: string) => {
     const digit = value.replace(/\D/g, '').slice(0, 1);
@@ -182,10 +227,8 @@ export default function VerifyPhoneScreen() {
 
   const renderStep1 = () => (
     <>
-      <Text style={styles.title}>Verify your phone</Text>
-      <Text style={styles.subtitle}>
-        Enter your number to receive a verification code by SMS.
-      </Text>
+      <Text style={styles.title}>{t('auth.verifyPhone.titleStep1')}</Text>
+      <Text style={styles.subtitle}>{t('auth.verifyPhone.subtitleStep1')}</Text>
 
       <View style={styles.phoneRow}>
         <View style={styles.prefixContainer}>
@@ -207,12 +250,12 @@ export default function VerifyPhoneScreen() {
         </View>
 
         <View style={styles.phoneInputContainer}>
-          <Text style={styles.phoneLabel}>Phone</Text>
+          <Text style={styles.phoneLabel}>{t('auth.verifyPhone.phoneLabel')}</Text>
           <View style={styles.phoneInputRow}>
             <Text style={styles.phonePrefixInline}>{prefix}</Text>
             <TextInput
               style={styles.phoneInput}
-              placeholder="79 123 45 67"
+              placeholder={t('auth.verifyPhone.phonePlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               keyboardType="phone-pad"
               value={phoneLocal}
@@ -227,7 +270,7 @@ export default function VerifyPhoneScreen() {
 
       <View style={styles.primaryButtonContainer}>
         <Button
-          title="Send code"
+          title={t('auth.verifyPhone.sendCode')}
           onPress={handleSendCode}
           loading={loading}
           variant="primary"
@@ -238,10 +281,8 @@ export default function VerifyPhoneScreen() {
 
   const renderStep2 = () => (
     <>
-      <Text style={styles.title}>Enter the code</Text>
-      <Text style={styles.subtitle}>
-        We sent a 6-digit code by SMS. Enter it below to confirm your number.
-      </Text>
+      <Text style={styles.title}>{t('auth.verifyPhone.titleStep2')}</Text>
+      <Text style={styles.subtitle}>{t('auth.verifyPhone.subtitleStep2')}</Text>
 
       <View style={styles.otpRow}>
         {otpDigits.map((digit, index) => (
@@ -263,7 +304,7 @@ export default function VerifyPhoneScreen() {
 
       <View style={styles.primaryButtonContainer}>
         <Button
-          title="Verify"
+          title={t('auth.verifyPhone.verify')}
           onPress={handleVerifyCode}
           loading={verifying}
           variant="primary"
@@ -282,8 +323,8 @@ export default function VerifyPhoneScreen() {
               (!canResend || loading) && styles.resendTextDisabled
             ]}
           >
-            Resend code
-            {secondsLeft > 0 ? ` (${secondsLeft}s)` : ''}
+            {t('auth.verifyPhone.resendCode')}
+            {secondsLeft > 0 ? t('auth.verifyPhone.resendSeconds', { seconds: secondsLeft }) : ''}
           </Text>
         </TouchableOpacity>
       </View>
@@ -309,9 +350,7 @@ export default function VerifyPhoneScreen() {
 
         attempts += 1;
         if (attempts >= maxAttempts) {
-          setSessionError(
-            'We could not restore your session. Please sign in again.'
-          );
+          setSessionError(t('auth.verifyPhone.sessionRestoreError'));
           setSessionReady(false);
           return;
         }
@@ -321,9 +360,7 @@ export default function VerifyPhoneScreen() {
         if (!isMounted) return;
         attempts += 1;
         if (attempts >= maxAttempts) {
-          setSessionError(
-            'We could not restore your session. Please sign in again.'
-          );
+          setSessionError(t('auth.verifyPhone.sessionRestoreError'));
           setSessionReady(false);
           return;
         }
@@ -343,49 +380,96 @@ export default function VerifyPhoneScreen() {
       <StatusBar style="dark" />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={() => router.back()} />
+          <HeaderBackButton onPress={handleHeaderBack} />
           <View style={{ flex: 1 }} />
         </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
         >
-          <View style={styles.content}>
-            {!sessionReady && !sessionError && (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}
-              >
-                <ActivityIndicator size="large" color={theme.colors.textPrimary} />
-              </View>
-            )}
-
-            {sessionError && (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}
-              >
-                <Text style={styles.errorText}>{sessionError}</Text>
-                <View style={styles.primaryButtonContainer}>
-                  <Button
-                    title="Back to sign in"
-                    onPress={() => router.replace('/auth/login')}
-                    variant="primary"
-                  />
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.content}>
+              {!sessionReady && !sessionError && (
+                <View style={styles.centeredBlock}>
+                  <ActivityIndicator size="large" color={theme.colors.textPrimary} />
                 </View>
-              </View>
-            )}
+              )}
 
-            {sessionReady && !sessionError && (step === 1 ? renderStep1() : renderStep2())}
-          </View>
+              {sessionError && (
+                <View style={styles.centeredBlock}>
+                  <Text style={styles.errorText}>{sessionError}</Text>
+                  <View style={styles.primaryButtonContainer}>
+                    <Button
+                      title={t('auth.verifyPhone.backToSignIn')}
+                      onPress={() => router.replace('/auth/login')}
+                      variant="primary"
+                    />
+                  </View>
+                </View>
+              )}
+
+              {sessionReady && !sessionError && (step === 1 ? renderStep1() : renderStep2())}
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <Modal
+        visible={abandonModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!abandonDeleting) setAbandonModalVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.abandonOverlay}
+          onPress={() => {
+            if (!abandonDeleting) setAbandonModalVisible(false);
+          }}
+        >
+          <Pressable style={styles.abandonCard} onPress={() => null}>
+            <Text style={styles.abandonTitle}>{t('auth.verifyPhone.abandonTitle')}</Text>
+            <Text style={styles.abandonMessage}>{t('auth.verifyPhone.abandonMessage')}</Text>
+            {abandonModalError ? (
+              <Text style={styles.abandonError}>{abandonModalError}</Text>
+            ) : null}
+            <View style={styles.abandonSeparator} />
+            <View style={styles.abandonActionsRow}>
+              <Pressable
+                onPress={() => {
+                  if (!abandonDeleting) setAbandonModalVisible(false);
+                }}
+                style={({ pressed }) => [
+                  styles.abandonCancelBtn,
+                  pressed && !abandonDeleting && styles.abandonBtnPressed
+                ]}
+                disabled={abandonDeleting}
+              >
+                <Text style={styles.abandonCancelText}>{t('common.cancel')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleConfirmAbandonRegistration()}
+                style={({ pressed }) => [
+                  styles.abandonConfirmBtn,
+                  pressed && !abandonDeleting && styles.abandonBtnPressed
+                ]}
+                disabled={abandonDeleting}
+              >
+                {abandonDeleting ? (
+                  <ActivityIndicator size="small" color={theme.colors.googleWhite} />
+                ) : (
+                  <Text style={styles.abandonConfirmText}>{t('auth.verifyPhone.abandonConfirm')}</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
@@ -405,12 +489,20 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1
   },
+  scrollContent: {
+    flexGrow: 1
+  },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: theme.spacing.screenPaddingX,
     paddingTop: 32,
     paddingBottom: 32,
     justifyContent: 'flex-start'
+  },
+  centeredBlock: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
   title: {
     ...theme.typography.h2,
@@ -525,6 +617,78 @@ const styles = StyleSheet.create({
   },
   resendTextDisabled: {
     color: theme.colors.textSecondary
+  },
+  abandonOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24
+  },
+  abandonCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: theme.colors.background,
+    borderRadius: 16,
+    padding: 24
+  },
+  abandonTitle: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: 18,
+    color: theme.colors.appleBlack,
+    textAlign: 'center'
+  },
+  abandonMessage: {
+    marginTop: 12,
+    fontFamily: theme.fontFamily.regular,
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20
+  },
+  abandonError: {
+    marginTop: 12,
+    fontFamily: theme.fontFamily.regular,
+    fontSize: 14,
+    color: theme.colors.danger,
+    textAlign: 'center'
+  },
+  abandonSeparator: {
+    marginTop: 16,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.border
+  },
+  abandonActionsRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    columnGap: 10
+  },
+  abandonCancelBtn: {
+    flex: 1,
+    backgroundColor: theme.colors.muted,
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  abandonCancelText: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.appleBlack
+  },
+  abandonConfirmBtn: {
+    flex: 1,
+    backgroundColor: theme.colors.danger,
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  abandonConfirmText: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.googleWhite
+  },
+  abandonBtnPressed: {
+    opacity: 0.85
   }
 });
 
