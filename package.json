@@ -1,6 +1,6 @@
 {
   "name": "bloomi-app",
-  "version": "1.1.2",
+  "version": "1.1.8",
   "private": true,
   "packageManager": "npm@10.9.2",
   "main": "expo-router/entry",
@@ -12,6 +12,7 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "design:check": "node ./scripts/design-check.mjs",
     "icons:generate": "node ./scripts/generate-app-icons.mjs",
+    "eas-build-post-install": "npm run icons:generate",
     "splash:generate": "node ./scripts/generate-splash.mjs",
     "locales:build": "node ./scripts/build-locale-files.mjs",
     "fees:test": "node scripts/test-fees.mjs"
@@ -63,5 +64,22 @@
     "sharp": "^0.34.5",
     "supabase": "^2.93.0",
     "typescript": "^5.6.0"
-  }
+  },
+  "description": "Application mobile Expo avec Supabase pour l'authentification et le backend.",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/julien2203/app-bloomi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/julien2203/app-bloomi/issues"
+  },
+  "homepage": "https://github.com/julien2203/app-bloomi#readme"
 }
