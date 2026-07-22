@@ -126,3 +126,21 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/boost-listing/deno.json"
 entrypoint = "./functions/boost-listing/index.ts"
+
+[functions.sync-boost-payments]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-boost-payments/deno.json"
+entrypoint = "./functions/sync-boost-payments/index.ts"
+
+[functions.listing-share]
+enabled = true
+verify_jwt = false
+import_map = "./functions/listing-share/deno.json"
+entrypoint = "./functions/listing-share/index.ts"
+
+[functions.closet-share]
+enabled = true
+verify_jwt = false
+import_map = "./functions/closet-share/deno.json"
+entrypoint = "./functions/closet-share/index.ts"

@@ -3,8 +3,7 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-type SponsorType = "listing" | "dressing";
+import { getBoostPriceCents, type BoostSponsorType } from "../_shared/fees.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -23,8 +22,16 @@ function normalizeAuthHeader(req: Request): string | null {
   return h;
 }
 
-function sponsorAmountCents(type: SponsorType): number {
-  return type === "listing" ? 599 : 1299;
+function parseDurationDays(raw: unknown): 3 | 7 | null {
+  const n = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+  if (n === 3 || n === 7) return n;
+  return null;
+}
+
+function parseSponsorType(raw: unknown): BoostSponsorType | null {
+  const value = String(raw ?? "").trim();
+  if (value === "listing" || value === "dressing") return value;
+  return null;
 }
 
 function addDaysIso(days: number): string {
@@ -61,7 +68,6 @@ Deno.serve(async (req) => {
   const parsed = (body ?? {}) as Record<string, unknown>;
   const action = String(parsed.action ?? "create");
 
-  // Client Supabase avec JWT utilisateur (plus robuste que authAdmin.getUser dans certains environnements)
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -78,27 +84,26 @@ Deno.serve(async (req) => {
 
   const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
-  // ---------------------------
-  // CREATE: crée un PaymentIntent
-  // ---------------------------
   if (action === "create") {
     const listing_id = String(parsed.listing_id ?? "").trim();
     const seller_id = String(parsed.seller_id ?? "").trim();
-    const sponsor_type = String(parsed.sponsor_type ?? "").trim() as SponsorType;
+    const sponsor_type = parseSponsorType(parsed.sponsor_type);
+    const duration_days = parseDurationDays(parsed.duration_days);
 
-    if (!listing_id || !seller_id || (sponsor_type !== "listing" && sponsor_type !== "dressing")) {
+    if (!listing_id || !seller_id || !sponsor_type) {
       return jsonResponse(
         { error: "listing_id, seller_id, sponsor_type ('listing'|'dressing') sont requis" },
         { status: 400 },
       );
     }
+    if (!duration_days) {
+      return jsonResponse({ error: "duration_days doit être 3 ou 7" }, { status: 400 });
+    }
 
-    // Seul le vendeur peut booster
     if (seller_id !== authenticatedUserId) {
       return jsonResponse({ error: "seller_id ne correspond pas à l'utilisateur authentifié" }, { status: 403 });
     }
 
-    // Vérifier propriété + statut
     const { data: listingRow, error: listingErr } = await supabaseAdmin
       .from("listings")
       .select("id, seller_id, status, title")
@@ -123,21 +128,40 @@ Deno.serve(async (req) => {
       );
     }
 
-    const amount = sponsorAmountCents(sponsor_type);
+    let amount: number;
+    try {
+      amount = getBoostPriceCents(sponsor_type, duration_days);
+    } catch (e) {
+      return jsonResponse(
+        {
+          error: "Option boost invalide",
+          details: e instanceof Error ? e.message : String(e),
+        },
+        { status: 400 },
+      );
+    }
+
     const title = String((listingRow as any).title ?? "Listing boost");
 
     try {
       const pi = await stripe.paymentIntents.create({
         amount,
         currency: "chf",
-        payment_method_types: ["card"],
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: "never",
+        },
         metadata: {
           purpose: "boost",
           listing_id,
           seller_id,
           sponsor_type,
+          duration_days: String(duration_days),
         },
-        description: sponsor_type === "listing" ? `Boost listing: ${title}` : `Boost dressing: ${title}`,
+        description:
+          sponsor_type === "listing"
+            ? `Boost listing ${duration_days}d: ${title}`
+            : `Boost dressing ${duration_days}d: ${title}`,
       });
 
       return jsonResponse({ client_secret: pi.client_secret });
@@ -149,9 +173,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ---------------------------
-  // CONFIRM: vérifie paiement puis applique la mise en avant
-  // ---------------------------
   if (action === "confirm") {
     const payment_intent_id = String(parsed.payment_intent_id ?? "").trim();
     if (!payment_intent_id) {
@@ -163,16 +184,25 @@ Deno.serve(async (req) => {
 
       const seller_id = String(pi.metadata?.seller_id ?? "").trim();
       const listing_id = String(pi.metadata?.listing_id ?? "").trim();
-      const sponsor_type = String(pi.metadata?.sponsor_type ?? "").trim() as SponsorType;
+      const sponsor_type = parseSponsorType(pi.metadata?.sponsor_type);
+      const duration_days = parseDurationDays(pi.metadata?.duration_days);
 
-      if (!seller_id || !listing_id || (sponsor_type !== "listing" && sponsor_type !== "dressing")) {
-        return jsonResponse({ error: "PaymentIntent metadata incomplet (seller_id/listing_id/sponsor_type)" }, { status: 400 });
+      if (!seller_id || !listing_id || !sponsor_type) {
+        return jsonResponse(
+          { error: "PaymentIntent metadata incomplet (seller_id/listing_id/sponsor_type)" },
+          { status: 400 },
+        );
+      }
+      if (!duration_days) {
+        return jsonResponse(
+          { error: "PaymentIntent metadata incomplet (duration_days doit être 3 ou 7)" },
+          { status: 400 },
+        );
       }
       if (seller_id !== authenticatedUserId) {
         return jsonResponse({ error: "Vous n'êtes pas le vendeur de ce paiement" }, { status: 403 });
       }
 
-      // On considère paiement OK uniquement si succeeded
       if (pi.status !== "succeeded") {
         return jsonResponse(
           { error: "Paiement non finalisé", details: `payment_intent.status=${pi.status}` },
@@ -180,7 +210,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const sponsored_until = addDaysIso(15);
+      const sponsored_until = addDaysIso(duration_days);
       const patch = {
         is_sponsored: true,
         sponsored_until,
@@ -213,7 +243,47 @@ Deno.serve(async (req) => {
         updated_count = (data ?? []).length;
       }
 
-      return jsonResponse({ success: true, updated_count });
+      if (updated_count === 0) {
+        return jsonResponse(
+          {
+            error:
+              sponsor_type === "dressing"
+                ? "Aucune annonce publiée à mettre en avant"
+                : "Annonce introuvable pour le boost",
+            details:
+              sponsor_type === "dressing"
+                ? "Publiez au moins une annonce avant d'appliquer le boost dressing."
+                : `listing_id=${listing_id}`,
+          },
+          { status: 409 },
+        );
+      }
+
+      const amountCents = typeof pi.amount === "number" ? pi.amount : getBoostPriceCents(sponsor_type, duration_days);
+      const paidAt = pi.created
+        ? new Date(pi.created * 1000).toISOString()
+        : new Date().toISOString();
+
+      const { error: boostPaymentErr } = await supabaseAdmin.from("boost_payments").upsert(
+        {
+          stripe_payment_intent_id: payment_intent_id,
+          seller_id,
+          listing_id,
+          sponsor_type,
+          duration_days,
+          amount_cents: amountCents,
+          currency: String(pi.currency ?? "chf").toLowerCase(),
+          updated_count,
+          paid_at: paidAt,
+        },
+        { onConflict: "stripe_payment_intent_id" },
+      );
+
+      if (boostPaymentErr) {
+        console.error("boost_payments upsert failed", boostPaymentErr);
+      }
+
+      return jsonResponse({ success: true, updated_count, sponsored_until, duration_days });
     } catch (e) {
       return jsonResponse(
         { error: "Impossible de confirmer le paiement", details: e instanceof Error ? e.message : String(e) },
@@ -224,4 +294,3 @@ Deno.serve(async (req) => {
 
   return jsonResponse({ error: "action invalide (create|confirm)" }, { status: 400 });
 });
-
