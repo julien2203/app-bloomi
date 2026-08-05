@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bloomi",
     "slug": "bloomi-app",
-    "version": "1.1.2",
+    "version": "1.1.11",
     "scheme": "bloomi",
     "platforms": [
       "ios",
@@ -20,14 +20,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Bloomi needs access to your photo library to let you select photos of items you want to sell. For example, choose existing photos of a jacket, dress, or shoes to add to your listing.",
-          "cameraPermission": "Bloomi needs access to your camera to take photos of items you want to sell. For example, photograph a jacket, dress, or pair of shoes to create a new listing."
+          "photosPermission": "Bloomi a besoin d'accéder à vos photos pour sélectionner des images des articles que vous vendez. Par exemple, choisissez des photos d'une veste, d'une robe ou de chaussures pour votre annonce.",
+          "cameraPermission": "Bloomi a besoin d'accéder à votre appareil photo pour photographier les articles que vous vendez. Par exemple, prenez en photo une veste, une robe ou des chaussures pour créer une annonce."
         }
       ],
       [
         "@stripe/stripe-react-native",
         {
           "merchantIdentifier": "merchant.com.jupouch.bloomiapp",
+          "enableGooglePay": true,
           "urlScheme": "bloomi"
         }
       ],
@@ -37,9 +38,21 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#C3EA4F",
-          "image": "./assets/brand/logo-bloomi.png",
-          "imageWidth": 280,
-          "resizeMode": "contain"
+          "image": "./assets/brand/splash-screen.png",
+          "enableFullScreenImage_legacy": true,
+          "resizeMode": "contain",
+          "ios": {
+            "backgroundColor": "#C3EA4F",
+            "image": "./assets/brand/splash-screen.png",
+            "enableFullScreenImage_legacy": true,
+            "resizeMode": "contain"
+          },
+          "android": {
+            "backgroundColor": "#C3EA4F",
+            "image": "./assets/brand/splash-screen.png",
+            "enableFullScreenImage_legacy": true,
+            "resizeMode": "contain"
+          }
         }
       ],
       "@react-native-community/datetimepicker"
@@ -47,7 +60,7 @@
     "icon": "./assets/b.png",
     "splash": {
       "backgroundColor": "#C3EA4F",
-      "image": "./assets/brand/logo-bloomi.png",
+      "image": "./assets/brand/splash-screen.png",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": [
@@ -62,17 +75,48 @@
     "owner": "jupouch",
     "android": {
       "package": "com.jupouch.bloomiapp",
-      "versionCode": 2,
+      "versionCode": 33,
+      "softwareKeyboardLayoutMode": "pan",
       "splash": {
         "backgroundColor": "#C3EA4F",
-        "image": "./assets/brand/logo-bloomi.png",
+        "image": "./assets/brand/splash-screen.png",
         "resizeMode": "contain"
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/android-adaptive-foreground.png",
-        "backgroundColor": "#121212"
+        "backgroundColor": "#C3EA4F"
       },
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "bloomi.ch",
+              "pathPrefix": "/dressing"
+            },
+            {
+              "scheme": "https",
+              "host": "bloomi.ch",
+              "pathPrefix": "/listing"
+            },
+            {
+              "scheme": "https",
+              "host": "www.bloomi.ch",
+              "pathPrefix": "/dressing"
+            },
+            {
+              "scheme": "https",
+              "host": "www.bloomi.ch",
+              "pathPrefix": "/listing"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "data": [
@@ -99,6 +143,47 @@
             "BROWSABLE",
             "DEFAULT"
           ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "bloomi",
+              "host": "stripe-redirect"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "bloomi",
+              "host": "listing",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "bloomi",
+              "host": "dressing",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -107,13 +192,23 @@
     },
     "ios": {
       "bundleIdentifier": "com.jupouch.bloomiapp",
-      "buildNumber": "26",
+      "buildNumber": "97",
+      "associatedDomains": [
+        "applinks:bloomi.ch",
+        "applinks:www.bloomi.ch"
+      ],
+      "icon": "./assets/app-icon/icon-1024.png",
       "supportsTablet": false,
       "infoPlist": {
+        "CFBundleDevelopmentRegion": "fr",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Bloomi needs access to your camera to take photos of items you want to sell. For example, photograph a jacket, dress, or pair of shoes to create a new listing.",
-        "NSPhotoLibraryUsageDescription": "Bloomi needs access to your photo library to let you select photos of items you want to sell. For example, choose existing photos of a jacket, dress, or shoes to add to your listing.",
-        "NSPhotoLibraryAddUsageDescription": "Bloomi saves photos to your library when you download listing images."
+        "NSCameraUsageDescription": "Bloomi a besoin d'accéder à votre appareil photo pour photographier les articles que vous vendez. Par exemple, prenez en photo une veste, une robe ou des chaussures pour créer une annonce.",
+        "NSPhotoLibraryUsageDescription": "Bloomi a besoin d'accéder à vos photos pour sélectionner des images des articles que vous vendez. Par exemple, choisissez des photos d'une veste, d'une robe ou de chaussures pour votre annonce.",
+        "NSPhotoLibraryAddUsageDescription": "Bloomi enregistre les images dans votre photothèque lorsque vous téléchargez des photos d'annonces.",
+        "NSLocationWhenInUseUsageDescription": "Bloomi a besoin d'accéder à votre position pour afficher les annonces près de chez vous.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Bloomi a besoin d'accéder à votre position pour afficher les annonces près de chez vous.",
+        "NSLocationAlwaysUsageDescription": "Bloomi a besoin d'accéder à votre position pour afficher les annonces près de chez vous.",
+        "NSMicrophoneUsageDescription": "Bloomi a besoin d'accéder au microphone pour cette fonctionnalité."
       }
     }
   }

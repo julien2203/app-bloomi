@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +16,7 @@ import {
   Image
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,13 +24,18 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
+import { BLOOMI_COUNTRY_CODE } from '../../../lib/bloomiRegion';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { Text as UiText } from '../../../components/ui/Text';
 
 type ProfileRow = {
   id: string;
   avatar_url: string | null;
+  cover_image?: string | null;
   display_name: string | null;
   bio?: string | null;
   about?: string | null;
@@ -79,7 +84,8 @@ type ToastState = {
 type EditFieldModal = 'username' | 'about' | null;
 
 const PAGE_BG = theme.colors.backgroundWhite;
-const ROW_DIVIDER = '#E5E5E5';
+const ROW_DIVIDER = theme.colors.primary;
+const MODAL_ROW_DIVIDER = '#E5E5E5';
 const INPUT_BORDER = '#D1D5DB';
 /** Espace supplémentaire entre la feuille d’édition et le clavier (iOS). */
 const KEYBOARD_EXTRA_GAP = 40;
@@ -89,6 +95,8 @@ const ICON_BG = '#F0F0F0';
 const ICON_COLOR = '#8E8E93';
 const LOCATION_ICON_COLOR = '#6B6B6B';
 const AVATAR_FALLBACK_BG = '#F0F0F0';
+const COVER_FALLBACK_BG = '#F0F0F0';
+const COVER_HEIGHT = 160;
 const SWITCH_TRACK_OFF = '#D1D1D6';
 
 function FieldIconCircle({
@@ -107,7 +115,7 @@ function FieldIconCircle({
 
 export default function EditProfileScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -122,11 +130,13 @@ export default function EditProfileScreen() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [gpsPermissionDenied, setGpsPermissionDenied] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [updatingLocationVisible, setUpdatingLocationVisible] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [editFieldModal, setEditFieldModal] = useState<EditFieldModal>(null);
   const [modalDraft, setModalDraft] = useState('');
@@ -169,7 +179,7 @@ export default function EditProfileScreen() {
         const full = await supabase
           .from('profiles')
           .select(
-            'id, avatar_url, display_name, bio, about, location, location_visible, city, country, latitude, longitude'
+            'id, avatar_url, cover_image, display_name, bio, about, location, location_visible, city, country, latitude, longitude'
           )
           .eq('id', user.id)
           .maybeSingle();
@@ -179,7 +189,7 @@ export default function EditProfileScreen() {
         } else {
           const minimal = await supabase
             .from('profiles')
-            .select('id, avatar_url, display_name, bio, about, location, location_visible')
+            .select('id, avatar_url, cover_image, display_name, bio, about, location, location_visible')
             .eq('id', user.id)
             .maybeSingle();
 
@@ -222,6 +232,8 @@ export default function EditProfileScreen() {
           );
           setGpsPermissionDenied(false);
           setAvatarUrl(row.avatar_url ?? null);
+          const coverRaw = String(row.cover_image ?? '').trim();
+          setCoverImageUrl(coverRaw.length > 0 ? coverRaw : null);
         } else {
           setProfile(null);
           const authUsername =
@@ -238,6 +250,7 @@ export default function EditProfileScreen() {
           setGpsLng(null);
           setGpsPermissionDenied(false);
           setAvatarUrl(null);
+          setCoverImageUrl(null);
         }
       } catch (e) {
         setToast({
@@ -374,6 +387,71 @@ export default function EditProfileScreen() {
     }
   };
 
+  const handlePickCoverImage = async () => {
+    if (!user?.id || uploadingCover) return;
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        t('profile.publicProfile.permissionRequired'),
+        t('profile.publicProfile.coverPermission')
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.85,
+      aspect: [3, 1]
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    const picked = result.assets[0];
+    const previousCover = coverImageUrl;
+    const coverPath = `${user.id}/cover-${Date.now()}.jpg`;
+
+    setCoverImageUrl(picked.uri);
+    setUploadingCover(true);
+
+    try {
+      const base64 = await FileSystem.readAsStringAsync(picked.uri, {
+        encoding: FileSystem.EncodingType.Base64
+      });
+      const fileBuffer = decodeBase64(base64);
+
+      const { error: uploadErr } = await supabase.storage.from('cover').upload(coverPath, fileBuffer, {
+        upsert: true,
+        contentType: picked.mimeType || 'image/jpeg'
+      });
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicData } = supabase.storage.from('cover').getPublicUrl(coverPath);
+      const publicUrl = publicData?.publicUrl ?? '';
+      if (!publicUrl) throw new Error(t('profile.publicProfile.unableUpdateCover'));
+
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ cover_image: publicUrl })
+        .eq('id', user.id);
+      if (updateErr) throw updateErr;
+
+      setCoverImageUrl(publicUrl);
+    } catch (error) {
+      setCoverImageUrl(previousCover);
+      setToast({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : t('profile.publicProfile.unableUpdateCover')
+      });
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
   const handleToggleLocationVisible = async (value: boolean) => {
     if (!user?.id) return;
 
@@ -432,8 +510,7 @@ export default function EditProfileScreen() {
         .toString()
         .toUpperCase();
 
-      const allowed = ['CH', 'FR', 'DE', 'IT'] as const;
-      if (!allowed.includes(countryCode as any)) {
+      if (countryCode !== BLOOMI_COUNTRY_CODE) {
         Alert.alert(
           t('profile.editProfileScreen.areaUnavailable'),
           t('profile.editProfileScreen.countriesOnly')
@@ -483,7 +560,7 @@ export default function EditProfileScreen() {
           location: locationValue || null,
           location_visible: locationVisible,
           city: locationVisible ? (gpsCity ?? null) : null,
-          country: locationVisible ? (gpsCountry ?? null) : null,
+          country: locationVisible ? BLOOMI_COUNTRY_CODE : null,
           latitude: locationVisible ? (gpsLat ?? null) : null,
           longitude: locationVisible ? (gpsLng ?? null) : null
         })
@@ -505,7 +582,7 @@ export default function EditProfileScreen() {
         message: t('profile.editProfileScreen.profileUpdated')
       });
 
-      navigation.goBack();
+      router.back();
     } catch (error) {
       setToast({
         type: 'error',
@@ -575,7 +652,7 @@ export default function EditProfileScreen() {
                 styles.editModalSheet,
                 {
                   marginBottom: keyboardInset,
-                  paddingBottom: Math.max(insets.bottom, 20)
+                  paddingBottom: Math.max(getSafeBottomInset(insets.bottom), 20)
                 }
               ]}
               onPress={() => {}}
@@ -638,42 +715,36 @@ export default function EditProfileScreen() {
   const usernameDisplay = displayName.trim() || t('profile.editProfileScreen.username');
   const aboutDisplay = about.trim() || t('profile.editProfileScreen.aboutMe');
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: t('profile.editProfileScreen.title'),
-      headerBackTitleVisible: false,
-      headerBackTitle: '',
-      headerStyle: { backgroundColor: PAGE_BG },
-      headerShadowVisible: false,
-      headerRight: () => (
-        <TouchableOpacity
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="dark" />
+
+      <View style={styles.header}>
+        <HeaderBackButton onPress={() => router.back()} />
+        <UiText variant="body" style={styles.headerTitle}>
+          {t('profile.editProfileScreen.title')}
+        </UiText>
+        <Pressable
           onPress={handleSave}
           disabled={isSaveDisabled}
-          activeOpacity={isSaveDisabled ? 1 : 0.7}
-          style={{ paddingHorizontal: 8 }}
+          style={({ pressed }) => [
+            styles.saveButton,
+            isSaveDisabled && styles.saveButtonDisabled,
+            pressed && !isSaveDisabled && styles.saveButtonPressed
+          ]}
+          hitSlop={10}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={VALUE_COLOR} />
+            <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : (
-            <Text
-              style={{
-                fontSize: 16,
-                fontFamily: theme.fontFamily.semiBold,
-                color: theme.colors.primary,
-                opacity: isSaveDisabled ? 0.4 : 1
-              }}
-            >
+            <UiText variant="body" style={styles.saveText}>
               {t('common.save')}
-            </Text>
+            </UiText>
           )}
-        </TouchableOpacity>
-      )
-    });
-  }, [navigation, isSaveDisabled, saving, handleSave]);
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="dark" />
+        </Pressable>
+      </View>
+      <View style={styles.headerSeparator} />
 
       <ScrollView
         style={styles.scroll}
@@ -681,6 +752,45 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Cover photo */}
+        <View style={styles.coverWrap}>
+          {loading ? (
+            <View style={styles.coverPlaceholder}>
+              <ActivityIndicator size="small" color={ICON_COLOR} />
+            </View>
+          ) : coverImageUrl ? (
+            <Image source={{ uri: coverImageUrl }} style={styles.coverImage} />
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Text style={styles.coverPlaceholderText}>
+                {t('profile.publicProfile.addCover')}
+              </Text>
+            </View>
+          )}
+          <Pressable
+            onPress={() => {
+              void handlePickCoverImage();
+            }}
+            style={({ pressed }) => [
+              styles.coverEditButton,
+              pressed && styles.coverEditButtonPressed
+            ]}
+            disabled={uploadingCover || loading}
+            accessibilityRole="button"
+            accessibilityLabel={
+              coverImageUrl
+                ? t('common.edit')
+                : t('profile.publicProfile.addCover')
+            }
+          >
+            {uploadingCover ? (
+              <ActivityIndicator size="small" color={VALUE_COLOR} />
+            ) : (
+              <Text style={styles.coverEditButtonText}>{t('common.edit')}</Text>
+            )}
+          </Pressable>
+        </View>
+
         {/* Profile photo */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>
@@ -705,7 +815,7 @@ export default function EditProfileScreen() {
               {uploadingAvatar ? (
                 <ActivityIndicator size="small" color={ICON_COLOR} />
               ) : (
-                <Feather name="camera" size={14} color={ICON_COLOR} />
+                <Feather name="camera" size={16} color={ICON_COLOR} />
               )}
             </TouchableOpacity>
           </View>
@@ -823,13 +933,45 @@ export default function EditProfileScreen() {
   );
 }
 
-const AVATAR_SIZE = 90;
-const CAMERA_SIZE = 28;
+const AVATAR_SIZE = 112;
+const CAMERA_SIZE = 32;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: PAGE_BG
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.settingsPaddingX,
+    paddingVertical: theme.spacing.settingsHeaderPaddingY
+  },
+  headerTitle: {
+    ...theme.typography.settingsHeaderTitle,
+    color: theme.colors.appleBlack,
+    textAlign: 'center',
+    flex: 1
+  },
+  headerSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.separator
+  },
+  saveButton: {
+    minWidth: theme.spacing.settingsHeaderSideWidth,
+    alignItems: 'flex-end',
+    justifyContent: 'center'
+  },
+  saveButtonPressed: {
+    opacity: 0.7
+  },
+  saveButtonDisabled: {
+    opacity: 0.35
+  },
+  saveText: {
+    ...theme.typography.settingsHeaderTitle,
+    color: theme.colors.primary
   },
   scroll: {
     flex: 1
@@ -837,8 +979,54 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40
   },
+  coverWrap: {
+    height: COVER_HEIGHT,
+    width: '100%',
+    backgroundColor: COVER_FALLBACK_BG
+  },
+  coverImage: {
+    width: '100%',
+    height: COVER_HEIGHT,
+    resizeMode: 'cover'
+  },
+  coverPlaceholder: {
+    width: '100%',
+    height: COVER_HEIGHT,
+    backgroundColor: COVER_FALLBACK_BG,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  coverPlaceholderText: {
+    fontSize: 14,
+    color: LABEL_COLOR,
+    textAlign: 'center',
+    paddingHorizontal: 24
+  },
+  coverEditButton: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    minWidth: 64,
+    minHeight: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E5E5'
+  },
+  coverEditButtonPressed: {
+    opacity: 0.75
+  },
+  coverEditButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: VALUE_COLOR
+  },
   avatarSection: {
-    marginTop: 32,
+    marginTop: 16,
     marginBottom: 32,
     alignItems: 'center'
   },
@@ -872,7 +1060,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   avatarInitials: {
-    fontSize: 30,
+    fontSize: 38,
     fontFamily: theme.fontFamily.semiBold,
     color: VALUE_COLOR
   },
@@ -942,7 +1130,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     lineHeight: 16,
-    fontFamily: theme.fontFamily.regular,
+    fontFamily: theme.fontFamily.semiBold,
     color: LABEL_COLOR,
     marginBottom: 2
   },
@@ -955,7 +1143,7 @@ const styles = StyleSheet.create({
   fieldValueSingle: {
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: theme.fontFamily.regular,
+    fontFamily: theme.fontFamily.semiBold,
     color: VALUE_COLOR
   },
   fieldSubValue: {
@@ -966,9 +1154,9 @@ const styles = StyleSheet.create({
     color: LABEL_COLOR
   },
   rowDivider: {
-    height: StyleSheet.hairlineWidth,
+    height: 1,
     backgroundColor: ROW_DIVIDER,
-    marginLeft: 16 + 36 + 12
+    marginHorizontal: 16
   },
   locationSwitch: {
     transform: Platform.OS === 'ios' ? [{ scaleX: 0.92 }, { scaleY: 0.92 }] : undefined
@@ -1052,7 +1240,7 @@ const styles = StyleSheet.create({
   cantonRow: {
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: ROW_DIVIDER
+    borderBottomColor: MODAL_ROW_DIVIDER
   },
   cantonText: {
     fontSize: 16,

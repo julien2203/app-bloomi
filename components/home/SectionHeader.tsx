@@ -3,6 +3,7 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../lib/theme';
 import { Text } from '../ui/Text';
+import { runGuardedNav } from '../../lib/navigation/guardedNav';
 
 interface SectionHeaderProps {
   title: string;
@@ -19,7 +20,10 @@ export function SectionHeader({ title, onPressSeeAll, titleColor }: SectionHeade
         {title}
       </Text>
       {onPressSeeAll && (
-        <TouchableOpacity onPress={onPressSeeAll} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={() => runGuardedNav(`see-all:${title}`, onPressSeeAll)}
+          activeOpacity={0.7}
+        >
           <Text variant="caption" color="textSecondary">
             {t('common.seeAll')}
           </Text>

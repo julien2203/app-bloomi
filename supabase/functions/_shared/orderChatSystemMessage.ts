@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  encodeChatEventBody,
+  type ChatEventPayload,
+} from "./chatTransactionEvents.ts";
 
 /**
  * Trouve ou crée le thread listing + acheteur + vendeur (service role, hors RLS).
@@ -71,4 +75,12 @@ export async function insertThreadSystemMessage(
     return;
   }
   await admin.from("threads").update({ last_message_at: now }).eq("id", threadId);
+}
+
+export async function insertThreadEventMessage(
+  admin: SupabaseClient,
+  threadId: string,
+  payload: ChatEventPayload,
+): Promise<void> {
+  await insertThreadSystemMessage(admin, threadId, encodeChatEventBody(payload));
 }

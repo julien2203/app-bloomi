@@ -8,9 +8,10 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getChildCategories, getDescendantCategoryIds } from '../../lib/api/filters';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { translateCategoryLabel } from '../../lib/categoryI18n';
 import { useTranslation } from 'react-i18next';
 
@@ -61,6 +62,7 @@ export default function CategoryDetailScreen() {
   const gender = params.gender as string | undefined;
 
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [allParentCategoryIds, setAllParentCategoryIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([...(filters.categoryIds ?? [])]);
@@ -75,7 +77,7 @@ export default function CategoryDetailScreen() {
 
   const handleShowResult = () => {
     setFilter('categoryIds', selectedIds);
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const handleSelectAllParentItems = () => {
@@ -197,7 +199,7 @@ export default function CategoryDetailScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

@@ -6,7 +6,7 @@ import {
   ScrollViewProps,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { theme } from '../../lib/theme';
 
 interface ScreenProps {
@@ -15,6 +15,7 @@ interface ScreenProps {
   style?: ViewStyle;
   scrollProps?: Omit<ScrollViewProps, 'style' | 'contentContainerStyle'>;
   noHorizontalPadding?: boolean;
+  edges?: Edge[];
 }
 
 export function Screen({
@@ -22,11 +23,12 @@ export function Screen({
   scroll = false,
   style,
   scrollProps,
-  noHorizontalPadding = false
+  noHorizontalPadding = false,
+  edges
 }: ScreenProps) {
   if (scroll) {
     return (
-      <SafeAreaView style={[styles.root, style]} edges={['left', 'right']}>
+      <SafeAreaView style={[styles.root, style]} edges={edges ?? ['left', 'right']}>
         <ScrollView
           {...scrollProps}
           style={styles.scroll}
@@ -43,7 +45,7 @@ export function Screen({
   }
 
   return (
-    <SafeAreaView style={[styles.root, style]}>
+    <SafeAreaView style={[styles.root, style]} edges={edges}>
       <View
         style={[styles.content, noHorizontalPadding && styles.noHorizontalPadding]}
       >

@@ -5,9 +5,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking,
   Image
 } from 'react-native';
+import { openPrivacyPolicy, openTermsOfUse } from '../../lib/legalLinks';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -76,7 +76,7 @@ export default function VerifyEmailScreen() {
               try {
                 await supabase.auth.signOut();
               } finally {
-                router.replace('/onboarding/splash');
+                router.replace('/onboarding/step-1');
               }
             }}
             style={styles.logoutButton}
@@ -155,15 +155,12 @@ export default function VerifyEmailScreen() {
                 By continuing, you agree to Bloomi&apos;s{' '}
                 <Text
                   style={styles.legalLink}
-                  onPress={() => Linking.openURL('https://bloomi.app/terms')}
+                  onPress={() => openTermsOfUse(router)}
                 >
                   {t('common.termsOfService')}
                 </Text>{' '}
                 and acknowledge you&apos;ve read our{' '}
-                <Text
-                  style={styles.legalLink}
-                  onPress={() => Linking.openURL('https://bloomi.app/privacy')}
-                >
+                <Text style={styles.legalLink} onPress={openPrivacyPolicy}>
                   {t('common.privacyPolicy')}
                 </Text>
                 .

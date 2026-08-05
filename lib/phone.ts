@@ -7,7 +7,7 @@ export type NormalizedPhoneResult =
 /**
  * Normalise un numéro de téléphone vers le format E.164 pour les pays supportés.
  *
- * Pays autorisés :
+ * Pays autorisés pour les numéros de téléphone (résidents en Suisse) :
  * - Suisse : +41 (CH)
  * - France : +33 (FR)
  * - Allemagne : +49 (DE)

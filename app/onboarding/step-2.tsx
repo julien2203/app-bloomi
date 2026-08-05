@@ -1,14 +1,13 @@
 /**
  * Onboarding Step 2
- * Background photo full-screen + logo "b." + boutons social (Apple/Google/Facebook) + "or" + CTA vert
+ * Fond blanc + logo + boutons social (Apple/Google/Facebook) + "or" + CTA vert
  */
 
 import React, { useState } from 'react';
-import { View, Text, ImageBackground, StyleSheet, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { DividerOr } from '../../components/ui/DividerOr';
 import { theme } from '../../lib/theme';
@@ -20,6 +19,9 @@ import {
   type OAuthProvider
 } from '../../lib/socialAuth';
 import { useTranslation } from 'react-i18next';
+import { authDebug, authDebugError } from '../../lib/authDebugLog';
+import { openPrivacyPolicy, openTermsOfUse } from '../../lib/legalLinks';
+import { postAuthDestination } from '../../lib/auth/needsPhoneVerification';
 
 export default function OnboardingStep2() {
   const { t } = useTranslation();
@@ -31,14 +33,25 @@ export default function OnboardingStep2() {
       Alert.alert(t('onboarding.social.facebook'), t('onboarding.social.facebookSoon'));
       return;
     }
+    if (oauthLoading) return;
 
     setOauthLoading(true);
+    authDebug('onboarding:oauth:start', { provider, step: 2 });
 
     try {
       const oauthProvider = provider as OAuthProvider;
       const { error } = await signInWithOAuthProvider(oauthProvider);
 
       if (error) {
+        const {
+          data: { session: recoveredSession }
+        } = await supabase.auth.getSession();
+        if (recoveredSession) {
+          authDebug('onboarding:oauth:recoveredSessionDespiteError', { provider, step: 2 });
+          await ensureProfileAfterOAuthLogin(recoveredSession);
+          router.replace(postAuthDestination(recoveredSession.user));
+          return;
+        }
         if (!isOAuthCancelled(error)) {
           Alert.alert(t('auth.login.submit'), error.message);
         }
@@ -54,8 +67,11 @@ export default function OnboardingStep2() {
       }
 
       await ensureProfileAfterOAuthLogin(session);
-      router.replace('/tabs/feed');
-    } catch {
+      authDebug('onboarding:oauth:navigateFeed:before', { provider, step: 2 });
+      router.replace(postAuthDestination(session.user));
+      authDebug('onboarding:oauth:navigateFeed:after', { provider, step: 2 });
+    } catch (e) {
+      authDebugError('onboarding:oauth:exception', e, { provider, step: 2 });
       Alert.alert(t('auth.login.submit'), t('onboarding.social.unableSocial'));
     } finally {
       setOauthLoading(false);
@@ -64,24 +80,17 @@ export default function OnboardingStep2() {
 
   return (
     <>
-      <StatusBar style="light" />
-      <ImageBackground
-        source={require('../../assets/onboarding/bg2.jpg')}
-        style={styles.background}
-        resizeMode="cover"
-      >
+      <StatusBar style="dark" />
+      <View style={styles.screen}>
         <SafeAreaView style={styles.container}>
-          {/* Logo Bloomi centré en haut */}
           <View style={styles.header}>
             <Image
-              source={require('../../assets/brand/logo-b.png')}
+              source={require('../../assets/brand/logo-bloomi-full.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
           </View>
 
-        
-          {/* Boutons en bas */}
           <View style={styles.footer}>
             <Button
               title={t('onboarding.social.apple')}
@@ -94,7 +103,7 @@ export default function OnboardingStep2() {
             <Button
               title={t('onboarding.social.google')}
               onPress={() => void handleSocialLogin('google')}
-              variant="google-white"
+              variant="apple-black"
               style={styles.socialButton}
               loading={oauthLoading}
               disabled={oauthLoading}
@@ -107,7 +116,7 @@ export default function OnboardingStep2() {
               disabled={oauthLoading}
             />
 
-            <DividerOr variant="light" />
+            <DividerOr />
 
             <Button
               title={t('onboarding.step2.signUpEmail')}
@@ -116,8 +125,6 @@ export default function OnboardingStep2() {
               style={styles.socialButton}
               disabled={oauthLoading}
             />
-
-            {/* Ancien bouton vers /auth/sign-in retiré car écran supprimé */}
 
             <View style={styles.loginLink}>
               <Text style={styles.loginLinkText}>
@@ -135,23 +142,29 @@ export default function OnboardingStep2() {
           <View style={styles.legalContainer}>
             <Text style={styles.legalText}>
               {`${t('onboarding.legal.prefix')} `}
-              <Text style={styles.legalLink}>{t('common.termsOfService')}</Text>
+              <Text
+                style={styles.legalLink}
+                onPress={() => openTermsOfUse(router)}
+              >
+                {t('common.termsOfService')}
+              </Text>
               {' '}
               {`${t('onboarding.legal.andRead')} `}
-              <Text style={styles.legalLink}>{t('common.privacyPolicy')}</Text>
+              <Text style={styles.legalLink} onPress={openPrivacyPolicy}>
+                {t('common.privacyPolicy')}
+              </Text>
             </Text>
           </View>
         </SafeAreaView>
-      </ImageBackground>
+      </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
+  screen: {
     flex: 1,
-    width: '100%',
-    height: '100%'
+    backgroundColor: '#FFFFFF'
   },
   container: {
     flex: 1
@@ -162,22 +175,7 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     width: 180,
-    height: 180
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.horizontalPadding
-  },
-  headline: {
-    ...theme.typography.h1,
-    color: theme.colors.googleWhite,
-    marginBottom: 16
-  },
-  subheadline: {
-    ...theme.typography.body,
-    color: theme.colors.googleWhite,
-    opacity: 0.9
+    height: 72
   },
   footer: {
     flex: 1,
@@ -188,22 +186,13 @@ const styles = StyleSheet.create({
   socialButton: {
     marginBottom: 12
   },
-  phoneButton: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.googleWhite,
-    backgroundColor: 'transparent'
-  },
-  phoneButtonText: {
-    color: theme.colors.googleWhite
-  },
   loginLink: {
     marginTop: 16,
     alignItems: 'center'
   },
   loginLinkText: {
     ...theme.typography.body,
-    color: theme.colors.googleWhite
+    color: theme.colors.appleBlack
   },
   loginLinkButton: {
     color: theme.colors.primary,
@@ -216,12 +205,11 @@ const styles = StyleSheet.create({
   },
   legalText: {
     ...theme.typography.captionSm,
-    color: theme.colors.googleWhite,
-    textAlign: 'center',
-    opacity: 0.9
+    color: theme.colors.textSecondary,
+    textAlign: 'center'
   },
   legalLink: {
-    color: '#C3EA4F',
+    color: theme.colors.appleBlack,
     fontWeight: '600'
   }
 });

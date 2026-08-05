@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
@@ -24,6 +25,7 @@ export default function SellBrandGenderScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
 
   const openGender = (segment: GenderSegment) => {
     router.push({
@@ -39,7 +41,7 @@ export default function SellBrandGenderScreen() {
   };
 
   return (
-    <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF', paddingBottom: insets.bottom }}>
+    <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF', paddingBottom: safeBottom }}>
       <View style={styles.container}>
         <View style={styles.header}>
           <HeaderBackButton onPress={handleBack} />

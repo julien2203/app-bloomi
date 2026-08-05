@@ -9,6 +9,10 @@ import { theme } from '../lib/theme';
 import type { FeedListing } from '../lib/api';
 import { useTranslation } from 'react-i18next';
 import { ListingCoverImage } from './ui/ListingCoverImage';
+import { runGuardedNav } from '../lib/navigation/guardedNav';
+import { openListingDetail } from '../lib/navigation/openListingDetail';
+import { gridCardWidth } from '../lib/cardLayout';
+import { computeBuyerDisplayPriceChf, formatCatalogPriceChf } from '../lib/formatBuyerPrice';
 
 const IMAGE_HEIGHT = 200;
 
@@ -21,21 +25,23 @@ export function ListingCard({ listing, onPress }: ListingCardProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
-
-  const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0
-    }).format(price);
-  };
+  const cardWidth = gridCardWidth(windowWidth);
+  const displayPriceChf = computeBuyerDisplayPriceChf(listing.price);
 
   const handlePress = () => {
-    if (onPress) {
-      onPress();
-    } else {
-      router.push(`/tabs/feed/${listing.id}`);
-    }
+    runGuardedNav(`listing-card:${listing.id}`, () => {
+      if (onPress) {
+        onPress();
+      } else {
+        openListingDetail(router, listing.id, {
+          return_to: 'feed',
+          cover_photo: listing.cover_photo_url,
+          detailPathBase: '/tabs/feed',
+          imageWidthDp: cardWidth,
+          imageHeightDp: IMAGE_HEIGHT
+        });
+      }
+    });
   };
 
   return (
@@ -48,7 +54,7 @@ export function ListingCard({ listing, onPress }: ListingCardProps) {
         <View style={[styles.imageContainer, styles.imageFrame]}>
           <ListingCoverImage
             uri={listing.cover_photo_url}
-            widthDp={windowWidth}
+            widthDp={cardWidth}
             heightDp={IMAGE_HEIGHT}
             recyclingKey={listing.id}
           />
@@ -63,7 +69,7 @@ export function ListingCard({ listing, onPress }: ListingCardProps) {
         <Text style={styles.title} numberOfLines={2}>
           {listing.title}
         </Text>
-        <Text style={styles.price}>{formatPrice(listing.price)}</Text>
+        <Text style={styles.price}>{formatCatalogPriceChf(displayPriceChf)}</Text>
         {listing.listing_city && (
           <Text style={styles.location} numberOfLines={1}>
             {listing.listing_city}

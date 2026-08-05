@@ -1,0 +1,1318 @@
+{
+  "common.learnMore": {
+    "en": "Learn more",
+    "fr": "En savoir plus"
+  },
+  "common.permissionRequired": {
+    "en": "Permission required",
+    "fr": "Autorisation requise"
+  },
+  "auth.login.continueGuest": {
+    "en": "Continue as guest",
+    "fr": "Continuer en tant qu'invité"
+  },
+  "auth.signUp.browseWithoutAccount": {
+    "en": "Browse without an account",
+    "fr": "Parcourir sans compte"
+  },
+  "auth.verifyEmail.noEmail": {
+    "en": "No email address found.",
+    "fr": "Aucune adresse e-mail trouvée."
+  },
+  "auth.verifyEmail.resendLink": {
+    "en": "Resend verification email",
+    "fr": "Renvoyer l'e-mail de vérification"
+  },
+  "auth.forgotPassword.subtitle": {
+    "en": "Enter your email to receive a reset link.",
+    "fr": "Saisissez votre e-mail pour recevoir un lien de réinitialisation."
+  },
+  "auth.forgotPassword.sentMessage": {
+    "en": "We sent a reset link to your email.",
+    "fr": "Nous avons envoyé un lien de réinitialisation à votre e-mail."
+  },
+  "auth.resetPassword.subtitle": {
+    "en": "Choose a new password for your account.",
+    "fr": "Choisissez un nouveau mot de passe pour votre compte."
+  },
+  "auth.resetPassword.noMatch": {
+    "en": "Passwords do not match.",
+    "fr": "Les mots de passe ne correspondent pas."
+  },
+  "auth.resetPassword.updatedTitle": {
+    "en": "Password updated",
+    "fr": "Mot de passe mis à jour"
+  },
+  "auth.resetPassword.updatedMessage": {
+    "en": "Your password has been updated.",
+    "fr": "Votre mot de passe a été mis à jour."
+  },
+  "auth.verifyPhone.titleStep1": {
+    "en": "Verify your phone",
+    "fr": "Vérifiez votre téléphone"
+  },
+  "auth.verifyPhone.titleStep2": {
+    "en": "Enter verification code",
+    "fr": "Saisissez le code de vérification"
+  },
+  "auth.verifyPhone.subtitleStep1": {
+    "en": "We will send you a verification code by SMS.",
+    "fr": "Nous vous enverrons un code de vérification par SMS."
+  },
+  "auth.verifyPhone.subtitleStep2": {
+    "en": "Enter the 6-digit code we sent you.",
+    "fr": "Saisissez le code à 6 chiffres que nous vous avons envoyé."
+  },
+  "auth.verifyPhone.phoneLabel": {
+    "en": "Phone number",
+    "fr": "Numéro de téléphone"
+  },
+  "auth.verifyPhone.phonePlaceholder": {
+    "en": "+41 79 000 00 00",
+    "fr": "+41 79 000 00 00"
+  },
+  "auth.verifyPhone.phoneMissing": {
+    "en": "Phone number is missing.",
+    "fr": "Numéro de téléphone manquant."
+  },
+  "auth.verifyPhone.validPhone": {
+    "en": "Enter a valid phone number.",
+    "fr": "Saisissez un numéro de téléphone valide."
+  },
+  "auth.verifyPhone.sendCodeError": {
+    "en": "Unable to send code.",
+    "fr": "Impossible d'envoyer le code."
+  },
+  "auth.verifyPhone.verifyCodeError": {
+    "en": "Unable to verify code.",
+    "fr": "Impossible de vérifier le code."
+  },
+  "auth.verifyPhone.codeIncorrect": {
+    "en": "Incorrect code. Please try again.",
+    "fr": "Code incorrect. Veuillez réessayer."
+  },
+  "auth.verifyPhone.codeExpired": {
+    "en": "The code has expired. Request a new one.",
+    "fr": "Le code a expiré. Demandez-en un nouveau."
+  },
+  "auth.verifyPhone.enterAllDigits": {
+    "en": "Enter all 6 digits.",
+    "fr": "Saisissez les 6 chiffres."
+  },
+  "auth.verifyPhone.resendCode": {
+    "en": "Resend code",
+    "fr": "Renvoyer le code"
+  },
+  "auth.verifyPhone.resendSeconds": {
+    "en": "Resend in {{seconds}}s",
+    "fr": "Renvoyer dans {{seconds}}s"
+  },
+  "auth.verifyPhone.abandonTitle": {
+    "en": "Leave verification?",
+    "fr": "Quitter la vérification ?"
+  },
+  "auth.verifyPhone.abandonMessage": {
+    "en": "Your progress will be lost.",
+    "fr": "Votre progression sera perdue."
+  },
+  "auth.verifyPhone.abandonConfirm": {
+    "en": "Leave",
+    "fr": "Quitter"
+  },
+  "auth.verifyPhone.deleteAccountError": {
+    "en": "Unable to delete account.",
+    "fr": "Impossible de supprimer le compte."
+  },
+  "auth.verifyPhone.sessionRestoreError": {
+    "en": "Unable to restore session.",
+    "fr": "Impossible de restaurer la session."
+  },
+  "auth.verifyPhoneInfo.pleaseVerifyTitle": {
+    "en": "Please verify your phone number to continue.",
+    "fr": "Veuillez vérifier votre numéro de téléphone pour continuer."
+  },
+  "auth.verifyPhoneInfo.subtitle": {
+    "en": "We will send you a verification code by SMS.",
+    "fr": "Nous vous enverrons un code de vérification par SMS."
+  },
+  "auth.verifyPhoneInfo.phonePlaceholder": {
+    "en": "+41 79 000 00 00",
+    "fr": "+41 79 000 00 00"
+  },
+  "auth.verifyPhoneCode.screenTitle": {
+    "en": "Verify your phone number",
+    "fr": "Vérifiez votre numéro de téléphone"
+  },
+  "auth.verifyPhoneCode.screenSubtitle": {
+    "en": "Enter the 6-digit code we sent you.",
+    "fr": "Saisissez le code à 6 chiffres que nous vous avons envoyé."
+  },
+  "auth.verify.title": {
+    "en": "Verification",
+    "fr": "Vérification"
+  },
+  "auth.verify.subtitle": {
+    "en": "Enter the code we sent to your phone.",
+    "fr": "Saisissez le code envoyé sur votre téléphone."
+  },
+  "auth.verify.smsFootnote": {
+    "en": "Standard SMS rates may apply.",
+    "fr": "Des frais SMS standards peuvent s'appliquer."
+  },
+  "auth.verify.yourNumber": {
+    "en": "your number",
+    "fr": "votre numéro"
+  },
+  "auth.verify.phoneNotFound": {
+    "en": "Phone not found.",
+    "fr": "Téléphone introuvable."
+  },
+  "auth.verify.signInFailed": {
+    "en": "Sign-in failed.",
+    "fr": "Échec de la connexion."
+  },
+  "auth.verify.verifyError": {
+    "en": "Unable to verify.",
+    "fr": "Impossible de vérifier."
+  },
+  "auth.verify.testAuthError": {
+    "en": "Test auth error.",
+    "fr": "Erreur d'authentification test."
+  },
+  "auth.checkEmail.messageGeneric": {
+    "en": "We sent a verification link to your email.",
+    "fr": "Nous avons envoyé un lien de vérification à votre e-mail."
+  },
+  "auth.checkEmail.messageWithEmail": {
+    "en": "We sent a verification link to {{email}}.",
+    "fr": "Nous avons envoyé un lien de vérification à {{email}}."
+  },
+  "auth.email": {
+    "en": "Email",
+    "fr": "Email"
+  },
+  "auth.emailPlaceholder": {
+    "en": "your@email.com",
+    "fr": "your@email.com"
+  },
+  "auth.password": {
+    "en": "Password",
+    "fr": "Mot de passe"
+  },
+  "onboarding.step3.headline": {
+    "en": "Your marketplace awaits",
+    "fr": "Votre marketplace vous attend"
+  },
+  "onboarding.step3.subheadline": {
+    "en": "Join thousands of buyers and sellers",
+    "fr": "Rejoignez des milliers d'acheteurs et vendeurs"
+  },
+  "onboarding.step3.signUp": {
+    "en": "Sign up to Bloomi",
+    "fr": "S'inscrire sur Bloomi"
+  },
+  "onboarding.legal.prefix": {
+    "en": "By continuing, you agree to our",
+    "fr": "En continuant, vous acceptez nos"
+  },
+  "onboarding.legal.andRead": {
+    "en": "and read our",
+    "fr": "et avoir lu notre"
+  },
+  "onboarding.social.apple": {
+    "en": "Continue with Apple",
+    "fr": "Continuer avec Apple"
+  },
+  "onboarding.social.google": {
+    "en": "Continue with Google",
+    "fr": "Continuer avec Google"
+  },
+  "onboarding.social.facebook": {
+    "en": "Continue with Facebook",
+    "fr": "Continuer avec Facebook"
+  },
+  "onboarding.social.facebookSoon": {
+    "en": "Facebook sign-in is coming soon.",
+    "fr": "La connexion Facebook n'est pas encore disponible."
+  },
+  "onboarding.social.unableSocial": {
+    "en": "Something went wrong during social sign-in.",
+    "fr": "Une erreur s'est produite lors de la connexion sociale."
+  },
+  "onboarding.social.unableComplete": {
+    "en": "Unable to complete sign-in. Please try again.",
+    "fr": "Connexion impossible. Veuillez réessayer."
+  },
+  "filters.brand": {
+    "en": "Brand",
+    "fr": "Marque"
+  },
+  "filters.condition": {
+    "en": "Condition",
+    "fr": "État"
+  },
+  "filters.other": {
+    "en": "Other",
+    "fr": "Autre"
+  },
+  "filters.fromChf": {
+    "en": "From {{value}} CHF",
+    "fr": "À partir de {{value}} CHF"
+  },
+  "filters.upToChf": {
+    "en": "Up to {{value}} CHF",
+    "fr": "Jusqu'à {{value}} CHF"
+  },
+  "filters.categoriesCount": {
+    "en": "{{count}} categories",
+    "fr": "{{count}} catégories"
+  },
+  "filters.allItems": {
+    "en": "All items",
+    "fr": "Tous les articles"
+  },
+  "filters.allFor": {
+    "en": "All {{value}}",
+    "fr": "Tous les {{value}}"
+  },
+  "filters.popularForGender": {
+    "en": "Popular for {{gender}}",
+    "fr": "Populaires pour {{gender}}"
+  },
+  "filters.allBrands": {
+    "en": "All brands",
+    "fr": "Toutes les marques"
+  },
+  "filters.noBrandsFound": {
+    "en": "No brands found",
+    "fr": "Aucune marque trouvée"
+  },
+  "filters.noColorsFound": {
+    "en": "No colors found",
+    "fr": "Aucune couleur trouvée"
+  },
+  "filters.brandsLoadError": {
+    "en": "Unable to load brands.",
+    "fr": "Impossible de charger les marques."
+  },
+  "filters.sizesLoadError": {
+    "en": "Unable to load sizes.",
+    "fr": "Impossible de charger les tailles."
+  },
+  "filters.colorsLoadError": {
+    "en": "Unable to load colors.",
+    "fr": "Impossible de charger les couleurs."
+  },
+  "filters.conditionLoadError": {
+    "en": "Unable to load conditions.",
+    "fr": "Impossible de charger les états."
+  },
+  "filters.priceLoadError": {
+    "en": "Unable to load price range.",
+    "fr": "Impossible de charger la fourchette de prix."
+  },
+  "filters.allGenderItems.woman": {
+    "en": "All women's items",
+    "fr": "Tous les articles femme"
+  },
+  "filters.allGenderItems.men": {
+    "en": "All men's items",
+    "fr": "Tous les articles homme"
+  },
+  "filters.allGenderItems.kids": {
+    "en": "All kids' items",
+    "fr": "Tous les articles enfant"
+  },
+  "filters.allGenderItems.baby": {
+    "en": "All baby items",
+    "fr": "Tous les articles bébé"
+  },
+  "filters.segment.womenClothing": {
+    "en": "Women's clothing",
+    "fr": "Vêtements femme"
+  },
+  "filters.segment.womenShoes": {
+    "en": "Women's shoes",
+    "fr": "Chaussures femme"
+  },
+  "filters.segment.womenBags": {
+    "en": "Women's bags",
+    "fr": "Sacs femme"
+  },
+  "filters.segment.womenAccessories": {
+    "en": "Women's accessories",
+    "fr": "Accessoires femme"
+  },
+  "filters.segment.menClothing": {
+    "en": "Men's clothing",
+    "fr": "Vêtements homme"
+  },
+  "filters.segment.menShoes": {
+    "en": "Men's shoes",
+    "fr": "Chaussures homme"
+  },
+  "filters.segment.menBags": {
+    "en": "Men's bags",
+    "fr": "Sacs homme"
+  },
+  "filters.segment.menAccessories": {
+    "en": "Men's accessories",
+    "fr": "Accessoires homme"
+  },
+  "filters.segment.kidsClothing": {
+    "en": "Kids' clothing",
+    "fr": "Vêtements enfant"
+  },
+  "filters.segment.kidsShoes": {
+    "en": "Kids' shoes",
+    "fr": "Chaussures enfant"
+  },
+  "filters.segment.kidsBags": {
+    "en": "Kids' bags",
+    "fr": "Sacs enfant"
+  },
+  "filters.segment.kidsAccessories": {
+    "en": "Kids' accessories",
+    "fr": "Accessoires enfant"
+  },
+  "filters.segment.kidsToys": {
+    "en": "Kids' toys",
+    "fr": "Jouets enfant"
+  },
+  "filters.segment.kidsFurniture": {
+    "en": "Kids' furniture",
+    "fr": "Mobilier enfant"
+  },
+  "filters.segment.kidsSchool": {
+    "en": "Kids' school",
+    "fr": "Scolaire enfant"
+  },
+  "filters.segment.babyClothing": {
+    "en": "Baby clothing",
+    "fr": "Vêtements bébé"
+  },
+  "filters.segment.babyShoes": {
+    "en": "Baby shoes",
+    "fr": "Chaussures bébé"
+  },
+  "filters.segment.babyAccessories": {
+    "en": "Baby accessories",
+    "fr": "Accessoires bébé"
+  },
+  "filters.segment.babyCare": {
+    "en": "Baby care",
+    "fr": "Puériculture bébé"
+  },
+  "filters.segment.babyToys": {
+    "en": "Baby toys",
+    "fr": "Jouets bébé"
+  },
+  "filters.sizeSections.womanItems": {
+    "en": "Women's clothing",
+    "fr": "Vêtements femme"
+  },
+  "filters.sizeSections.womanShoes": {
+    "en": "Women's shoes",
+    "fr": "Chaussures femme"
+  },
+  "filters.sizeSections.menClothing": {
+    "en": "Men's clothing",
+    "fr": "Vêtements homme"
+  },
+  "filters.sizeSections.menPants": {
+    "en": "Men's pants",
+    "fr": "Pantalons homme"
+  },
+  "filters.sizeSections.menShirts": {
+    "en": "Men's shirts",
+    "fr": "Chemises homme"
+  },
+  "filters.sizeSections.menShoes": {
+    "en": "Men's shoes",
+    "fr": "Chaussures homme"
+  },
+  "filters.sizeSections.kids": {
+    "en": "Kids' clothing",
+    "fr": "Vêtements enfant"
+  },
+  "filters.sizeSections.kidsShoes": {
+    "en": "Kids' shoes",
+    "fr": "Chaussures enfant"
+  },
+  "filters.sizeSections.baby": {
+    "en": "Baby clothing",
+    "fr": "Vêtements bébé"
+  },
+  "filters.sizeSections.babyShoes": {
+    "en": "Baby shoes",
+    "fr": "Chaussures bébé"
+  },
+  "feed.emptyListings": {
+    "en": "No listings yet.",
+    "fr": "Aucun article pour le moment."
+  },
+  "feed.loadingFeed": {
+    "en": "Loading feed…",
+    "fr": "Chargement du fil…"
+  },
+  "feed.loadError": {
+    "en": "Loading error",
+    "fr": "Erreur de chargement"
+  },
+  "feed.listingDetail.sellerOnVacation": {
+    "en": "Vacation mode",
+    "fr": "Mode vacances"
+  },
+  "feed.listingDetail.sellerVacationTitle": {
+    "en": "Seller in vacation mode",
+    "fr": "Vendeur en mode vacances"
+  },
+  "feed.listingDetail.sellerVacationMessage": {
+    "en": "This seller has enabled vacation mode. Listings stay visible but buyers cannot purchase them for now.",
+    "fr": "Ce vendeur est en mode vacances. Ses annonces restent visibles mais ne peuvent pas être achetées pour le moment."
+  },
+  "feed.listingDetail.pickup": {
+    "en": "Local pickup",
+    "fr": "Remise en main propre"
+  },
+  "feed.listingDetail.shipping": {
+    "en": "+ {{price}} CHF shipping",
+    "fr": "+ {{price}} CHF de livraison"
+  },
+  "feed.listingDetail.shippingPromo": {
+    "en": "Promo rate",
+    "fr": "Tarif promo"
+  },
+  "feed.listingDetail.hoursAgo": {
+    "en": "{{count}}h ago",
+    "fr": "il y a {{count}} h"
+  },
+  "feed.listingDetail.daysAgo": {
+    "en": "{{count}}d ago",
+    "fr": "il y a {{count}} j"
+  },
+  "feed.listingDetail.weeksAgo": {
+    "en": "{{count}}w ago",
+    "fr": "il y a {{count}} sem."
+  },
+  "feed.listingDetail.monthsAgo": {
+    "en": "{{count}}mo ago",
+    "fr": "il y a {{count}} mois"
+  },
+  "feed.listingDetail.yearsAgo": {
+    "en": "{{count}}y ago",
+    "fr": "il y a {{count}} an(s)"
+  },
+  "feed.makeOffer.blockedTitle": {
+    "en": "Offer already in progress",
+    "fr": "Offre déjà en cours"
+  },
+  "feed.makeOffer.pendingBlocked": {
+    "en": "You already have a pending offer on this item. Wait for the seller's response or open the conversation.",
+    "fr": "Vous avez déjà une offre en attente sur cet article. Attendez la réponse du vendeur ou ouvrez la conversation."
+  },
+  "feed.makeOffer.acceptedBlocked": {
+    "en": "Your offer was accepted. Complete the purchase from the conversation.",
+    "fr": "Votre offre a été acceptée. Finalisez l'achat depuis la conversation."
+  },
+  "feed.checkout.bankingFee": {
+    "en": "Banking fee ({{percent}}%)",
+    "fr": "Frais bancaires ({{percent}} %)"
+  },
+  "feed.checkout.buyerProtection": {
+    "en": "Buyer Protection ({{percent}}%)",
+    "fr": "Protection acheteur ({{percent}} %)"
+  },
+  "feed.checkout.country": {
+    "en": "Country",
+    "fr": "Pays"
+  },
+  "feed.checkout.differentAddress": {
+    "en": "Use a different address",
+    "fr": "Utiliser une autre adresse"
+  },
+  "feed.checkout.enterManually": {
+    "en": "Enter address manually",
+    "fr": "Saisir l'adresse manuellement"
+  },
+  "feed.checkout.itemPrice": {
+    "en": "Item price",
+    "fr": "Prix de l'article"
+  },
+  "feed.checkout.noSavedAddressHint": {
+    "en": "Add your postal address in your profile to complete a shipping order.",
+    "fr": "Ajoutez votre adresse postale dans le profil pour finaliser une commande en expédition."
+  },
+  "feed.checkout.addAddressInProfile": {
+    "en": "Add my address in profile",
+    "fr": "Renseigner mon adresse dans le profil"
+  },
+  "feed.checkout.shippingFee": {
+    "en": "Shipping fee",
+    "fr": "Frais d'expédition"
+  },
+  "feed.checkout.shippingPromo": {
+    "en": "Free shipping promo",
+    "fr": "Livraison offerte (promo)"
+  },
+  "feed.checkout.pickupOnlyHint": {
+    "en": "This seller only offers local pickup.",
+    "fr": "Ce vendeur propose uniquement la remise en main propre."
+  },
+  "feed.checkout.shippingOnlyHint": {
+    "en": "This seller only offers shipping.",
+    "fr": "Ce vendeur propose uniquement l'expédition."
+  },
+  "feed.checkout.deliveryNotAllowed": {
+    "en": "This delivery method is not available for this listing.",
+    "fr": "Ce mode de livraison n'est pas proposé pour cette annonce."
+  },
+  "feed.orderConfirmation.bankingFee": {
+    "en": "Banking fee",
+    "fr": "Frais bancaires"
+  },
+  "feed.pricing.bankingFee": {
+    "en": "Banking fee",
+    "fr": "Frais bancaires"
+  },
+  "feed.pricing.breakdownTitle": {
+    "en": "Price breakdown",
+    "fr": "Détail du prix"
+  },
+  "feed.pricing.buyerProtection": {
+    "en": "Buyer Protection",
+    "fr": "Protection acheteur"
+  },
+  "feed.pricing.finalPrice": {
+    "en": "Final price",
+    "fr": "Prix final"
+  },
+  "feed.pricing.checkoutTotal": {
+    "en": "Total at checkout",
+    "fr": "Total à la caisse"
+  },
+  "feed.pricing.itemPrice": {
+    "en": "Item price",
+    "fr": "Prix de l'article"
+  },
+  "feed.pricing.priceIncl": {
+    "en": "Price incl. fees",
+    "fr": "Prix incl. frais"
+  },
+  "feed.pricing.infoTitle": {
+    "en": "Final price excluding delivery",
+    "fr": "Prix final hors livraison"
+  },
+  "feed.pricing.excludingDelivery": {
+    "en": "excluding delivery",
+    "fr": "hors livraison"
+  },
+  "feed.pricing.infoDescription": {
+    "en": "This price includes the item price, buyer protection fees and service fees. Delivery fees are added at checkout",
+    "fr": "Ce prix inclut le prix de l'article, les frais de protection acheteur et les frais de service. Les frais de livraison sont ajoutés au moment du paiement"
+  },
+  "feed.pricing.infoA11y": {
+    "en": "Price information",
+    "fr": "Information sur le prix"
+  },
+  "feed.pricing.serviceGuarantee": {
+    "en": "Service guarantee",
+    "fr": "Garantie de service"
+  },
+  "messages.offerCardLabel": {
+    "en": "Purchase offer",
+    "fr": "Proposition d'achat"
+  },
+  "messages.offerAcceptedBuyerHint": {
+    "en": "Complete your purchase using the button below.",
+    "fr": "Finalisez votre achat avec le bouton ci-dessous."
+  },
+  "messages.offerAcceptedSellerHint": {
+    "en": "Waiting for the buyer to pay.",
+    "fr": "En attente du paiement de l'acheteur."
+  },
+  "messages.includesBuyerProtection": {
+    "en": "Includes Buyer Protection",
+    "fr": "Inclut la Protection acheteur"
+  },
+  "messages.loadingConversation": {
+    "en": "Loading conversation…",
+    "fr": "Chargement de la conversation…"
+  },
+  "messages.noConversationsYet": {
+    "en": "No conversations yet",
+    "fr": "Aucune conversation pour le moment"
+  },
+  "messages.offerAcceptedSystem": {
+    "en": "Offer accepted.",
+    "fr": "Offre acceptée."
+  },
+  "messages.generateShippingLabel": {
+    "en": "🔗 Generate my label",
+    "fr": "🔗 Générer mon étiquette"
+  },
+  "messages.generateLabelA11y": {
+    "en": "Generate my shipping label",
+    "fr": "Générer mon étiquette d'expédition"
+  },
+  "messages.viewMyOrder": {
+    "en": "📦 View my order",
+    "fr": "📦 Voir ma commande"
+  },
+  "messages.viewMyOrderA11y": {
+    "en": "View my order",
+    "fr": "Voir ma commande"
+  },
+  "messages.sellerShipBannerTitle": {
+    "en": "🎉 Your item sold!",
+    "fr": "🎉 Votre article est vendu !"
+  },
+  "messages.sellerShipBannerShipping": {
+    "en": "Generate your Swiss Post label to ship the parcel.",
+    "fr": "Générez votre étiquette La Poste pour expédier le colis."
+  },
+  "messages.sellerShipBannerLetterAplus": {
+    "en": "⚠️ Bloomi does not generate a label for Letter A+. Ship the parcel directly via Swiss Post, then mark it as shipped in your orders.",
+    "fr": "⚠️ Bloomi ne génère pas d'étiquette pour Lettre A+. Envoyez le colis directement via La Poste, puis marquez-le comme expédié dans vos commandes."
+  },
+  "messages.sellerShipBannerPickup": {
+    "en": "Arrange the local handoff with your buyer.",
+    "fr": "Organisez la remise en main propre avec votre acheteur."
+  },
+  "messages.system.orderPlacedParcel": {
+    "en": "🛍️ Order placed — Payment is secure. The seller will prepare your parcel.",
+    "fr": "🛍️ Commande passée — Le paiement est sécurisé. Le vendeur prépare votre colis."
+  },
+  "messages.system.orderPlacedPickup": {
+    "en": "🛍️ Order placed — Payment is secure. Arrange the local handoff via messages.",
+    "fr": "🛍️ Commande passée — Le paiement est sécurisé. Organisez la remise en main propre via la messagerie."
+  },
+  "messages.system.orderPlacedParcelSeller": {
+    "en": "🎉 Item sold! Generate your Swiss Post label to ship the parcel.",
+    "fr": "🎉 Article vendu ! Générez votre étiquette La Poste pour expédier le colis."
+  },
+  "messages.system.orderPlacedPickupSeller": {
+    "en": "🎉 Item sold! Arrange the local handoff with your buyer.",
+    "fr": "🎉 Article vendu ! Organisez la remise en main propre avec votre acheteur."
+  },
+  "messages.system.orderAutoConfirmed": {
+    "en": "✅ Order automatically confirmed after 7 days — The transaction is complete. Thanks for using Bloomi!",
+    "fr": "✅ Commande confirmée automatiquement après 7 jours — La transaction est terminée. Merci d'utiliser Bloomi !"
+  },
+  "messages.system.orderReceiptConfirmed": {
+    "en": "✅ Receipt confirmed — The transaction is complete. Thanks for using Bloomi!",
+    "fr": "✅ Réception confirmée — La transaction est terminée. Merci d'utiliser Bloomi !"
+  },
+  "messages.system.orderShipped": {
+    "en": "📦 Shipped! — Your parcel is on its way.",
+    "fr": "📦 Expédié ! — Votre colis est en route."
+  },
+  "messages.system.orderShippedTracking": {
+    "en": "📦 Shipped! [{{tracking}}] — Your parcel is on its way.",
+    "fr": "📦 Expédié ! [{{tracking}}] — Votre colis est en route."
+  },
+  "messages.deleteConversationTitle": {
+    "en": "Delete conversation?",
+    "fr": "Supprimer la conversation ?"
+  },
+  "messages.deleteConversationConfirm": {
+    "en": "This conversation will be deleted for you only. The other person will still see it. It will reappear if a new message is sent.",
+    "fr": "La conversation sera supprimée uniquement pour vous. L'autre personne la conservera. Elle réapparaîtra si un nouveau message est envoyé."
+  },
+  "messages.deleteConversationError": {
+    "en": "Unable to delete this conversation.",
+    "fr": "Impossible de supprimer la conversation."
+  },
+  "messages.events.orderConfirmedSellerLetterAplusBody": {
+    "en": "{{name}} paid. Ship the Letter A+ parcel directly via Swiss Post (Bloomi does not generate a label for this format).",
+    "fr": "{{name}} a payé. Envoyez le colis en Lettre A+ directement via La Poste (Bloomi ne génère pas d'étiquette pour ce format)."
+  },
+  "messages.events.labelPreparingSellerLetterAplusBody": {
+    "en": "Ship the Letter A+ parcel directly via Swiss Post. Bloomi does not generate a label for this format.",
+    "fr": "Envoyez le colis en Lettre A+ directement via La Poste. Bloomi ne génère pas d'étiquette pour ce format."
+  },
+  "sell.sellingHeader": {
+    "en": "Sell an item",
+    "fr": "Vendre un article"
+  },
+  "sell.boostListing3d": {
+    "en": "Featured listing — 3 days",
+    "fr": "Annonce à la une — 3 jours"
+  },
+  "sell.boostListing7d": {
+    "en": "Featured listing — 7 days",
+    "fr": "Annonce à la une — 7 jours"
+  },
+  "sell.boostDressing3d": {
+    "en": "Closet — 3 days",
+    "fr": "Dressing — 3 jours"
+  },
+  "sell.boostDressing7d": {
+    "en": "Closet — 7 days",
+    "fr": "Dressing — 7 jours"
+  },
+  "sell.conditionDescNew": {
+    "en": "Brand new item with tags still attached.",
+    "fr": "Article neuf avec étiquettes encore attachées."
+  },
+  "sell.conditionDescLikeNew": {
+    "en": "Never worn, without tags or with tags removed.",
+    "fr": "Jamais porté, sans étiquettes ou avec étiquettes retirées."
+  },
+  "sell.conditionDescGood": {
+    "en": "Lightly worn with no major flaws.",
+    "fr": "Légèrement porté, sans défauts majeurs."
+  },
+  "sell.conditionDescFair": {
+    "en": "Worn with visible signs of use but fully functional.",
+    "fr": "Porté avec des signes d'usure visibles mais entièrement fonctionnel."
+  },
+  "sell.conditionDescPoor": {
+    "en": "Well worn with noticeable wear or minor defects.",
+    "fr": "Bien porté, avec une usure marquée ou de légers défauts."
+  },
+  "sell.parcelSize.title": {
+    "en": "Parcel size",
+    "fr": "Taille du colis"
+  },
+  "sell.parcelSize.letterAplus": {
+    "en": "Letter A+ (500 g max, 2 cm thick)",
+    "fr": "Lettre A+ (500 g max, 2 cm d'épaisseur)"
+  },
+  "sell.parcelSize.small": {
+    "en": "Small (up to 2 kg)",
+    "fr": "Petit colis (jusqu'à 2 kg)"
+  },
+  "sell.parcelSize.large": {
+    "en": "Large (up to 9 kg)",
+    "fr": "Grand colis (jusqu'à 9 kg)"
+  },
+  "sell.parcelSize.xlarge": {
+    "en": "Extra large (up to 30 kg)",
+    "fr": "Très grand colis (jusqu'à 30 kg)"
+  },
+  "sell.parcelSize.required": {
+    "en": "Please select a parcel size.",
+    "fr": "Veuillez sélectionner une taille de colis."
+  },
+  "sell.parcelSize.shippingSuffix": {
+    "en": "· Shipping {{price}}",
+    "fr": "· Livraison {{price}}"
+  },
+  "sell.parcelSize.letterAplusLabelNote": {
+    "en": "⚠️ Bloomi does not generate a shipping label for this format yet. Buyer and seller must go through Swiss Post directly.",
+    "fr": "⚠️ Bloomi ne génère pas encore d'étiquette pour ce format. L'acheteur et le vendeur doivent passer directement par La Poste."
+  },
+  "sell.deliveryMode.title": {
+    "en": "Delivery method",
+    "fr": "Mode de livraison"
+  },
+  "sell.deliveryMode.both": {
+    "en": "Both options",
+    "fr": "Les deux options"
+  },
+  "sell.deliveryMode.bothHint": {
+    "en": "The buyer chooses shipping or local pickup.",
+    "fr": "L'acheteur choisit entre expédition ou remise en main propre."
+  },
+  "sell.deliveryMode.shipping": {
+    "en": "Swiss Post shipping",
+    "fr": "Expédition La Poste"
+  },
+  "sell.deliveryMode.shippingHint": {
+    "en": "You ship the parcel with a Bloomi label.",
+    "fr": "Vous expédiez le colis avec une étiquette Bloomi."
+  },
+  "sell.deliveryMode.pickup": {
+    "en": "Local pickup only",
+    "fr": "Remise en main propre uniquement"
+  },
+  "sell.deliveryMode.pickupHint": {
+    "en": "The buyer collects the item from you.",
+    "fr": "L'acheteur récupère l'article chez vous."
+  },
+  "sell.brand": {
+    "en": "Brand",
+    "fr": "Marque"
+  },
+  "sell.condition": {
+    "en": "Condition",
+    "fr": "État"
+  },
+  "sell.description": {
+    "en": "Description",
+    "fr": "Description"
+  },
+  "sell.city": {
+    "en": "City",
+    "fr": "Ville"
+  },
+  "sell.priceChf": {
+    "en": "Price (CHF)",
+    "fr": "Prix (CHF)"
+  },
+  "sell.invalidPrice": {
+    "en": "Please enter a valid price.",
+    "fr": "Veuillez saisir un prix valide."
+  },
+  "sell.unablePublish": {
+    "en": "Unable to publish listing.",
+    "fr": "Impossible de publier l'annonce."
+  },
+  "sell.photosUploadAllFailed": {
+    "en": "No photos could be saved. The listing was not published — please try again.",
+    "fr": "Aucune photo n'a pu être enregistrée. L'annonce n'a pas été publiée — réessayez."
+  },
+  "sell.photosPartialUploadTitle": {
+    "en": "Some photos were not saved",
+    "fr": "Photos partiellement enregistrées"
+  },
+  "sell.photosPartialUploadBody": {
+    "en": "{{uploaded}} of {{total}} photos were saved. You can add the rest from \"Edit listing\".",
+    "fr": "{{uploaded}} photo(s) sur {{total}} ont été enregistrées. Vous pourrez ajouter les autres depuis « Modifier l'annonce »."
+  },
+  "sell.characterLeft": {
+    "en": "{{count}} characters left",
+    "fr": "{{count}} caractères restants"
+  },
+  "sell.chooseNaturalLight": {
+    "en": "Choose natural light",
+    "fr": "Choisissez la lumière naturelle"
+  },
+  "sell.chooseOption": {
+    "en": "Choose an option",
+    "fr": "Choisissez une option"
+  },
+  "sell.payToFeatureItem": {
+    "en": "Pay to feature this item",
+    "fr": "Payer pour mettre cet article en avant"
+  },
+  "sell.payToFeatureCloset": {
+    "en": "Pay to feature your closet",
+    "fr": "Payer pour mettre en avant votre dressing"
+  },
+  "sell.photoTipsBody": {
+    "en": "Use natural light and a neutral background. Show any flaws clearly.",
+    "fr": "Utilisez la lumière naturelle et un fond neutre. Montrez clairement les défauts éventuels."
+  },
+  "sell.productGoingLive": {
+    "en": "Your product is going live!",
+    "fr": "Votre article est en ligne !"
+  },
+  "sell.publishListing": {
+    "en": "Publish listing",
+    "fr": "Publier l'annonce"
+  },
+  "profile.wallet.confirmPayoutMessage": {
+    "en": "Transfer {{amount}} CHF to your bank account?",
+    "fr": "Transférer {{amount}} CHF sur votre compte bancaire ?"
+  },
+  "profile.wallet.missingStripeUrl": {
+    "en": "Stripe dashboard URL is missing.",
+    "fr": "L'URL du tableau de bord Stripe est manquante."
+  },
+  "profile.wallet.payoutInitiated": {
+    "en": "Payout initiated.",
+    "fr": "Versement initié."
+  },
+  "profile.wallet.unableCreatePayout": {
+    "en": "Unable to create payout.",
+    "fr": "Impossible de créer le versement."
+  },
+  "profile.wallet.unableLoadBalance": {
+    "en": "Unable to load balance.",
+    "fr": "Impossible de charger le solde."
+  },
+  "profile.activateSeller.incompleteOnboarding": {
+    "en": "Stripe needs more information. Restart bank connection to finish.",
+    "fr": "Stripe a besoin d'informations supplémentaires. Relancez la connexion bancaire pour terminer."
+  },
+  "profile.activateSeller.pendingReview": {
+    "en": "Your application has been submitted to Stripe.",
+    "fr": "Votre dossier a bien été transmis à Stripe."
+  },
+  "profile.activateSeller.pendingReviewSubtitle": {
+    "en": "Stripe is still reviewing your account. You can already sell on Bloomi; payouts will start once approved.",
+    "fr": "Stripe vérifie encore votre compte. Vous pouvez déjà vendre sur Bloomi ; les virements seront activés dès validation."
+  },
+  "profile.activateSeller.retryCheck": {
+    "en": "Check again",
+    "fr": "Vérifier à nouveau"
+  },
+  "profile.activateSeller.screenTitle": {
+    "en": "Activate seller account",
+    "fr": "Activer le compte vendeur"
+  },
+  "profile.activateSeller.activatedTitle": {
+    "en": "Your seller account is ready",
+    "fr": "Votre compte vendeur est prêt"
+  },
+  "profile.activateSeller.activatedSubtitle": {
+    "en": "You can now receive payouts on Bloomi.",
+    "fr": "Vous pouvez maintenant recevoir des paiements sur Bloomi."
+  },
+  "profile.activateSeller.unableStartOnboarding": {
+    "en": "Unable to start Stripe onboarding.",
+    "fr": "Impossible de démarrer l'onboarding Stripe."
+  },
+  "profile.vacationModeInfo": {
+    "en": "This mode temporarily pauses your listings: they stay visible, but buyers cannot purchase them.",
+    "fr": "Ce mode permet de suspendre temporairement vos annonces, elles resteront visibles mais les acheteurs ne pourront pas les acheter."
+  },
+  "profile.editProfileScreen.username": {
+    "en": "Username",
+    "fr": "Nom d'utilisateur"
+  },
+  "profile.editProfileScreen.myLocation": {
+    "en": "My location",
+    "fr": "Ma localisation"
+  },
+  "profile.editProfileScreen.selectLocation": {
+    "en": "Select location",
+    "fr": "Sélectionner la localisation"
+  },
+  "profile.editProfileScreen.chooseCanton": {
+    "en": "Choose canton",
+    "fr": "Choisir le canton"
+  },
+  "profile.editProfileScreen.locationHelp": {
+    "en": "Your location helps buyers find items near them.",
+    "fr": "Votre localisation aide les acheteurs à trouver des articles près de chez eux."
+  },
+  "profile.accountSettings.change": {
+    "en": "Change",
+    "fr": "Modifier"
+  },
+  "profile.accountSettings.changeEmailTitle": {
+    "en": "Change email",
+    "fr": "Modifier l'e-mail"
+  },
+  "profile.accountSettings.deleteConfirmMessage": {
+    "en": "Are you sure you want to delete your account? This action cannot be undone.",
+    "fr": "Voulez-vous vraiment supprimer votre compte ? Cette action est irréversible."
+  },
+  "profile.accountSettings.phoneChangeDisclaimer": {
+    "en": "Changing your phone number requires verification.",
+    "fr": "La modification de votre numéro nécessite une vérification."
+  },
+  "profile.accountSettings.saving": {
+    "en": "Saving…",
+    "fr": "Enregistrement…"
+  },
+  "profile.notificationsScreen.empty": {
+    "en": "No notifications yet",
+    "fr": "Aucune notification pour le moment"
+  },
+  "profile.notificationsScreen.markReadPartial": {
+    "en": "Some notifications could not be marked as read.",
+    "fr": "Certaines notifications n'ont pas pu être marquées comme lues."
+  },
+  "profile.orders.awaitingPickup": {
+    "en": "Awaiting handoff",
+    "fr": "En attente de remise"
+  },
+  "profile.orders.awaitingPickupSale": {
+    "en": "Awaiting handoff to buyer",
+    "fr": "En attente de remise à l'acheteur"
+  },
+  "profile.orders.trackingNumber": {
+    "en": "Tracking: {{number}}",
+    "fr": "Suivi : {{number}}"
+  },
+  "profile.orders.generateSwissPostLabel": {
+    "en": "Generate Swiss Post label",
+    "fr": "Générer l'étiquette La Poste"
+  },
+  "profile.orders.letterAplusShipNote": {
+    "en": "⚠️ Bloomi does not generate a label for Letter A+. Ship the parcel directly via Swiss Post, then mark it as shipped.",
+    "fr": "⚠️ Bloomi ne génère pas d'étiquette pour Lettre A+. Envoyez le colis directement via La Poste, puis marquez-le comme expédié."
+  },
+  "profile.orders.unableConfirmWithDetails": {
+    "en": "Unable to confirm receipt: {{message}}",
+    "fr": "Impossible de confirmer la réception : {{message}}"
+  },
+  "profile.orders.unableCancelWithDetails": {
+    "en": "Unable to cancel the order: {{message}}",
+    "fr": "Impossible d'annuler la commande : {{message}}"
+  },
+  "profile.orders.shippingAddressIncompleteForOrder": {
+    "en": "The shipping address for this order is incomplete.",
+    "fr": "L'adresse de livraison de cette commande est incomplète."
+  },
+  "profile.orders.cacheUnavailable": {
+    "en": "Local storage is unavailable.",
+    "fr": "Stockage local indisponible."
+  },
+  "profile.orders.disputeEmailSubject": {
+    "en": "Order dispute",
+    "fr": "Litige commande"
+  },
+  "profile.orders.disputeEmailBody": {
+    "en": "Order ID: {{orderId}}",
+    "fr": "N° de commande : {{orderId}}"
+  },
+  "profile.orders.unableShippedWithDetails": {
+    "en": "Could not mark order as shipped: {{message}}",
+    "fr": "Impossible de marquer la commande comme expédiée : {{message}}"
+  },
+  "profile.orders.noOrdersYet": {
+    "en": "No orders yet",
+    "fr": "Aucune commande pour le moment"
+  },
+  "profile.orders.copyOrderId": {
+    "en": "Copy order ID",
+    "fr": "Copier le n° de commande"
+  },
+  "profile.orders.openDispute": {
+    "en": "Open dispute",
+    "fr": "Ouvrir un litige"
+  },
+  "profile.orders.disputeMessage": {
+    "en": "Describe the issue with your order. Our team will review it.",
+    "fr": "Décrivez le problème avec votre commande. Notre équipe l'examinera."
+  },
+  "profile.orders.sellerCommission": {
+    "en": "Seller commission",
+    "fr": "Commission vendeur"
+  },
+  "profile.orders.sellerPayout": {
+    "en": "Seller payout",
+    "fr": "Versement vendeur"
+  },
+  "profile.orders.sendEmail": {
+    "en": "Send email",
+    "fr": "Envoyer un e-mail"
+  },
+  "profile.orders.senderAddressTitle": {
+    "en": "Sender address",
+    "fr": "Adresse de l'expéditeur"
+  },
+  "profile.orders.senderAddressSubtitle": {
+    "en": "Enter the address you will ship from.",
+    "fr": "Saisissez l'adresse depuis laquelle vous expédiez."
+  },
+  "profile.orders.detail.progressTitle": {
+    "en": "Order progress",
+    "fr": "Suivi de la commande"
+  },
+  "profile.orders.stepper.labelGenerated": {
+    "en": "Label generated",
+    "fr": "Étiquette générée"
+  },
+  "profile.orders.stepper.parcelDeposited": {
+    "en": "Parcel dropped off",
+    "fr": "Colis déposé"
+  },
+  "profile.orders.stepper.parcelDepositedSeller": {
+    "en": "Parcel dropped off",
+    "fr": "Colis déposé"
+  },
+  "profile.orders.stepper.parcelInTransit": {
+    "en": "Parcel in transit",
+    "fr": "Colis en route"
+  },
+  "profile.orders.stepper.parcelReceived": {
+    "en": "Parcel received",
+    "fr": "Colis reçu"
+  },
+  "profile.orders.stepper.awaitingReceipt": {
+    "en": "Awaiting delivery",
+    "fr": "En attente de réception"
+  },
+  "profile.orders.stepper.buyerConfirm": {
+    "en": "Buyer confirmation",
+    "fr": "Acheteur confirme"
+  },
+  "profile.orders.stepper.transactionComplete": {
+    "en": "Transaction complete",
+    "fr": "Transaction terminée"
+  },
+  "profile.orders.stepper.paymentReleased": {
+    "en": "Payment released",
+    "fr": "Paiement débloqué"
+  },
+  "profile.orders.stepper.pickupPaidBuyer": {
+    "en": "Order confirmed",
+    "fr": "Commande confirmée"
+  },
+  "profile.orders.stepper.pickupPaidSeller": {
+    "en": "Order confirmed",
+    "fr": "Commande confirmée"
+  },
+  "profile.orders.stepper.pickupHandoff": {
+    "en": "Local pickup",
+    "fr": "Remise en main propre"
+  },
+  "profile.orders.stepper.inProgress": {
+    "en": "In progress",
+    "fr": "En cours"
+  },
+  "profile.orders.stepper.pending": {
+    "en": "Pending",
+    "fr": "En attente"
+  },
+  "profile.blockedUsers.intro": {
+    "en": "Blocked users cannot contact you or see your listings.",
+    "fr": "Les utilisateurs bloqués ne peuvent pas vous contacter ni voir vos annonces."
+  },
+  "profile.blockedUsers.emptyHint": {
+    "en": "Users you block will appear here.",
+    "fr": "Les utilisateurs que vous bloquez apparaîtront ici."
+  },
+  "profile.leaveReview.reviewReceivedBody": {
+    "en": "See what they said about you.",
+    "fr": "Découvrez ce qu'il ou elle a dit."
+  },
+  "profile.leaveReview.youAreRating": {
+    "en": "You are rating",
+    "fr": "Vous évaluez"
+  },
+  "profile.leaveReview.submitReview": {
+    "en": "Submit review",
+    "fr": "Envoyer l'avis"
+  },
+  "profile.leaveReview.alreadyReviewed": {
+    "en": "You have already reviewed this order.",
+    "fr": "Vous avez déjà évalué cette commande."
+  },
+  "profile.leaveReview.submitError": {
+    "en": "Unable to submit review.",
+    "fr": "Impossible d'envoyer l'avis."
+  },
+  "profile.editListing.uploadPhotos": {
+    "en": "Upload photos",
+    "fr": "Télécharger des photos"
+  },
+  "profile.editListing.addUpToPhotos": {
+    "en": "Add up to 5 photos.",
+    "fr": "Ajoutez jusqu'à 5 photos."
+  },
+  "profile.editListing.loading": {
+    "en": "Loading listing…",
+    "fr": "Chargement de l'annonce…"
+  },
+  "profile.publicProfile.reviewsCount": {
+    "en": "Reviews ({{count}})",
+    "fr": "Avis ({{count}})"
+  },
+  "profile.publicProfile.listingMenu": {
+    "en": "Listing menu",
+    "fr": "Menu de l'annonce"
+  },
+  "profile.publicProfile.blockTitle": {
+    "en": "Block user",
+    "fr": "Bloquer l'utilisateur"
+  },
+  "profile.publicProfile.couldNotBlock": {
+    "en": "Unable to block this user.",
+    "fr": "Impossible de bloquer cet utilisateur."
+  },
+  "profile.publicProfile.permissionRequired": {
+    "en": "Permission required",
+    "fr": "Autorisation requise"
+  },
+  "profile.publicProfile.safetyMenuMessage": {
+    "en": "Safety options",
+    "fr": "Options de sécurité"
+  },
+  "profile.publicProfile.unableCreateConversation": {
+    "en": "Unable to start a conversation.",
+    "fr": "Impossible de démarrer une conversation."
+  },
+  "profile.publicProfile.unableFollow": {
+    "en": "Unable to follow this user.",
+    "fr": "Impossible de suivre cet utilisateur."
+  },
+  "profile.publicProfile.unableLoadProfile": {
+    "en": "Unable to load profile.",
+    "fr": "Impossible de charger le profil."
+  },
+  "profile.publicProfile.unableUpdateCover": {
+    "en": "Unable to update cover photo.",
+    "fr": "Impossible de mettre à jour la photo de couverture."
+  },
+  "profile.sendFeedback": {
+    "en": "Send feedback",
+    "fr": "Envoyer un commentaire"
+  },
+  "profile.walletScreenTitle": {
+    "en": "Wallet",
+    "fr": "Portefeuille"
+  },
+  "app.termsModal.title": {
+    "en": "Terms of use",
+    "fr": "Conditions d'utilisation"
+  },
+  "app.termsModal.body": {
+    "en": "By creating an account or using Bloomi, you agree to our Terms of Use and Privacy Policy. You agree to treat other users with respect, not to post any illegal, misleading, or inappropriate content, and to follow our safety and moderation rules. Reported content may be reviewed and removed.",
+    "fr": "En créant un compte ou en utilisant Bloomi, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité. Vous vous engagez à traiter les autres utilisateurs avec respect, à ne pas publier de contenu illégal, trompeur ou inapproprié, et à respecter nos règles de sécurité et de modération. Les contenus signalés peuvent être examinés et supprimés."
+  },
+  "app.termsModal.readFullTerms": {
+    "en": "Read full Terms of Use",
+    "fr": "Lire les Conditions d'utilisation"
+  },
+  "app.termsModal.readPrivacy": {
+    "en": "Read Privacy Policy",
+    "fr": "Lire la Politique de confidentialité"
+  },
+  "app.termsModal.accept": {
+    "en": "I accept",
+    "fr": "J'accepte"
+  },
+  "errors.pageNotFound.title": {
+    "en": "Page not found",
+    "fr": "Page introuvable"
+  },
+  "errors.pageNotFound.message": {
+    "en": "This page does not exist or has been moved.",
+    "fr": "Cette page n'existe pas ou a été déplacée."
+  },
+  "push.likeListing.title": {
+    "en": "❤️ Your listing was liked",
+    "fr": "❤️ Ton article a été liké"
+  },
+  "push.likeListing.body": {
+    "en": "Drop the price by CHF 1–2 within the hour to sell faster!",
+    "fr": "Baisse le prix de 1–2 CHF dans l'heure pour vendre plus vite !"
+  },
+  "push.likesHot.title": {
+    "en": "🔥 Your listing is really popular!",
+    "fr": "🔥 Ton article plaît beaucoup !"
+  },
+  "push.likesHot.body": {
+    "en": "Several people saved it. Great time to close a sale!",
+    "fr": "Plusieurs personnes l'ont ajouté à leurs favoris. C'est le bon moment pour vendre !"
+  },
+  "push.newOffer.title": {
+    "en": "💸 New offer received",
+    "fr": "💸 Nouvelle offre reçue"
+  },
+  "push.newOffer.body": {
+    "en": "A buyer offered {{amount}} CHF for your listing.",
+    "fr": "Un acheteur propose {{amount}} CHF pour ton article."
+  },
+  "push.urgencySomeoneElse.title": {
+    "en": "⚠️ Someone else is interested in this listing",
+    "fr": "⚠️ Quelqu'un d'autre est intéressé par ton article"
+  },
+  "push.urgencySomeoneElse.body": {
+    "en": "Don't wait too long — others are looking at it too.",
+    "fr": "Ne tarde pas trop, d'autres personnes le regardent aussi."
+  },
+  "push.urgencySellingFast.title": {
+    "en": "🔥 This listing is going fast!",
+    "fr": "🔥 Cet article part vite !"
+  },
+  "push.urgencySellingFast.body": {
+    "en": "It's getting a lot of attention right now.",
+    "fr": "Il attire beaucoup d'attention en ce moment."
+  },
+  "push.newFollower.title": {
+    "en": "👋 New follower",
+    "fr": "👋 Nouveau follower"
+  },
+  "push.newFollower.body": {
+    "en": "{{name}} started following you.",
+    "fr": "{{name}} a commencé à vous suivre."
+  }
+}

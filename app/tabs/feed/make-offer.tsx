@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -10,16 +11,16 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { theme } from '../../../lib/theme';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
-import { ModalCard } from '../../../components/ui/ModalCard';
 import {
   cloneListingDetail,
   getListingById,
@@ -29,12 +30,18 @@ import {
 import type { ListingDetail } from '../../../lib/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { openGuestAuthPrompt } from '../../../lib/guestAuthPrompt';
-import { computeBuyerFinalPriceChf } from '../../../lib/formatBuyerPrice';
+import { computeBuyerFinalPriceChf, formatCatalogPriceChf, formatChf } from '../../../lib/formatBuyerPrice';
+import { BuyerFinalPriceRow } from '../../../components/pricing/BuyerFinalPriceRow';
+import { supabase } from '../../../lib/supabase';
+import { navigateToThread } from '../../../lib/navigation/navigateInTabs';
+import { getBuyerListingOfferGate, type BuyerListingOfferGate } from '../../../lib/listingOffers';
+import { buildOfferPresetAmounts, formatOfferDiscountLabel } from '../../../lib/offerPresets';
 
 export default function MakeOfferScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const params = useLocalSearchParams<{ id?: string }>();
   const listingId = typeof params.id === 'string' ? params.id : '';
   const { user } = useAuthStore();
@@ -42,16 +49,14 @@ export default function MakeOfferScreen() {
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCard, setSelectedCard] = useState<'10' | '20' | 'other' | null>(null);
+  const [selectedCard, setSelectedCard] = useState<'p0' | 'p1' | 'p2' | 'other' | null>(null);
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [offerSuccessModalVisible, setOfferSuccessModalVisible] = useState(false);
-  const [pendingChatNavigation, setPendingChatNavigation] = useState<{
-    threadId: string;
-    listingId: string;
-  } | null>(null);
+  const [sellerVacationMode, setSellerVacationMode] = useState(false);
+  const [offerGate, setOfferGate] = useState<BuyerListingOfferGate | null>(null);
 
   const inputRef = useRef<TextInput | null>(null);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -79,46 +84,97 @@ export default function MakeOfferScreen() {
     void load();
   }, [listingId, t]);
 
-  const originalPrice = listing?.price ?? 0;
+  useEffect(() => {
+    if (!listing?.seller_id) {
+      setSellerVacationMode(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('vacation_mode')
+        .eq('id', listing.seller_id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setSellerVacationMode(false);
+        return;
+      }
+      const row = data as { vacation_mode?: boolean | null };
+      setSellerVacationMode(Boolean(row.vacation_mode));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listing?.seller_id]);
+
+  useEffect(() => {
+    if (!listing?.id || !user?.id) {
+      setOfferGate(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await getBuyerListingOfferGate(listing.id);
+      if (!cancelled) setOfferGate(data);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listing?.id, user?.id]);
+
+  const showOfferBlockedAlert = useCallback(
+    (gate: Extract<BuyerListingOfferGate, { canOffer: false }>) => {
+      Alert.alert(
+        t('feed.makeOffer.blockedTitle'),
+        gate.reason === 'pending'
+          ? t('feed.makeOffer.pendingBlocked')
+          : t('feed.makeOffer.acceptedBlocked'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('feed.makeOffer.viewConversation'),
+            onPress: () => navigateToThread(router, gate.threadId)
+          }
+        ]
+      );
+    },
+    [router, t]
+  );
 
   const quickOffers = useMemo(() => {
-    if (!listing) {
-      return {
-        minus10: { price: 0, total: 0 },
-        minus20: { price: 0, total: 0 }
-      };
-    }
-    const price10 = +(listing.price * 0.9).toFixed(2);
-    const price20 = +(listing.price * 0.8).toFixed(2);
-    const total10 = Math.round(computeBuyerFinalPriceChf(price10));
-    const total20 = Math.round(computeBuyerFinalPriceChf(price20));
-    return {
-      minus10: { price: price10, total: total10 },
-      minus20: { price: price20, total: total20 }
-    };
+    if (!listing) return [] as Array<{ amount: number; discountChf: number; total: number }>;
+    return buildOfferPresetAmounts(listing.price).map((preset) => ({
+      ...preset,
+      total: computeBuyerFinalPriceChf(preset.amount)
+    }));
   }, [listing]);
 
-  const handleSelectCard = (type: '10' | '20' | 'other') => {
-    setSelectedCard(type);
-    if (!listing) return;
+  const handleSelectPreset = (index: number) => {
+    const preset = quickOffers[index];
+    if (!preset) return;
+    setSelectedCard(index === 0 ? 'p0' : index === 1 ? 'p1' : 'p2');
+    setAmount(preset.amount.toFixed(2));
+  };
 
-    if (type === '10') {
-      setAmount(quickOffers.minus10.price.toFixed(2));
-    } else if (type === '20') {
-      setAmount(quickOffers.minus20.price.toFixed(2));
-    } else {
-      setAmount('');
-      // focus sur le champ manuel
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 0);
-    }
+  const handleSelectOther = () => {
+    setSelectedCard('other');
+    setAmount('');
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
   };
 
   const parsedAmount = useMemo(() => {
     const v = parseFloat(amount.replace(',', '.'));
     return Number.isFinite(v) && v > 0 ? v : null;
   }, [amount]);
+
+  const manualOfferBuyerTotal = useMemo(() => {
+    if (parsedAmount == null) return null;
+    return computeBuyerFinalPriceChf(parsedAmount);
+  }, [parsedAmount]);
 
   const isValidAmount = parsedAmount !== null;
 
@@ -127,11 +183,20 @@ export default function MakeOfferScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!listing || !isValidAmount) return;
+    if (!listing || !isValidAmount || submitting || submitLockRef.current) return;
+    if (offerGate && !offerGate.canOffer) {
+      showOfferBlockedAlert(offerGate);
+      return;
+    }
     if (!user) {
       openGuestAuthPrompt();
       return;
     }
+    if (sellerVacationMode) {
+      setError(t('feed.listingDetail.sellerVacationMessage'));
+      return;
+    }
+    submitLockRef.current = true;
     setSubmitting(true);
     try {
       const { data: thread, error: threadError } = await createOrGetThreadForListing(
@@ -154,13 +219,36 @@ export default function MakeOfferScreen() {
       if (msgError) {
         // eslint-disable-next-line no-console
         console.warn('Erreur message offre:', msgError);
+        if (msgError === 'OFFER_ALREADY_PENDING' || msgError === 'OFFER_ALREADY_ACCEPTED') {
+          const { data: gate } = await getBuyerListingOfferGate(listing.id);
+          if (gate && !gate.canOffer) {
+            setOfferGate(gate);
+            showOfferBlockedAlert(gate);
+          } else {
+            Alert.alert(t('common.error'), t('feed.makeOffer.unableSend'));
+          }
+          return;
+        }
         setError(t('feed.makeOffer.unableSend'));
         return;
       }
 
-      setPendingChatNavigation({ threadId: thread.id, listingId: listing.id });
-      setOfferSuccessModalVisible(true);
+      const threadId = thread.id;
+      Alert.alert(
+        t('feed.makeOffer.offerSent'),
+        t('feed.makeOffer.offerSentMessage'),
+        [
+          {
+            text: t('feed.makeOffer.viewConversation'),
+            onPress: () => {
+              navigateToThread(router, threadId);
+            }
+          }
+        ],
+        { cancelable: false }
+      );
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
@@ -203,11 +291,11 @@ export default function MakeOfferScreen() {
   return (
     <>
       <StatusBar style="dark" />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           {/* Header */}
           <View style={styles.header}>
             <HeaderBackButton onPress={handleBack} />
@@ -223,6 +311,7 @@ export default function MakeOfferScreen() {
               style={styles.content}
               contentContainerStyle={{ paddingBottom: 24 }}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             >
               {/* Article card */}
               <View style={styles.listingRow}>
@@ -241,62 +330,51 @@ export default function MakeOfferScreen() {
                   >
                     {listing.title}
                   </Text>
-                  <Text variant="body" style={styles.listingPrice}>
-                    {originalPrice.toFixed(2)} CHF
-                  </Text>
+                  {listing.price > 0 ? (
+                    <BuyerFinalPriceRow
+                      itemPriceChf={listing.price}
+                      textStyle={styles.listingPrice}
+                    />
+                  ) : null}
                 </View>
               </View>
 
-              {/* Quick offers */}
+              {/* Quick offers — montants CHF fixes (pas de %) */}
               <View style={styles.quickOffersRow}>
-                {/* -10% */}
-                <TouchableOpacity
-                  style={[
-                    styles.quickCard,
-                    selectedCard === '10' && styles.quickCardSelected
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() => handleSelectCard('10')}
-                >
-                  <Text variant="body" style={styles.quickPrice}>
-                    {quickOffers.minus10.price.toFixed(2)}CHF
-                  </Text>
-                  <Text variant="captionSm" style={styles.quickTotal}>
-                    {quickOffers.minus10.total}CHF Total
-                  </Text>
-                  <Text variant="captionSm" style={styles.quickDiscount}>
-                    {t('feed.makeOffer.off10')}
-                  </Text>
-                </TouchableOpacity>
+                {quickOffers.map((preset, index) => {
+                  const cardKey = index === 0 ? 'p0' : index === 1 ? 'p1' : 'p2';
+                  return (
+                    <TouchableOpacity
+                      key={`preset-${preset.amount}`}
+                      style={[
+                        styles.quickCard,
+                        selectedCard === cardKey && styles.quickCardSelected
+                      ]}
+                      activeOpacity={0.8}
+                      onPress={() => handleSelectPreset(index)}
+                    >
+                      <Text variant="body" style={styles.quickPrice}>
+                        {formatChf(preset.amount)}
+                      </Text>
+                      <Text variant="captionSm" style={styles.quickTotal}>
+                        {t('feed.makeOffer.buyerTotal', {
+                          total: formatCatalogPriceChf(preset.total)
+                        })}
+                      </Text>
+                      <Text variant="captionSm" style={styles.quickDiscount}>
+                        {formatOfferDiscountLabel(preset.discountChf)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
 
-                {/* -20% */}
-                <TouchableOpacity
-                  style={[
-                    styles.quickCard,
-                    selectedCard === '20' && styles.quickCardSelected
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() => handleSelectCard('20')}
-                >
-                  <Text variant="body" style={styles.quickPrice}>
-                    {quickOffers.minus20.price.toFixed(2)}CHF
-                  </Text>
-                  <Text variant="captionSm" style={styles.quickTotal}>
-                    {quickOffers.minus20.total}CHF Total
-                  </Text>
-                  <Text variant="captionSm" style={styles.quickDiscount}>
-                    {t('feed.makeOffer.off20')}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* OTHER */}
                 <TouchableOpacity
                   style={[
                     styles.quickCard,
                     selectedCard === 'other' && styles.quickCardSelected
                   ]}
                   activeOpacity={0.8}
-                  onPress={() => handleSelectCard('other')}
+                  onPress={handleSelectOther}
                 >
                   <Text variant="body" style={styles.quickPrice}>
                     {t('feed.makeOffer.otherUpper')}
@@ -315,6 +393,9 @@ export default function MakeOfferScreen() {
                 <Text variant="body" style={styles.toLabel}>
                   {t('feed.makeOffer.to')}
                 </Text>
+                <Text variant="captionSm" color="textSecondary" style={styles.toHint}>
+                  {t('feed.makeOffer.itemPriceHint')}
+                </Text>
                 <View
                   style={[
                     styles.toInputWrapper,
@@ -330,13 +411,35 @@ export default function MakeOfferScreen() {
                     placeholderTextColor={theme.colors.textSecondary}
                     value={amount}
                     onChangeText={setAmount}
-                    autoFocus
                   />
                   <Text variant="body" style={styles.toCurrency}>
                     CHF
                   </Text>
                 </View>
+                {manualOfferBuyerTotal != null ? (
+                  <Text variant="captionSm" style={styles.offerBuyerTotal}>
+                    {t('feed.makeOffer.buyerTotal', {
+                      total: formatCatalogPriceChf(manualOfferBuyerTotal)
+                    })}
+                  </Text>
+                ) : null}
               </View>
+
+              {offerGate && !offerGate.canOffer ? (
+                <View style={styles.errorToast}>
+                  <Text variant="captionSm" color="textSecondary">
+                    {offerGate.reason === 'pending'
+                      ? t('feed.makeOffer.pendingBlocked')
+                      : t('feed.makeOffer.acceptedBlocked')}
+                  </Text>
+                  <Button
+                    title={t('feed.makeOffer.viewConversation')}
+                    variant="secondary"
+                    onPress={() => navigateToThread(router, offerGate.threadId)}
+                    style={styles.conversationLinkBtn}
+                  />
+                </View>
+              ) : null}
 
               {error && (
                 <View style={styles.errorToast}>
@@ -351,53 +454,22 @@ export default function MakeOfferScreen() {
             <View
               style={[
                 styles.footer,
-                { paddingBottom: insets.bottom || 0 }
+                { paddingBottom: safeBottom + 12 }
               ]}
             >
               <Button
                 title={t('feed.makeOffer.sendOffer')}
                 onPress={handleSubmit}
                 variant="primary"
-                disabled={!isValidAmount || submitting}
+                disabled={!isValidAmount || submitting || Boolean(offerGate && !offerGate.canOffer)}
                 loading={submitting}
                 style={styles.submitButton}
                 textStyle={styles.submitText}
               />
             </View>
           </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-
-      <ModalCard
-        visible={offerSuccessModalVisible}
-        onClose={() => {
-          setOfferSuccessModalVisible(false);
-          setPendingChatNavigation(null);
-        }}
-        icon={
-          <Ionicons
-            name="checkmark-circle"
-            size={56}
-            color={theme.colors.primary}
-          />
-        }
-        title={t('feed.makeOffer.offerSent')}
-        message={t('feed.makeOffer.offerSentMessage')}
-        buttonText={t('feed.makeOffer.viewConversation')}
-        onButtonPress={() => {
-          const nav = pendingChatNavigation;
-          setOfferSuccessModalVisible(false);
-          setPendingChatNavigation(null);
-          if (!nav) return;
-          router.replace({
-            pathname: '/tabs/messages/[id]',
-            params: {
-              id: nav.threadId,
-              from_listing_id: nav.listingId
-            }
-          });
-        }}
-      />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </>
   );
 }
@@ -479,12 +551,15 @@ const styles = StyleSheet.create({
   },
   quickOffersRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 20,
     marginVertical: 16,
-    columnGap: 8
+    gap: 8
   },
   quickCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: 72,
     borderWidth: 1,
     borderColor: '#E5E5E5',
     borderRadius: 10,
@@ -519,6 +594,15 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     marginBottom: 4
   },
+  toHint: {
+    marginBottom: 4
+  },
+  offerBuyerTotal: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#84CC16',
+    fontFamily: theme.fontFamily.semiBold
+  },
   toInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -546,6 +630,9 @@ const styles = StyleSheet.create({
   errorToast: {
     marginTop: 8,
     paddingHorizontal: 20
+  },
+  conversationLinkBtn: {
+    marginTop: 8
   },
   footer: {
     paddingHorizontal: 16,

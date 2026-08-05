@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../lib/safeArea';
 import { Text } from '../ui/Text';
 import { theme } from '../../lib/theme';
 
@@ -30,7 +31,7 @@ export function SafetyChoiceSheet({ visible, onClose, title, message, actions }:
       <View style={styles.root} pointerEvents="box-none">
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
         <View
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]}
+          style={[styles.sheet, { paddingBottom: Math.max(getSafeBottomInset(insets.bottom), 12) }]}
           accessibilityViewIsModal
         >
           <View style={styles.handleZone}>

@@ -2,34 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../../../lib/safeArea';
 import { Screen } from '../../../../components/ui/Screen';
 import { Text } from '../../../../components/ui/Text';
 import { Button } from '../../../../components/ui/Button';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { theme } from '../../../../lib/theme';
-import { getChildCategories } from '../../../../lib/api/filters';
+import { getChildCategories, getCategoryFilterContext } from '../../../../lib/api/filters';
 import { useEditListingFormStore } from '../../../../lib/store/editListingForm';
 import type { SellCategoryType } from '../../../../lib/store/sellForm';
 import { supabase } from '../../../../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { translateCategoryLabel } from '../../../../lib/categoryI18n';
+import { inferTypeFromParentSlug } from '../../../../lib/inferProductType';
 
 type CategoryRow = { id: number; name: string; slug?: string | null };
-
-function inferTypeFromParentSlug(
-  parentSlug?: string | null
-): SellCategoryType {
-  const s = (parentSlug ?? '').toLowerCase();
-  if (s.includes('chaussures')) return 'chaussures';
-  if (s.includes('pantalons')) return 'pantalons';
-  if (s.includes('chemises')) return 'chemises';
-  return 'vetements';
-}
 
 export default function EditListingCategoryDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const params = useLocalSearchParams<{
     parentId?: string;
     title?: string;
@@ -44,7 +37,7 @@ export default function EditListingCategoryDetailScreen() {
     ) || t('sell.category');
   const gender = typeof params.gender === 'string' ? params.gender : undefined;
 
-  const { setField } = useEditListingFormStore();
+  const { values, setField } = useEditListingFormStore();
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -86,10 +79,26 @@ export default function EditListingCategoryDetailScreen() {
     const cat = categories.find((c) => c.id === selectedId);
     if (!cat) return;
 
-    setField('category', { id: cat.id, name: cat.name, gender });
+    const previousCategoryId = values.category?.id ?? null;
+    const categoryChanged = previousCategoryId != null && previousCategoryId !== cat.id;
+
+    setField('category', { id: cat.id, name: cat.name, gender, slug: cat.slug ?? null });
     setField('categoryGender', gender);
     setField('categoryType', inferTypeFromParentSlug(parentSlug));
 
+    void getCategoryFilterContext(String(cat.id)).then((ctx) => {
+      if (ctx?.type) {
+        setField('categoryType', ctx.type as SellCategoryType);
+      }
+    });
+
+    if (categoryChanged) {
+      setField('brand', null);
+      setField('size', null);
+    }
+
+    // Même logique que le flux vente : dépiler les 3 écrans catégorie sans recréer [id]
+    // (un router.replace laissait category / category-gender dans la pile et perdait les params de retour).
     router.back();
     router.back();
     router.back();
@@ -133,7 +142,7 @@ export default function EditListingCategoryDetailScreen() {
           )}
         </View>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.footer, { paddingBottom: safeBottom + 24 }]}>
           <Button
             title={t('common.confirm')}
             onPress={handleConfirm}

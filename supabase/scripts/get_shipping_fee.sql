@@ -3,7 +3,8 @@
 --   • orders.shipping_fee_chf, orders.is_promo_shipping
 --   • public.platform_counters + completed_orders_count
 
--- 1) Fonction (CREATE OR REPLACE = réexécutable)
+-- Promo : 300 premières commandes payées, plafond 5 CHF (500 centimes) si tarif > 5 CHF.
+
 CREATE OR REPLACE FUNCTION public.get_shipping_fee(p_parcel_size text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -12,23 +13,37 @@ SET search_path = public
 AS $$
 DECLARE
   v_count integer;
+  v_standard_fee integer;
   v_fee integer;
   v_is_promo boolean;
+  v_promo_limit constant integer := 300;
+  v_promo_cap_cents constant integer := 500;
+  v_promo_eligible boolean;
 BEGIN
   SELECT value INTO v_count
   FROM public.platform_counters
   WHERE key = 'completed_orders_count';
 
-  v_is_promo := COALESCE(v_count, 0) < 100;
+  v_promo_eligible := COALESCE(v_count, 0) < v_promo_limit;
 
-  IF p_parcel_size = 'small' THEN
-    v_fee := CASE WHEN v_is_promo THEN 500 ELSE 900 END;
+  IF p_parcel_size = 'letter_aplus' THEN
+    v_standard_fee := 390;
+  ELSIF p_parcel_size = 'small' THEN
+    v_standard_fee := 900;
   ELSIF p_parcel_size = 'large' THEN
-    v_fee := CASE WHEN v_is_promo THEN 700 ELSE 1200 END;
+    v_standard_fee := 1200;
   ELSIF p_parcel_size = 'xlarge' THEN
-    v_fee := CASE WHEN v_is_promo THEN 1800 ELSE 2100 END;
+    v_standard_fee := 2100;
   ELSE
-    v_fee := CASE WHEN v_is_promo THEN 900 ELSE 900 END;
+    v_standard_fee := 900;
+  END IF;
+
+  v_fee := v_standard_fee;
+  v_is_promo := false;
+
+  IF v_promo_eligible AND v_standard_fee > v_promo_cap_cents THEN
+    v_fee := v_promo_cap_cents;
+    v_is_promo := true;
   END IF;
 
   RETURN jsonb_build_object(
@@ -41,7 +56,8 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_shipping_fee(text) TO anon, authenticated, service_role;
 
--- 2) Vérification rapide (compteur < 100 → promo)
+-- Vérification rapide (compteur < 300 → promo plafond 5 CHF)
+SELECT get_shipping_fee('letter_aplus') AS letter_aplus;
 SELECT get_shipping_fee('small') AS small;
 SELECT get_shipping_fee('large') AS large;
 SELECT get_shipping_fee('xlarge') AS xlarge;

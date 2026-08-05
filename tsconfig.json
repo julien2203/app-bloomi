@@ -18,6 +18,7 @@
     "lib",
     "stores",
     "index.ts",
+    "svg.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]

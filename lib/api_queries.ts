@@ -80,13 +80,67 @@ export async function getListingDetailById(listingId: string) {
 // 3. INBOX THREADS (v_thread_list)
 // ============================================
 
+function isThreadVisibleForUser(
+  thread: {
+    buyer_id?: string | null;
+    seller_id?: string | null;
+    buyer_hidden_at?: string | null;
+    seller_hidden_at?: string | null;
+  },
+  userId: string
+): boolean {
+  if (thread.buyer_id === userId) {
+    return !thread.buyer_hidden_at;
+  }
+  if (thread.seller_id === userId) {
+    return !thread.seller_hidden_at;
+  }
+  return false;
+}
+
+/** Marque comme lus tous les messages reçus (y compris système) dans un thread. */
+export async function markThreadMessagesAsRead(
+  threadId: string,
+  userId: string
+): Promise<{ ok: boolean; updatedCount: number }> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ read_at: now })
+    .eq('thread_id', threadId)
+    .neq('sender_id', userId)
+    .is('read_at', null)
+    .select('id');
+
+  if (error) {
+    return { ok: false, updatedCount: 0 };
+  }
+  return { ok: true, updatedCount: data?.length ?? 0 };
+}
+
 /** Threads distincts où il existe au moins un message read_at IS NULL et sender_id != utilisateur. */
 export async function fetchUnreadThreadsCount(userId: string): Promise<number> {
+  const { data: threads, error: threadsError } = await supabase
+    .from('threads')
+    .select('id, buyer_id, seller_id, buyer_hidden_at, seller_hidden_at')
+    .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
+
+  if (threadsError) throw threadsError;
+
+  const visibleThreadIds = (threads ?? [])
+    .filter((row) => isThreadVisibleForUser(row as any, userId))
+    .map((row) => String((row as { id?: string }).id ?? ''))
+    .filter(Boolean);
+
+  if (visibleThreadIds.length === 0) return 0;
+
   const { data, error } = await supabase
     .from('messages')
     .select('thread_id')
+    .in('thread_id', visibleThreadIds)
     .is('read_at', null)
-    .neq('sender_id', userId);
+    .neq('sender_id', userId)
+    .or('is_system.is.false,is_system.is.null');
   if (error) throw error;
   const set = new Set<string>();
   for (const row of data ?? []) {
@@ -106,7 +160,8 @@ async function getUnreadThreadIdsForThreadList(userId: string, threadIds: string
       .select('thread_id')
       .in('thread_id', chunk)
       .is('read_at', null)
-      .neq('sender_id', userId);
+      .neq('sender_id', userId)
+      .or('is_system.is.false,is_system.is.null');
     if (error) throw error;
     for (const row of data ?? []) {
       const tid = (row as { thread_id?: string }).thread_id;
@@ -158,16 +213,31 @@ export async function getInboxThreadsBase(params?: {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // RLS filtre automatiquement selon auth.uid()
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user?.id) {
+    return {
+      data: [],
+      hasMore: false,
+      page,
+      pageSize,
+      userId: null
+    };
+  }
+
+  const userId = user.id;
+
   let query = supabase
     .from('v_thread_list')
     .select('*')
+    .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
+    .not('last_message_id', 'is', null)
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .order('thread_created_at', { ascending: false })
     .range(from, to);
 
   if (unreadOnly) {
-    // Filtrer les threads avec messages non lus
     query = query.is('last_message_read_at', null);
   }
 
@@ -177,27 +247,27 @@ export async function getInboxThreadsBase(params?: {
     throw error;
   }
 
-  // Enrichir avec other_participant_name/avatar selon l'utilisateur connecté
-  const { data: { user } } = await supabase.auth.getUser();
-  const enrichedData = (data || []).map((thread) => {
-    const isBuyer = thread.buyer_id === user?.id;
-    return {
-      ...thread,
-      other_participant_name: isBuyer 
-        ? thread.seller_display_name 
-        : thread.buyer_display_name,
-      other_participant_avatar: isBuyer 
-        ? thread.seller_avatar_url 
-        : thread.buyer_avatar_url
-    };
-  });
+  const enrichedData = (data || [])
+    .map((thread) => {
+      const isBuyer = thread.buyer_id === userId;
+      return {
+        ...thread,
+        other_participant_name: isBuyer
+          ? thread.seller_display_name
+          : thread.buyer_display_name,
+        other_participant_avatar: isBuyer
+          ? thread.seller_avatar_url
+          : thread.buyer_avatar_url
+      };
+    })
+    .filter((thread) => isThreadVisibleForUser(thread, userId));
 
   return {
     data: enrichedData,
     hasMore: (data?.length || 0) === pageSize,
     page,
     pageSize,
-    userId: user?.id ?? null
+    userId
   };
 }
 
@@ -321,6 +391,8 @@ export type ThreadListItem = {
   buyer_avatar_url: string | null;
   seller_display_name: string | null;
   seller_avatar_url: string | null;
+  buyer_hidden_at?: string | null;
+  seller_hidden_at?: string | null;
   other_participant_name?: string | null;
   other_participant_avatar?: string | null;
   /** Au moins un message non lu envoyé par l’interlocuteur (read_at null, sender != moi). */

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,18 +9,16 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { getFilterFooterPaddingBottom, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
-import { getConditions } from '../../lib/api/filters';
-import { translateConditionDescription, translateConditionLabel } from '../../lib/conditionI18n';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
-
-type ConditionRow = {
-  id: number;
-  name: string;
-  value: string;
-  description: string;
-};
+import {
+  FILTER_CONDITION_VALUES,
+  normalizeConditionFilterSelection,
+  translateConditionDescription,
+  translateConditionLabel,
+  type FilterConditionValue
+} from '../../lib/conditionI18n';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 
 export default function ConditionFilterScreen() {
   const { t } = useTranslation();
@@ -33,13 +31,23 @@ export default function ConditionFilterScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
 
-  const [conditions, setConditions] = useState<ConditionRow[]>([]);
-  const [selected, setSelected] = useState<string[]>([...(filters.conditionIds ?? [])]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const conditions = useMemo(
+    () =>
+      FILTER_CONDITION_VALUES.map((value) => ({
+        value,
+        label: translateConditionLabel(value, t),
+        description: translateConditionDescription(value, t)
+      })),
+    [t]
+  );
 
-  const toggleCondition = (value: string) => {
+  const [selected, setSelected] = useState<FilterConditionValue[]>(() =>
+    normalizeConditionFilterSelection(filters.conditionIds ?? [])
+  );
+
+  const toggleCondition = (value: FilterConditionValue) => {
     setSelected((prev) =>
       prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
     );
@@ -51,35 +59,8 @@ export default function ConditionFilterScreen() {
 
   const handleShowResult = () => {
     setFilter('conditionIds', selected);
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
-
-  const loadConditions = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const data = await getConditions();
-
-      const mapped: ConditionRow[] = (data as any[]).map((row) => ({
-        id: row.id as number,
-        name: row.name as string,
-        value: (row.value as string | undefined) ?? (row.name as string),
-        description: (row.description as string | undefined) ?? ''
-      }));
-
-      setConditions(mapped);
-    } catch {
-      setError(t('filters.conditionLoadError'));
-      setConditions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadConditions();
-  }, [t]);
 
   return (
     <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF' }}>
@@ -101,81 +82,51 @@ export default function ConditionFilterScreen() {
           </TouchableOpacity>
         </View>
 
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text variant="captionSm" color="textSecondary" style={styles.errorText}>
-              {error}
-            </Text>
-            <TouchableOpacity onPress={loadConditions} activeOpacity={0.7}>
-              <Text variant="captionSm" color="primary">
-                {t('common.retry')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         <View style={styles.content}>
-          {loading ? (
-            <ScrollView contentContainerStyle={styles.list}>
-              {Array.from({ length: 5 }).map((_, index) => (
-                <View key={index} style={[styles.row, styles.skeletonRow]}>
-                  <View style={styles.skeletonTextBlock}>
-                    <View style={styles.skeletonTitle} />
-                    <View style={styles.skeletonDescription} />
-                  </View>
-                  <View style={styles.skeletonCheckbox} />
-                </View>
-              ))}
-            </ScrollView>
-          ) : (
-            <ScrollView contentContainerStyle={styles.list}>
-              {conditions.map((cond) => {
-                const checked = selected.includes(cond.value);
-                return (
-                  <TouchableOpacity
-                    key={cond.id}
-                    style={styles.row}
-                    activeOpacity={0.7}
-                    onPress={() => toggleCondition(cond.value)}
-                  >
-                    <View style={styles.textContainer}>
-                      <Text variant="body" style={styles.conditionTitle}>
-                        {translateConditionLabel(cond.value, t)}
+          <ScrollView contentContainerStyle={styles.list}>
+            {conditions.map((cond) => {
+              const checked = selected.includes(cond.value);
+              return (
+                <TouchableOpacity
+                  key={cond.value}
+                  style={styles.row}
+                  activeOpacity={0.7}
+                  onPress={() => toggleCondition(cond.value)}
+                >
+                  <View style={styles.textContainer}>
+                    <Text variant="body" style={styles.conditionTitle}>
+                      {cond.label}
+                    </Text>
+                    {cond.description.length > 0 ? (
+                      <Text
+                        variant="captionSm"
+                        style={styles.description}
+                        numberOfLines={2}
+                      >
+                        {cond.description}
                       </Text>
-                      {(() => {
-                        const desc = translateConditionDescription(cond.value, t);
-                        return desc.length > 0 ? (
-                          <Text
-                            variant="captionSm"
-                            style={styles.description}
-                            numberOfLines={2}
-                          >
-                            {desc}
-                          </Text>
-                        ) : null;
-                      })()}
-                    </View>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        checked && styles.checkboxChecked
-                      ]}
-                    >
-                      {checked && (
-                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
+                    ) : null}
+                  </View>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      checked && styles.checkboxChecked
+                    ]}
+                  >
+                    {checked && (
+                      <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

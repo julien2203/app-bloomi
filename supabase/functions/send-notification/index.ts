@@ -107,6 +107,21 @@ Deno.serve(async (req) => {
       : null;
   const shouldSendPush = isPushAllowed(pushSettings, data);
 
+  // Compte actuel des non-lues (+1 pour cette notif, insérée juste après le push).
+  let badgeCount = 1;
+  try {
+    const { count, error: countError } = await supabaseAdmin
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user_id)
+      .is("read_at", null);
+    if (!countError) {
+      badgeCount = (count ?? 0) + 1;
+    }
+  } catch {
+    badgeCount = 1;
+  }
+
   if (token && shouldSendPush) {
     try {
       const expoResp = await fetch("https://exp.host/--/api/v2/push/send", {
@@ -120,6 +135,7 @@ Deno.serve(async (req) => {
           body,
           data: data ?? undefined,
           sound: "default",
+          badge: badgeCount,
         }),
       });
 

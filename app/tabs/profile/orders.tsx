@@ -9,7 +9,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text as RNText,
-  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -27,7 +26,20 @@ import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications'
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import {
+  navigateBackFromProfileShortcut,
+  notificationsShortcutHref,
+  pickProfileShortcutOrigin
+} from '../../../lib/navigation/feedShortcutNav';
 import { theme } from '../../../lib/theme';
+import { isOrderPickupDelivery } from '../../../lib/deliveryMode';
+import { computeOrderBuyerTotals, resolveOrderItemPriceChf } from '../../../lib/orderTotals';
+import {
+  fetchAcceptedOfferAmountsForOrders,
+  getOrderAcceptedOfferAmountFromMap
+} from '../../../lib/fetchOrderAcceptedOfferAmount';
+import { formatCatalogPriceChf } from '../../../lib/formatBuyerPrice';
+import { ensureProfileShippingAddress } from '../../../lib/profileShippingAddress';
 
 type OrdersTab = 'purchases' | 'sales';
 
@@ -40,12 +52,19 @@ type OrderRow = {
   payment_status: string | null;
   seller_amount: number | string | null;
   seller_commission_chf?: number | string | null;
+  buyer_protection_chf?: number | string | null;
+  buyer_banking_fee_chf?: number | string | null;
+  shipping_fee_chf?: number | string | null;
+  parcel_size?: string | null;
+  is_promo_shipping?: boolean | null;
   created_at: string | null;
   delivery_mode?: string | null;
   shipping_address?: string | null;
   shipping_city?: string | null;
   shipping_postal_code?: string | null;
   shipping_country?: string | null;
+  shipping_first_name?: string | null;
+  shipping_last_name?: string | null;
   tracking_number?: string | null;
   listing_title?: string | null;
   listing_price?: number | string | null;
@@ -66,6 +85,8 @@ type EnrichedOrder = OrderRow & {
   listing: ListingForOrder | null;
   coverPhotoUrl: string | null;
   displayAmount: string;
+  displayAmountLabel?: string | null;
+  displayShippingLabel?: string | null;
   commissionLabel?: string | null;
 };
 
@@ -80,7 +101,7 @@ function formatAmount(amount: number | string | null | undefined) {
   if (amount == null) return '-';
   const n = typeof amount === 'number' ? amount : Number(amount);
   if (!Number.isFinite(n)) return String(amount);
-  return `${n.toFixed(2)} CHF`;
+  return formatCatalogPriceChf(n);
 }
 
 function normalizePhotoUrl(rawUrl: string) {
@@ -89,16 +110,36 @@ function normalizePhotoUrl(rawUrl: string) {
   return data?.publicUrl ?? rawUrl;
 }
 
+
 export default function OrdersScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { from_notifications, from_notifications_origin } = useLocalSearchParams<{
-    from_notifications?: string;
-    from_notifications_origin?: string;
+  const { from_notifications, from_notifications_origin, from, tab: tabParam } = useLocalSearchParams<{
+    from_notifications?: string | string[];
+    from_notifications_origin?: string | string[];
+    from?: string | string[];
+    tab?: string | string[];
   }>();
+  const shortcutOrigin = pickProfileShortcutOrigin({ from });
+  const notificationOrigin = pickProfileShortcutOrigin({
+    from,
+    from_notifications_origin
+  });
+  const fromNotifications =
+    from_notifications === '1' ||
+    (Array.isArray(from_notifications) && from_notifications[0] === '1');
   const { user } = useAuthStore();
 
-  const [tab, setTab] = useState<OrdersTab>('purchases');
+  const [tab, setTab] = useState<OrdersTab>(() => {
+    const raw = Array.isArray(tabParam) ? tabParam[0] : tabParam;
+    return raw === 'sales' ? 'sales' : 'purchases';
+  });
+
+  useEffect(() => {
+    const raw = Array.isArray(tabParam) ? tabParam[0] : tabParam;
+    if (raw === 'sales') setTab('sales');
+    else if (raw === 'purchases') setTab('purchases');
+  }, [tabParam]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<EnrichedOrder[]>([]);
@@ -115,15 +156,6 @@ export default function OrdersScreen() {
     () => new Set()
   );
   const [reviewedOrderIds, setReviewedOrderIds] = useState<Set<string>>(() => new Set());
-  const [addressModalVisible, setAddressModalVisible] = useState(false);
-  const [addressModalOrder, setAddressModalOrder] = useState<EnrichedOrder | null>(null);
-  const [addressModalSellerName, setAddressModalSellerName] = useState('Seller');
-  const [senderStreetInput, setSenderStreetInput] = useState('');
-  const [senderCityInput, setSenderCityInput] = useState('');
-  const [senderZipInput, setSenderZipInput] = useState('');
-  const [senderCountryInput, setSenderCountryInput] = useState('');
-  const [saveSenderAddress, setSaveSenderAddress] = useState(true);
-  const [submittingAddressModal, setSubmittingAddressModal] = useState(false);
   const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
 
@@ -152,12 +184,19 @@ export default function OrdersScreen() {
           payment_status,
           seller_amount,
           seller_commission_chf,
+          buyer_protection_chf,
+          buyer_banking_fee_chf,
+          shipping_fee_chf,
+          parcel_size,
+          is_promo_shipping,
           created_at,
           delivery_mode,
           shipping_address,
           shipping_city,
           shipping_postal_code,
           shipping_country,
+          shipping_first_name,
+          shipping_last_name,
           tracking_number,
           listing_title,
           listing_price,
@@ -190,7 +229,21 @@ export default function OrdersScreen() {
         listing: ListingForOrder | null;
       })[];
 
+      const acceptedOfferMap = await fetchAcceptedOfferAmountsForOrders(
+        rows.map((o) => ({ listing_id: o.listing_id, buyer_id: o.buyer_id }))
+      );
+
       const enriched: EnrichedOrder[] = rows.map((o) => {
+        const acceptedOfferAmount = getOrderAcceptedOfferAmountFromMap(
+          acceptedOfferMap,
+          o.listing_id,
+          o.buyer_id
+        );
+        const orderForPricing = {
+          ...o,
+          accepted_offer_amount_chf: acceptedOfferAmount,
+          listing: o.listing ?? null
+        };
         const listing = o.listing ?? null;
         const photos = listing?.photos ?? [];
         const sortedPhotos = [...photos].sort(
@@ -203,6 +256,16 @@ export default function OrdersScreen() {
             ? normalizePhotoUrl(o.listing_cover_photo_url)
             : null;
 
+        const buyerTotals =
+          tab === 'purchases' ? computeOrderBuyerTotals(orderForPricing) : null;
+        const resolvedItemPrice = resolveOrderItemPriceChf(orderForPricing);
+        const sellerDisplayAmount =
+          (o.seller_amount as any) ??
+          resolvedItemPrice ??
+          listing?.price ??
+          (o.listing_price as any) ??
+          null;
+
         return {
           ...o,
           listing:
@@ -211,22 +274,29 @@ export default function OrdersScreen() {
               ? {
                   id: o.listing_id,
                   title: o.listing_title ?? 'Listing',
-                  price:
-                    typeof o.listing_price === 'number'
-                      ? o.listing_price
-                      : typeof o.listing_price === 'string'
-                      ? Number(o.listing_price)
-                      : null,
+                  price: resolvedItemPrice,
                   photos: null
                 }
               : null),
           coverPhotoUrl,
-          displayAmount: formatAmount(
-            (o.seller_amount as any) ??
-              listing?.price ??
-              (o.listing_price as any) ??
-              null
-          ),
+          displayAmount:
+            tab === 'purchases' && buyerTotals
+              ? formatCatalogPriceChf(buyerTotals.totalPaidChf)
+              : formatAmount(sellerDisplayAmount),
+          displayAmountLabel:
+            tab === 'purchases' ? t('feed.orderConfirmation.totalPaid') : null,
+          displayShippingLabel:
+            tab === 'purchases' && buyerTotals?.includesShipping
+              ? buyerTotals.shippingFeeChf <= 0.009
+                ? t('profile.orders.promoShipping')
+                : buyerTotals.isPromoShipping
+                  ? t('profile.orders.shippingFeeLinePromo', {
+                      amount: formatCatalogPriceChf(buyerTotals.shippingFeeChf)
+                    })
+                  : t('profile.orders.shippingFeeLine', {
+                      amount: formatCatalogPriceChf(buyerTotals.shippingFeeChf)
+                    })
+              : null,
           commissionLabel:
             tab === 'sales' && o.seller_commission_chf != null
               ? (() => {
@@ -295,11 +365,13 @@ export default function OrdersScreen() {
   }, [loadOrders, tabQuery, userId]);
 
   const canConfirmReception = useCallback(
-    (order: EnrichedOrder) =>
-      tab === 'purchases' &&
-      userId != null &&
-      order.buyer_id === userId &&
-      String(order.status ?? '').toLowerCase() === 'shipped',
+    (order: EnrichedOrder) => {
+      if (tab !== 'purchases' || !userId || order.buyer_id !== userId) return false;
+      const status = String(order.status ?? '').toLowerCase();
+      if (status === 'shipped') return true;
+      if (status === 'pending' && isOrderPickupDelivery(order.delivery_mode)) return true;
+      return false;
+    },
     [tab, userId]
   );
 
@@ -326,8 +398,10 @@ export default function OrdersScreen() {
 
   const sendDisputeEmail = useCallback(async () => {
     const orderId = disputeOrderId ?? '';
-    const subject = encodeURIComponent('Order dispute');
-    const body = encodeURIComponent(`Order ID: ${orderId}`);
+    const subject = encodeURIComponent(t('profile.orders.disputeEmailSubject'));
+    const body = encodeURIComponent(
+      t('profile.orders.disputeEmailBody', { orderId })
+    );
     const url = `mailto:contact@bloomi.ch?subject=${subject}&body=${body}`;
     const canOpen = await Linking.canOpenURL(url);
     if (canOpen) {
@@ -340,11 +414,16 @@ export default function OrdersScreen() {
       tab === 'sales' &&
       userId != null &&
       order.seller_id === userId &&
-      String(order.delivery_mode ?? '').toLowerCase() !== 'pickup' &&
+      !isOrderPickupDelivery(order.delivery_mode) &&
       (String(order.status ?? '').toLowerCase() === 'pending' ||
         (String(order.status ?? '').toLowerCase() === 'shipped' &&
           !String(order.tracking_number ?? '').trim())),
     [tab, userId]
+  );
+
+  const isLetterAplusOrder = useCallback(
+    (order: EnrichedOrder) => String(order.parcel_size ?? '').toLowerCase() === 'letter_aplus',
+    []
   );
 
   const confirmReception = useCallback(
@@ -358,7 +437,7 @@ export default function OrdersScreen() {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
         if (!accessToken) {
-          throw new Error('Session expired. Please sign in again.');
+          throw new Error(t('feed.checkout.sessionExpired'));
         }
 
         const response = await fetch(
@@ -403,8 +482,8 @@ export default function OrdersScreen() {
         console.log('Erreur confirmReception:', e);
         const message =
           e instanceof Error && e.message
-            ? `Unable to confirm receipt: ${e.message}`
-            : 'Unable to confirm receipt.';
+            ? t('profile.orders.unableConfirmWithDetails', { message: e.message })
+            : t('profile.orders.unableConfirm');
         Alert.alert(t('common.error'), message);
       } finally {
         setConfirmingOrderIds((prev) => {
@@ -436,7 +515,7 @@ export default function OrdersScreen() {
                 const { data: sessionData } = await supabase.auth.getSession();
                 const accessToken = sessionData.session?.access_token;
                 if (!accessToken) {
-                  throw new Error('Session expired. Please sign in again.');
+                  throw new Error(t('feed.checkout.sessionExpired'));
                 }
 
                 const response = await fetch(
@@ -473,8 +552,8 @@ export default function OrdersScreen() {
                 console.log('Erreur cancelOrder:', e);
                 const message =
                   e instanceof Error && e.message
-                    ? `Unable to cancel the order: ${e.message}`
-                    : 'Unable to cancel the order.';
+                    ? t('profile.orders.unableCancelWithDetails', { message: e.message })
+                    : t('profile.orders.unableCancel');
                 Alert.alert(t('common.error'), message);
               } finally {
                 setCancellingOrderIds((prev) => {
@@ -501,25 +580,36 @@ export default function OrdersScreen() {
         .toUpperCase();
 
       if (!recipientStreet || !recipientCity || !recipientZip || !recipientCountry) {
-        throw new Error('Shipping address is incomplete for this order.');
+        throw new Error(t('profile.orders.shippingAddressIncompleteForOrder'));
       }
 
-      const { data: buyerProfile, error: buyerErr } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', order.buyer_id)
-        .maybeSingle();
+      const orderFirst = String((order as any).shipping_first_name ?? '').trim();
+      const orderLast = String((order as any).shipping_last_name ?? '').trim();
+      let buyerName = [orderFirst, orderLast].filter(Boolean).join(' ').trim();
 
-      if (buyerErr) {
-        throw new Error(buyerErr.message);
+      if (!buyerName) {
+        const { data: buyerProfile, error: buyerErr } = await supabase
+          .from('profiles')
+          .select('address_first_name, address_last_name, display_name')
+          .eq('id', order.buyer_id)
+          .maybeSingle();
+
+        if (buyerErr) {
+          throw new Error(buyerErr.message);
+        }
+
+        const fn = String((buyerProfile as any)?.address_first_name ?? '').trim();
+        const ln = String((buyerProfile as any)?.address_last_name ?? '').trim();
+        buyerName =
+          [fn, ln].filter(Boolean).join(' ').trim() ||
+          String((buyerProfile as any)?.display_name ?? '').trim() ||
+          'Buyer';
       }
-
-      const buyerName = String((buyerProfile as any)?.display_name ?? '').trim() || 'Buyer';
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        throw new Error('Session expired. Please sign in again.');
+        throw new Error(t('feed.checkout.sessionExpired'));
       }
 
       const response = await fetch(
@@ -577,11 +667,13 @@ export default function OrdersScreen() {
 
       const labelPdfBase64 = String((data as any)?.label_pdf_base64 ?? '').trim();
       const labelUrl = String((data as any)?.label_url ?? '').trim();
+      const emailSent = (data as any)?.email_sent === true;
+      const emailSentTo = String((data as any)?.email_sent_to ?? '').trim();
 
       if (labelPdfBase64) {
         const cacheDir = FileSystem.cacheDirectory;
         if (!cacheDir) {
-          throw new Error('Cache directory unavailable');
+          throw new Error(t('profile.orders.cacheUnavailable'));
         }
         const fileUri = `${cacheDir}etiquette_bloomi.pdf`;
         await FileSystem.writeAsStringAsync(fileUri, labelPdfBase64, {
@@ -590,20 +682,33 @@ export default function OrdersScreen() {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: 'application/pdf',
-            dialogTitle: 'Swiss Post shipping label'
+            dialogTitle: t('profile.orders.shippingLabelShare')
           });
         } else {
           await Print.printAsync({ uri: fileUri });
         }
+        if (emailSent && emailSentTo) {
+          Alert.alert(
+            t('common.success'),
+            t('profile.orders.labelEmailSent', { email: emailSentTo })
+          );
+        }
+      } else if (emailSent && emailSentTo) {
+        Alert.alert(
+          t('common.success'),
+          t('profile.orders.labelEmailSent', { email: emailSentTo })
+        );
       } else if (labelUrl) {
         await Linking.openURL(labelUrl);
+      } else if (trackingNumber) {
+        Alert.alert(t('common.success'), t('profile.orders.labelTrackingOnly'));
       } else {
-        Alert.alert(t('common.success'), t('profile.orders.labelNoDoc'));
+        Alert.alert(t('common.error'), t('profile.orders.labelNoDoc'));
       }
 
       await loadOrders();
     },
-    [loadOrders]
+    [loadOrders, t]
   );
 
   const generateShippingLabel = useCallback(
@@ -615,7 +720,7 @@ export default function OrdersScreen() {
       try {
         const { data: sellerProfile, error: sellerErr } = await supabase
           .from('profiles')
-          .select('display_name, street, postal_code, city, country')
+          .select('display_name, address_first_name, address_last_name')
           .eq('id', userId)
           .maybeSingle();
 
@@ -623,35 +728,34 @@ export default function OrdersScreen() {
           throw new Error(sellerErr.message);
         }
 
+        const sellerAddress = await ensureProfileShippingAddress(
+          supabase,
+          userId,
+          router,
+          t,
+          'seller'
+        );
+        if (!sellerAddress) return;
+
         const sellerName =
+          sellerAddress.full_name ||
+          [
+            String((sellerProfile as any)?.address_first_name ?? '').trim(),
+            String((sellerProfile as any)?.address_last_name ?? '').trim()
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .trim() ||
           String((sellerProfile as any)?.display_name ?? '').trim() ||
           'Seller';
-        const sellerStreet = String((sellerProfile as any)?.street ?? '').trim();
-        const sellerCity = String((sellerProfile as any)?.city ?? '').trim();
-        const sellerZip = String((sellerProfile as any)?.postal_code ?? '').trim();
-        const sellerCountry = String((sellerProfile as any)?.country ?? '')
-          .trim()
-          .toUpperCase();
-
-        if (!sellerStreet || !sellerCity || !sellerZip || !sellerCountry) {
-          setAddressModalOrder(order);
-          setAddressModalSellerName(sellerName);
-          setSenderStreetInput(sellerStreet);
-          setSenderCityInput(sellerCity);
-          setSenderZipInput(sellerZip);
-          setSenderCountryInput(sellerCountry);
-          setSaveSenderAddress(true);
-          setAddressModalVisible(true);
-          return;
-        }
 
         await invokeGenerateShippingLabel(
           order,
           {
-            street: sellerStreet,
-            city: sellerCity,
-            zip: sellerZip,
-            country: sellerCountry
+            street: sellerAddress.street,
+            city: sellerAddress.city,
+            zip: sellerAddress.postal_code,
+            country: sellerAddress.country
           },
           sellerName
         );
@@ -660,8 +764,8 @@ export default function OrdersScreen() {
         console.log('Erreur generateShippingLabel:', e);
         const message =
           e instanceof Error && e.message
-            ? `Could not generate label: ${e.message}`
-            : 'Could not generate label.';
+            ? t('profile.orders.labelGenerateFailed', { message: e.message })
+            : t('profile.orders.unableLabel');
         Alert.alert(t('common.error'), message);
       } finally {
         setGeneratingLabelOrderIds((prev) => {
@@ -671,77 +775,8 @@ export default function OrdersScreen() {
         });
       }
     },
-    [generatingLabelOrderIds, invokeGenerateShippingLabel, userId]
+    [generatingLabelOrderIds, invokeGenerateShippingLabel, router, t, userId]
   );
-
-  const submitSenderAddressModal = useCallback(async () => {
-    if (!addressModalOrder || !userId || submittingAddressModal) return;
-
-    const street = senderStreetInput.trim();
-    const city = senderCityInput.trim();
-    const zip = senderZipInput.trim();
-    const country = senderCountryInput.trim().toUpperCase();
-
-    if (!street || !city || !zip || !country) {
-      Alert.alert(
-        t('profile.orders.incompleteAddress'),
-        t('profile.orders.incompleteAddressMessage')
-      );
-      return;
-    }
-
-    setSubmittingAddressModal(true);
-    try {
-      if (saveSenderAddress) {
-        const { error: updateErr } = await supabase
-          .from('profiles')
-          .update({
-            street,
-            city,
-            postal_code: zip,
-            country
-          })
-          .eq('id', userId);
-        if (updateErr) {
-          throw new Error(updateErr.message);
-        }
-      }
-
-      await invokeGenerateShippingLabel(
-        addressModalOrder,
-        { street, city, zip, country },
-        addressModalSellerName
-      );
-
-      setAddressModalVisible(false);
-      setAddressModalOrder(null);
-    } catch (e) {
-      const message =
-        e instanceof Error && e.message
-          ? `Could not generate label: ${e.message}`
-          : 'Could not generate label.';
-      Alert.alert(t('common.error'), message);
-    } finally {
-      setSubmittingAddressModal(false);
-      setGeneratingLabelOrderIds((prev) => {
-        if (!addressModalOrder) return prev;
-        const next = new Set(prev);
-        next.delete(addressModalOrder.id);
-        return next;
-      });
-    }
-  }, [
-    addressModalOrder,
-    addressModalSellerName,
-    invokeGenerateShippingLabel,
-    saveSenderAddress,
-    senderCityInput,
-    senderCountryInput,
-    senderStreetInput,
-    senderZipInput,
-    submittingAddressModal,
-    userId
-  ]);
 
   const markAsShipped = useCallback(
     async (order: EnrichedOrder) => {
@@ -791,8 +826,8 @@ export default function OrdersScreen() {
         console.log('Erreur markAsShipped:', e);
         const message =
           e instanceof Error && e.message
-            ? `Could not mark order as shipped: ${e.message}`
-            : 'Could not mark order as shipped.';
+            ? t('profile.orders.unableShippedWithDetails', { message: e.message })
+            : t('profile.orders.unableShipped');
         Alert.alert(t('common.error'), message);
       } finally {
         setMarkingShippedOrderIds((prev) => {
@@ -842,6 +877,16 @@ export default function OrdersScreen() {
     );
   }, []);
 
+  const openOrderDetail = useCallback(
+    (orderId: string) => {
+      router.push({
+        pathname: '/tabs/profile/order/[id]',
+        params: { id: orderId, tab }
+      });
+    },
+    [router, tab]
+  );
+
   const renderOrderItem = useCallback(
     ({ item }: { item: EnrichedOrder }) => {
       const statusNorm = String(item.status ?? 'unknown').toLowerCase();
@@ -851,23 +896,38 @@ export default function OrdersScreen() {
       const showCancel = canCancelOrder(item);
       const isCancelling = cancellingOrderIds.has(item.id);
       const showGenerateLabel = canGenerateShippingLabel(item);
+      const isLetterAplus = isLetterAplusOrder(item);
       const isGeneratingLabel = generatingLabelOrderIds.has(item.id);
       const isMarkingShipped = markingShippedOrderIds.has(item.id);
       const trackingNumber = String(item.tracking_number ?? '').trim();
       const hasTracking = Boolean(trackingNumber);
       const hasReviewed = reviewedOrderIds.has(item.id);
       const showLeaveReview = statusNorm === 'completed' && !hasReviewed;
+      const isPickup = isOrderPickupDelivery(item.delivery_mode);
+      const showMarkShipped =
+        !isPurchasesTab &&
+        statusNorm === 'pending' &&
+        (hasTracking || (isLetterAplus && !isPickup));
 
       let statusText = String(item.status ?? 'unknown');
       if (isPurchasesTab) {
-        if (statusNorm === 'pending') statusText = 'Awaiting shipment';
-        if (statusNorm === 'shipped') statusText = 'Package on the way 📦';
-        if (statusNorm === 'completed') statusText = 'Order completed ✅';
-        if (statusNorm === 'cancelled') statusText = 'Order cancelled';
+        if (statusNorm === 'pending') {
+          statusText = isPickup
+            ? t('profile.orders.awaitingPickup')
+            : t('profile.orders.awaitingShipment');
+        }
+        if (statusNorm === 'shipped') statusText = t('profile.orders.packageOnWay');
+        if (statusNorm === 'completed') statusText = t('profile.orders.orderCompleted');
+        if (statusNorm === 'cancelled') statusText = t('profile.orders.orderCancelled');
       } else {
-        if (statusNorm === 'shipped') statusText = 'Shipped ✅';
-        if (statusNorm === 'completed') statusText = 'Completed ✅ — Payment received';
-        if (statusNorm === 'cancelled') statusText = 'Cancelled';
+        if (statusNorm === 'pending') {
+          statusText = isPickup
+            ? t('profile.orders.awaitingPickupSale')
+            : t('profile.orders.awaitingShipment');
+        }
+        if (statusNorm === 'shipped') statusText = t('profile.orders.shipped');
+        if (statusNorm === 'completed') statusText = t('profile.orders.completedPayment');
+        if (statusNorm === 'cancelled') statusText = t('profile.orders.cancelled');
       }
 
       const statusColor: any =
@@ -875,7 +935,15 @@ export default function OrdersScreen() {
 
       return (
         <View style={styles.orderCard}>
-          <View style={styles.orderTop}>
+          <TouchableOpacity
+            style={styles.orderTop}
+            activeOpacity={0.85}
+            onPress={() => openOrderDetail(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.orders.detail.openOrderA11y', {
+              title: item.listing?.title ?? 'Listing'
+            })}
+          >
             <View style={styles.coverWrap}>
               {item.coverPhotoUrl ? (
                 <Image source={{ uri: item.coverPhotoUrl }} style={styles.cover} />
@@ -888,11 +956,21 @@ export default function OrdersScreen() {
               <Text variant="body" style={styles.orderTitle} numberOfLines={2}>
                 {item.listing?.title ?? 'Listing'}
               </Text>
+              {item.displayAmountLabel ? (
+                <Text variant="captionSm" color="textSecondary">
+                  {item.displayAmountLabel}
+                </Text>
+              ) : null}
               <Text variant="body" color="textSecondary" style={styles.orderAmount}>
                 {!isPurchasesTab && item.commissionLabel
                   ? t('profile.orders.sellerPayout', { amount: item.displayAmount })
                   : item.displayAmount}
               </Text>
+              {item.displayShippingLabel ? (
+                <Text variant="captionSm" color="textSecondary">
+                  {item.displayShippingLabel}
+                </Text>
+              ) : null}
               {!isPurchasesTab && item.commissionLabel ? (
                 <Text variant="captionSm" color="textSecondary">
                   {item.commissionLabel}
@@ -905,28 +983,39 @@ export default function OrdersScreen() {
               >
                 {statusText}
               </Text>
-              {hasTracking ? (
+              {hasTracking && !isPickup ? (
                 <Text variant="captionSm" color="textSecondary">
-                  Tracking: {trackingNumber}
+                  {t('profile.orders.trackingNumber', { number: trackingNumber })}
                 </Text>
               ) : null}
+              <Text variant="captionSm" color="textSecondary" style={styles.viewDetailHint}>
+                {t('profile.orders.detail.viewDetail')}
+              </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {((isPurchasesTab &&
-            ((statusNorm === 'pending' && showCancel) ||
+            ((statusNorm === 'pending' && (showCancel || showConfirm)) ||
               statusNorm === 'shipped' ||
               (statusNorm === 'completed' && showLeaveReview))) ||
             (!isPurchasesTab &&
               ((statusNorm === 'pending' &&
-                (showCancel || (!hasTracking && showGenerateLabel) || hasTracking)) ||
-                (statusNorm === 'shipped' && showGenerateLabel) ||
+                (showCancel ||
+                  (!hasTracking && showGenerateLabel) ||
+                  hasTracking ||
+                  showLetterAplusShipNote ||
+                  showMarkShipped)) ||
+                (statusNorm === 'shipped' && (showGenerateLabel || showLetterAplusShipNote)) ||
                 (statusNorm === 'completed' && showLeaveReview)))) ? (
             <View style={styles.actionsWrap}>
-              {isPurchasesTab && statusNorm === 'shipped' && showConfirm ? (
+              {isPurchasesTab && showConfirm ? (
                 <View style={styles.confirmButtonWrap}>
                   <Button
-                    title={isConfirming ? 'Confirming…' : 'Confirm receipt'}
+                    title={
+                      isConfirming
+                        ? t('profile.orders.confirming')
+                        : t('profile.orders.confirmReceipt')
+                    }
                     onPress={() => void confirmReception(item)}
                     disabled={isConfirming}
                     loading={isConfirming}
@@ -950,7 +1039,9 @@ export default function OrdersScreen() {
                   />
                 </View>
               ) : null}
-              {isPurchasesTab && statusNorm === 'shipped' ? (
+              {isPurchasesTab &&
+              ((statusNorm === 'shipped' && !isPickup) ||
+                (statusNorm === 'pending' && isPickup)) ? (
                 <View style={styles.disputeButtonWrap}>
                   <TouchableOpacity
                     style={styles.disputeButton}
@@ -963,7 +1054,7 @@ export default function OrdersScreen() {
                   </TouchableOpacity>
                 </View>
               ) : null}
-              {isPurchasesTab && statusNorm === 'shipped' && hasTracking ? (
+              {isPurchasesTab && statusNorm === 'shipped' && hasTracking && !isPickup ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
                     title={t('profile.orders.trackParcel')}
@@ -987,8 +1078,8 @@ export default function OrdersScreen() {
                   <Button
                     title={
                       isGeneratingLabel
-                        ? 'Generating...'
-                        : 'Generate Swiss Post label'
+                        ? t('profile.orders.generating')
+                        : t('profile.orders.generateSwissPostLabel')
                     }
                     onPress={() => generateShippingLabel(item)}
                     disabled={isGeneratingLabel}
@@ -997,10 +1088,14 @@ export default function OrdersScreen() {
                   />
                 </View>
               ) : null}
-              {!isPurchasesTab && statusNorm === 'pending' && hasTracking ? (
+              {showMarkShipped ? (
                 <View style={styles.generateLabelButtonWrap}>
                   <Button
-                    title={isMarkingShipped ? 'Updating…' : 'Mark as shipped'}
+                    title={
+                      isMarkingShipped
+                        ? t('profile.orders.updating')
+                        : t('profile.orders.markShipped')
+                    }
                     onPress={() => markAsShipped(item)}
                     disabled={isMarkingShipped}
                     loading={isMarkingShipped}
@@ -1011,7 +1106,9 @@ export default function OrdersScreen() {
               {!isPurchasesTab && statusNorm === 'pending' && showCancel ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title={isCancelling ? 'Cancelling…' : 'Cancel'}
+                    title={
+                      isCancelling ? t('profile.orders.cancelling') : t('common.cancel')
+                    }
                     onPress={() => cancelOrder(item.id)}
                     disabled={isCancelling}
                     loading={isCancelling}
@@ -1037,6 +1134,7 @@ export default function OrdersScreen() {
       canCancelOrder,
       canConfirmReception,
       canGenerateShippingLabel,
+      isLetterAplusOrder,
       cancellingOrderIds,
       confirmingOrderIds,
       generatingLabelOrderIds,
@@ -1049,6 +1147,7 @@ export default function OrdersScreen() {
       followPackage,
       markAsShipped,
       openDisputeModal,
+      openOrderDetail,
       tab,
       t
     ]
@@ -1057,18 +1156,16 @@ export default function OrdersScreen() {
   const title = tab === 'purchases' ? t('profile.orders.myPurchases') : t('profile.orders.mySales');
 
   const handleBack = useCallback(() => {
-    if (from_notifications === '1') {
+    if (fromNotifications) {
+      const origin = shortcutOrigin ?? notificationOrigin;
       router.replace({
-        pathname: '/tabs/profile/notifications',
-        params:
-          from_notifications_origin === 'feed' || from_notifications_origin === 'profile'
-            ? { from: from_notifications_origin }
-            : undefined
+        pathname: notificationsShortcutHref(origin),
+        params: origin ? { from: origin } : undefined
       });
       return;
     }
-    router.back();
-  }, [from_notifications, from_notifications_origin, router]);
+    navigateBackFromProfileShortcut(router, shortcutOrigin);
+  }, [fromNotifications, notificationOrigin, router, shortcutOrigin]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -1124,89 +1221,6 @@ export default function OrdersScreen() {
           ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
         />
       )}
-      <Modal
-        visible={addressModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (submittingAddressModal) return;
-          setAddressModalVisible(false);
-          setAddressModalOrder(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text variant="h3" style={styles.modalTitle}>
-              {t('profile.orders.senderAddressTitle')}
-            </Text>
-            <Text variant="captionSm" color="textSecondary" style={styles.modalSubtitle}>
-              {t('profile.orders.senderAddressSubtitle')}
-            </Text>
-
-            <TextInput
-              value={senderStreetInput}
-              onChangeText={setSenderStreetInput}
-              placeholder={t('profile.orders.streetNumber')}
-              style={styles.modalInput}
-              editable={!submittingAddressModal}
-            />
-            <TextInput
-              value={senderCityInput}
-              onChangeText={setSenderCityInput}
-              placeholder={t('feed.checkout.city')}
-              style={styles.modalInput}
-              editable={!submittingAddressModal}
-            />
-            <TextInput
-              value={senderZipInput}
-              onChangeText={setSenderZipInput}
-              placeholder={t('feed.checkout.postalCode')}
-              style={styles.modalInput}
-              editable={!submittingAddressModal}
-            />
-            <TextInput
-              value={senderCountryInput}
-              onChangeText={setSenderCountryInput}
-              placeholder={t('profile.orders.countryExample')}
-              autoCapitalize="characters"
-              style={styles.modalInput}
-              editable={!submittingAddressModal}
-            />
-
-            <TouchableOpacity
-              style={styles.modalCheckboxRow}
-              activeOpacity={0.8}
-              onPress={() => setSaveSenderAddress((prev) => !prev)}
-              disabled={submittingAddressModal}
-            >
-              <View style={[styles.checkbox, saveSenderAddress && styles.checkboxChecked]} />
-              <Text variant="captionSm" color="textSecondary">
-                {t('profile.orders.saveAddress')}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.modalActions}>
-              <Button
-                title={t('common.cancel')}
-                onPress={() => {
-                  setAddressModalVisible(false);
-                  setAddressModalOrder(null);
-                }}
-                variant="secondary"
-                disabled={submittingAddressModal}
-              />
-              <Button
-                title={submittingAddressModal ? t('profile.orders.generating') : t('profile.orders.generateLabel')}
-                onPress={() => void submitSenderAddressModal()}
-                loading={submittingAddressModal}
-                disabled={submittingAddressModal}
-                variant="primary"
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       <Modal
         visible={disputeModalVisible}
         transparent
@@ -1359,6 +1373,9 @@ const styles = StyleSheet.create({
   orderStatus: {
     marginBottom: 6
   },
+  viewDetailHint: {
+    marginTop: 4
+  },
   actionsWrap: {
     marginTop: 10,
     gap: 10
@@ -1390,39 +1407,6 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     marginBottom: 2
-  },
-  modalSubtitle: {
-    marginBottom: 8
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: theme.colors.text
-  },
-  modalCheckboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2
-  },
-  checkbox: {
-    width: 16,
-    height: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 4
-  },
-  checkboxChecked: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8
   },
   disputeButtonWrap: {
     marginTop: 0

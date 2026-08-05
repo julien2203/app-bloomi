@@ -1,0 +1,1318 @@
+{
+  "common.learnMore": {
+    "de": "Mehr erfahren",
+    "it": "Scopri di più"
+  },
+  "common.permissionRequired": {
+    "de": "Berechtigung erforderlich",
+    "it": "Autorizzazione richiesta"
+  },
+  "auth.login.continueGuest": {
+    "de": "Als Gast fortfahren",
+    "it": "Continua come ospite"
+  },
+  "auth.signUp.browseWithoutAccount": {
+    "de": "Ohne Konto stöbern",
+    "it": "Sfoglia senza account"
+  },
+  "auth.verifyEmail.noEmail": {
+    "de": "Keine E-Mail-Adresse gefunden.",
+    "it": "Nessun indirizzo e-mail trovato."
+  },
+  "auth.verifyEmail.resendLink": {
+    "de": "Bestätigungs-E-Mail erneut senden",
+    "it": "Invia di nuovo l'e-mail di verifica"
+  },
+  "auth.forgotPassword.subtitle": {
+    "de": "Gib deine E-Mail ein, um einen Zurücksetzungslink zu erhalten.",
+    "it": "Inserisci la tua e-mail per ricevere un link di reimpostazione."
+  },
+  "auth.forgotPassword.sentMessage": {
+    "de": "Wir haben einen Zurücksetzungslink an deine E-Mail gesendet.",
+    "it": "Abbiamo inviato un link di reimpostazione alla tua e-mail."
+  },
+  "auth.resetPassword.subtitle": {
+    "de": "Wähle ein neues Passwort für dein Konto.",
+    "it": "Scegli una nuova password per il tuo account."
+  },
+  "auth.resetPassword.noMatch": {
+    "de": "Die Passwörter stimmen nicht überein.",
+    "it": "Le password non corrispondono."
+  },
+  "auth.resetPassword.updatedTitle": {
+    "de": "Passwort aktualisiert",
+    "it": "Password aggiornata"
+  },
+  "auth.resetPassword.updatedMessage": {
+    "de": "Dein Passwort wurde aktualisiert.",
+    "it": "La tua password è stata aggiornata."
+  },
+  "auth.verifyPhone.titleStep1": {
+    "de": "Bestätige dein Telefon",
+    "it": "Verifica il tuo telefono"
+  },
+  "auth.verifyPhone.titleStep2": {
+    "de": "Bestätigungscode eingeben",
+    "it": "Inserisci il codice di verifica"
+  },
+  "auth.verifyPhone.subtitleStep1": {
+    "de": "Wir senden dir einen Bestätigungscode per SMS.",
+    "it": "Ti invieremo un codice di verifica via SMS."
+  },
+  "auth.verifyPhone.subtitleStep2": {
+    "de": "Gib den 6-stelligen Code ein, den wir dir gesendet haben.",
+    "it": "Inserisci il codice a 6 cifre che ti abbiamo inviato."
+  },
+  "auth.verifyPhone.phoneLabel": {
+    "de": "Telefonnummer",
+    "it": "Numero di telefono"
+  },
+  "auth.verifyPhone.phonePlaceholder": {
+    "de": "+41 79 000 00 00",
+    "it": "+41 79 000 00 00"
+  },
+  "auth.verifyPhone.phoneMissing": {
+    "de": "Telefonnummer fehlt.",
+    "it": "Numero di telefono mancante."
+  },
+  "auth.verifyPhone.validPhone": {
+    "de": "Gib eine gültige Telefonnummer ein.",
+    "it": "Inserisci un numero di telefono valido."
+  },
+  "auth.verifyPhone.sendCodeError": {
+    "de": "Code konnte nicht gesendet werden.",
+    "it": "Impossibile inviare il codice."
+  },
+  "auth.verifyPhone.verifyCodeError": {
+    "de": "Code konnte nicht bestätigt werden.",
+    "it": "Impossibile verificare il codice."
+  },
+  "auth.verifyPhone.codeIncorrect": {
+    "de": "Falscher Code. Bitte versuche es erneut.",
+    "it": "Codice errato. Riprova."
+  },
+  "auth.verifyPhone.codeExpired": {
+    "de": "Der Code ist abgelaufen. Fordere einen neuen an.",
+    "it": "Il codice è scaduto. Richiedine uno nuovo."
+  },
+  "auth.verifyPhone.enterAllDigits": {
+    "de": "Gib alle 6 Ziffern ein.",
+    "it": "Inserisci tutte e 6 le cifre."
+  },
+  "auth.verifyPhone.resendCode": {
+    "de": "Code erneut senden",
+    "it": "Invia di nuovo il codice"
+  },
+  "auth.verifyPhone.resendSeconds": {
+    "de": "Erneut senden in {{seconds}} s",
+    "it": "Invia di nuovo tra {{seconds}} s"
+  },
+  "auth.verifyPhone.abandonTitle": {
+    "de": "Bestätigung verlassen?",
+    "it": "Vuoi uscire dalla verifica?"
+  },
+  "auth.verifyPhone.abandonMessage": {
+    "de": "Dein Fortschritt geht verloren.",
+    "it": "I tuoi progressi andranno persi."
+  },
+  "auth.verifyPhone.abandonConfirm": {
+    "de": "Verlassen",
+    "it": "Esci"
+  },
+  "auth.verifyPhone.deleteAccountError": {
+    "de": "Konto konnte nicht gelöscht werden.",
+    "it": "Impossibile eliminare l'account."
+  },
+  "auth.verifyPhone.sessionRestoreError": {
+    "de": "Sitzung konnte nicht wiederhergestellt werden.",
+    "it": "Impossibile ripristinare la sessione."
+  },
+  "auth.verifyPhoneInfo.pleaseVerifyTitle": {
+    "de": "Bitte bestätige deine Telefonnummer, um fortzufahren.",
+    "it": "Verifica il tuo numero di telefono per continuare."
+  },
+  "auth.verifyPhoneInfo.subtitle": {
+    "de": "Wir senden dir einen Bestätigungscode per SMS.",
+    "it": "Ti invieremo un codice di verifica via SMS."
+  },
+  "auth.verifyPhoneInfo.phonePlaceholder": {
+    "de": "+41 79 000 00 00",
+    "it": "+41 79 000 00 00"
+  },
+  "auth.verifyPhoneCode.screenTitle": {
+    "de": "Bestätige deine Telefonnummer",
+    "it": "Verifica il tuo numero di telefono"
+  },
+  "auth.verifyPhoneCode.screenSubtitle": {
+    "de": "Gib den 6-stelligen Code ein, den wir dir gesendet haben.",
+    "it": "Inserisci il codice a 6 cifre che ti abbiamo inviato."
+  },
+  "auth.verify.title": {
+    "de": "Bestätigung",
+    "it": "Verifica"
+  },
+  "auth.verify.subtitle": {
+    "de": "Gib den Code ein, den wir an dein Telefon gesendet haben.",
+    "it": "Inserisci il codice inviato al tuo telefono."
+  },
+  "auth.verify.smsFootnote": {
+    "de": "Es können Standard-SMS-Gebühren anfallen.",
+    "it": "Potrebbero essere applicate le tariffe SMS standard."
+  },
+  "auth.verify.yourNumber": {
+    "de": "deine Nummer",
+    "it": "il tuo numero"
+  },
+  "auth.verify.phoneNotFound": {
+    "de": "Telefonnummer nicht gefunden.",
+    "it": "Telefono non trovato."
+  },
+  "auth.verify.signInFailed": {
+    "de": "Anmeldung fehlgeschlagen.",
+    "it": "Accesso non riuscito."
+  },
+  "auth.verify.verifyError": {
+    "de": "Bestätigung nicht möglich.",
+    "it": "Impossibile verificare."
+  },
+  "auth.verify.testAuthError": {
+    "de": "Test-Authentifizierungsfehler.",
+    "it": "Errore di autenticazione di test."
+  },
+  "auth.checkEmail.messageGeneric": {
+    "de": "Wir haben einen Bestätigungslink an deine E-Mail gesendet.",
+    "it": "Abbiamo inviato un link di verifica alla tua e-mail."
+  },
+  "auth.checkEmail.messageWithEmail": {
+    "de": "Wir haben einen Bestätigungslink an {{email}} gesendet.",
+    "it": "Abbiamo inviato un link di verifica a {{email}}."
+  },
+  "auth.email": {
+    "de": "E-Mail",
+    "it": "E-mail"
+  },
+  "auth.emailPlaceholder": {
+    "de": "deine@email.com",
+    "it": "tuo@email.com"
+  },
+  "auth.password": {
+    "de": "Passwort",
+    "it": "Password"
+  },
+  "onboarding.step3.headline": {
+    "de": "Dein Marktplatz wartet auf dich",
+    "it": "Il tuo marketplace ti aspetta"
+  },
+  "onboarding.step3.subheadline": {
+    "de": "Schließe dich Tausenden Käufer:innen und Verkäufer:innen an",
+    "it": "Unisciti a migliaia di acquirenti e venditori"
+  },
+  "onboarding.step3.signUp": {
+    "de": "Bei Bloomi registrieren",
+    "it": "Iscriviti a Bloomi"
+  },
+  "onboarding.legal.prefix": {
+    "de": "Indem du fortfährst, stimmst du unseren",
+    "it": "Continuando, accetti i nostri"
+  },
+  "onboarding.legal.andRead": {
+    "de": "zu und hast unsere",
+    "it": "e dichiari di aver letto la nostra"
+  },
+  "onboarding.social.apple": {
+    "de": "Mit Apple fortfahren",
+    "it": "Continua con Apple"
+  },
+  "onboarding.social.google": {
+    "de": "Mit Google fortfahren",
+    "it": "Continua con Google"
+  },
+  "onboarding.social.facebook": {
+    "de": "Mit Facebook fortfahren",
+    "it": "Continua con Facebook"
+  },
+  "onboarding.social.facebookSoon": {
+    "de": "Facebook-Anmeldung kommt bald.",
+    "it": "L'accesso con Facebook arriverà presto."
+  },
+  "onboarding.social.unableSocial": {
+    "de": "Bei der Social-Anmeldung ist ein Fehler aufgetreten.",
+    "it": "Si è verificato un errore durante l'accesso social."
+  },
+  "onboarding.social.unableComplete": {
+    "de": "Anmeldung konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+    "it": "Impossibile completare l'accesso. Riprova."
+  },
+  "filters.brand": {
+    "de": "Marke",
+    "it": "Marca"
+  },
+  "filters.condition": {
+    "de": "Zustand",
+    "it": "Condizione"
+  },
+  "filters.other": {
+    "de": "Andere",
+    "it": "Altro"
+  },
+  "filters.fromChf": {
+    "de": "Ab {{value}} CHF",
+    "it": "Da {{value}} CHF"
+  },
+  "filters.upToChf": {
+    "de": "Bis {{value}} CHF",
+    "it": "Fino a {{value}} CHF"
+  },
+  "filters.categoriesCount": {
+    "de": "{{count}} Kategorien",
+    "it": "{{count}} categorie"
+  },
+  "filters.allItems": {
+    "de": "Alle Artikel",
+    "it": "Tutti gli articoli"
+  },
+  "filters.allFor": {
+    "de": "Alle {{value}}",
+    "it": "Tutti/e {{value}}"
+  },
+  "filters.popularForGender": {
+    "de": "Beliebt für {{gender}}",
+    "it": "Popolari per {{gender}}"
+  },
+  "filters.allBrands": {
+    "de": "Alle Marken",
+    "it": "Tutte le marche"
+  },
+  "filters.noBrandsFound": {
+    "de": "Keine Marken gefunden",
+    "it": "Nessuna marca trovata"
+  },
+  "filters.noColorsFound": {
+    "de": "Keine Farben gefunden",
+    "it": "Nessun colore trovato"
+  },
+  "filters.brandsLoadError": {
+    "de": "Marken konnten nicht geladen werden.",
+    "it": "Impossibile caricare le marche."
+  },
+  "filters.sizesLoadError": {
+    "de": "Größen konnten nicht geladen werden.",
+    "it": "Impossibile caricare le taglie."
+  },
+  "filters.colorsLoadError": {
+    "de": "Farben konnten nicht geladen werden.",
+    "it": "Impossibile caricare i colori."
+  },
+  "filters.conditionLoadError": {
+    "de": "Zustände konnten nicht geladen werden.",
+    "it": "Impossibile caricare le condizioni."
+  },
+  "filters.priceLoadError": {
+    "de": "Preisspanne konnte nicht geladen werden.",
+    "it": "Impossibile caricare la fascia di prezzo."
+  },
+  "filters.allGenderItems.woman": {
+    "de": "Alle Damenartikel",
+    "it": "Tutti gli articoli da donna"
+  },
+  "filters.allGenderItems.men": {
+    "de": "Alle Herrenartikel",
+    "it": "Tutti gli articoli da uomo"
+  },
+  "filters.allGenderItems.kids": {
+    "de": "Alle Kinderartikel",
+    "it": "Tutti gli articoli per bambini"
+  },
+  "filters.allGenderItems.baby": {
+    "de": "Alle Babyartikel",
+    "it": "Tutti gli articoli per bebè"
+  },
+  "filters.segment.womenClothing": {
+    "de": "Damenbekleidung",
+    "it": "Abbigliamento donna"
+  },
+  "filters.segment.womenShoes": {
+    "de": "Damenschuhe",
+    "it": "Scarpe donna"
+  },
+  "filters.segment.womenBags": {
+    "de": "Damentaschen",
+    "it": "Borse donna"
+  },
+  "filters.segment.womenAccessories": {
+    "de": "Damenaccessoires",
+    "it": "Accessori donna"
+  },
+  "filters.segment.menClothing": {
+    "de": "Herrenbekleidung",
+    "it": "Abbigliamento uomo"
+  },
+  "filters.segment.menShoes": {
+    "de": "Herrenschuhe",
+    "it": "Scarpe uomo"
+  },
+  "filters.segment.menBags": {
+    "de": "Herrentaschen",
+    "it": "Borse uomo"
+  },
+  "filters.segment.menAccessories": {
+    "de": "Herrenaccessoires",
+    "it": "Accessori uomo"
+  },
+  "filters.segment.kidsClothing": {
+    "de": "Kinderbekleidung",
+    "it": "Abbigliamento bambino"
+  },
+  "filters.segment.kidsShoes": {
+    "de": "Kinderschuhe",
+    "it": "Scarpe bambino"
+  },
+  "filters.segment.kidsBags": {
+    "de": "Kindertaschen",
+    "it": "Borse bambino"
+  },
+  "filters.segment.kidsAccessories": {
+    "de": "Kinderaccessoires",
+    "it": "Accessori bambino"
+  },
+  "filters.segment.kidsToys": {
+    "de": "Kinderspielzeug",
+    "it": "Giocattoli per bambini"
+  },
+  "filters.segment.kidsFurniture": {
+    "de": "Kindermöbel",
+    "it": "Arredi per bambini"
+  },
+  "filters.segment.kidsSchool": {
+    "de": "Kinder Schule",
+    "it": "Scuola bambini"
+  },
+  "filters.segment.babyClothing": {
+    "de": "Babybekleidung",
+    "it": "Abbigliamento bebè"
+  },
+  "filters.segment.babyShoes": {
+    "de": "Babyschuhe",
+    "it": "Scarpe bebè"
+  },
+  "filters.segment.babyAccessories": {
+    "de": "Babyaccessoires",
+    "it": "Accessori bebè"
+  },
+  "filters.segment.babyCare": {
+    "de": "Babypflege",
+    "it": "Cura bebè"
+  },
+  "filters.segment.babyToys": {
+    "de": "Babyspielzeug",
+    "it": "Giocattoli bebè"
+  },
+  "filters.sizeSections.womanItems": {
+    "de": "Damenbekleidung",
+    "it": "Abbigliamento donna"
+  },
+  "filters.sizeSections.womanShoes": {
+    "de": "Damenschuhe",
+    "it": "Scarpe donna"
+  },
+  "filters.sizeSections.menClothing": {
+    "de": "Herrenbekleidung",
+    "it": "Abbigliamento uomo"
+  },
+  "filters.sizeSections.menPants": {
+    "de": "Herrenhosen",
+    "it": "Pantaloni uomo"
+  },
+  "filters.sizeSections.menShirts": {
+    "de": "Herrenhemden",
+    "it": "Camicie uomo"
+  },
+  "filters.sizeSections.menShoes": {
+    "de": "Herrenschuhe",
+    "it": "Scarpe uomo"
+  },
+  "filters.sizeSections.kids": {
+    "de": "Kinderbekleidung",
+    "it": "Abbigliamento bambino"
+  },
+  "filters.sizeSections.kidsShoes": {
+    "de": "Kinderschuhe",
+    "it": "Scarpe bambino"
+  },
+  "filters.sizeSections.baby": {
+    "de": "Babybekleidung",
+    "it": "Abbigliamento bebè"
+  },
+  "filters.sizeSections.babyShoes": {
+    "de": "Babyschuhe",
+    "it": "Scarpe bebè"
+  },
+  "feed.emptyListings": {
+    "de": "Noch keine Artikel.",
+    "it": "Nessun annuncio per ora."
+  },
+  "feed.loadingFeed": {
+    "de": "Feed wird geladen…",
+    "it": "Caricamento del feed…"
+  },
+  "feed.loadError": {
+    "de": "Ladefehler",
+    "it": "Errore di caricamento"
+  },
+  "feed.listingDetail.sellerOnVacation": {
+    "de": "Urlaubsmodus",
+    "it": "Modalità vacanza"
+  },
+  "feed.listingDetail.sellerVacationTitle": {
+    "de": "Verkäufer im Urlaubsmodus",
+    "it": "Venditore in modalità vacanza"
+  },
+  "feed.listingDetail.sellerVacationMessage": {
+    "de": "Dieser Verkäufer hat den Urlaubsmodus aktiviert. Die Artikel bleiben sichtbar, können aber derzeit nicht gekauft werden.",
+    "it": "Questo venditore ha attivato la modalità vacanza. Gli annunci restano visibili ma al momento gli acquirenti non possono acquistarli."
+  },
+  "feed.listingDetail.pickup": {
+    "de": "Abholung vor Ort",
+    "it": "Ritiro a mano"
+  },
+  "feed.listingDetail.shipping": {
+    "de": "+ {{price}} CHF Versand",
+    "it": "+ {{price}} CHF di spedizione"
+  },
+  "feed.listingDetail.shippingPromo": {
+    "de": "Promo-Tarif",
+    "it": "Tariffa promo"
+  },
+  "feed.listingDetail.hoursAgo": {
+    "de": "vor {{count}} Std.",
+    "it": "{{count}} h fa"
+  },
+  "feed.listingDetail.daysAgo": {
+    "de": "vor {{count}} Tg.",
+    "it": "{{count}} g fa"
+  },
+  "feed.listingDetail.weeksAgo": {
+    "de": "vor {{count}} Wo.",
+    "it": "{{count}} sett. fa"
+  },
+  "feed.listingDetail.monthsAgo": {
+    "de": "vor {{count}} Mon.",
+    "it": "{{count}} mesi fa"
+  },
+  "feed.listingDetail.yearsAgo": {
+    "de": "vor {{count}} J.",
+    "it": "{{count}} anni fa"
+  },
+  "feed.makeOffer.blockedTitle": {
+    "de": "Angebot bereits in Bearbeitung",
+    "it": "Offerta già in corso"
+  },
+  "feed.makeOffer.pendingBlocked": {
+    "de": "Du hast bereits ein ausstehendes Angebot für diesen Artikel. Warte auf die Antwort des Verkäufers oder öffne die Unterhaltung.",
+    "it": "Hai già un'offerta in attesa per questo articolo. Attendi la risposta del venditore o apri la conversazione."
+  },
+  "feed.makeOffer.acceptedBlocked": {
+    "de": "Dein Angebot wurde angenommen. Schließe den Kauf über die Unterhaltung ab.",
+    "it": "La tua offerta è stata accettata. Completa l'acquisto dalla conversazione."
+  },
+  "feed.checkout.bankingFee": {
+    "de": "Bankgebühr ({{percent}}%)",
+    "it": "Commissione bancaria ({{percent}}%)"
+  },
+  "feed.checkout.buyerProtection": {
+    "de": "Käuferschutz ({{percent}}%)",
+    "it": "Protezione acquirente ({{percent}}%)"
+  },
+  "feed.checkout.country": {
+    "de": "Land",
+    "it": "Paese"
+  },
+  "feed.checkout.differentAddress": {
+    "de": "Andere Adresse verwenden",
+    "it": "Usa un indirizzo diverso"
+  },
+  "feed.checkout.enterManually": {
+    "de": "Adresse manuell eingeben",
+    "it": "Inserisci l'indirizzo manualmente"
+  },
+  "feed.checkout.itemPrice": {
+    "de": "Artikelpreis",
+    "it": "Prezzo dell'articolo"
+  },
+  "feed.checkout.noSavedAddressHint": {
+    "de": "Füge deine Postadresse in deinem Profil hinzu, um eine Versandbestellung abzuschließen.",
+    "it": "Aggiungi il tuo indirizzo postale nel profilo per completare un ordine con spedizione."
+  },
+  "feed.checkout.addAddressInProfile": {
+    "de": "Meine Adresse im Profil hinzufügen",
+    "it": "Aggiungi il mio indirizzo nel profilo"
+  },
+  "feed.checkout.shippingFee": {
+    "de": "Versandkosten",
+    "it": "Spese di spedizione"
+  },
+  "feed.checkout.shippingPromo": {
+    "de": "Kostenloser Versand (Promo)",
+    "it": "Spedizione gratuita (promo)"
+  },
+  "feed.checkout.pickupOnlyHint": {
+    "de": "Dieser Verkäufer bietet nur Abholung vor Ort an.",
+    "it": "Questo venditore offre solo il ritiro a mano."
+  },
+  "feed.checkout.shippingOnlyHint": {
+    "de": "Dieser Verkäufer bietet nur Versand an.",
+    "it": "Questo venditore offre solo la spedizione."
+  },
+  "feed.checkout.deliveryNotAllowed": {
+    "de": "Diese Liefermethode ist für diesen Artikel nicht verfügbar.",
+    "it": "Questo metodo di consegna non è disponibile per questo annuncio."
+  },
+  "feed.orderConfirmation.bankingFee": {
+    "de": "Bankgebühr",
+    "it": "Commissione bancaria"
+  },
+  "feed.pricing.bankingFee": {
+    "de": "Bankgebühr",
+    "it": "Commissione bancaria"
+  },
+  "feed.pricing.breakdownTitle": {
+    "de": "Preisaufschlüsselung",
+    "it": "Dettaglio del prezzo"
+  },
+  "feed.pricing.buyerProtection": {
+    "de": "Käuferschutz",
+    "it": "Protezione acquirente"
+  },
+  "feed.pricing.finalPrice": {
+    "de": "Endpreis",
+    "it": "Prezzo finale"
+  },
+  "feed.pricing.checkoutTotal": {
+    "de": "Gesamtbetrag beim Checkout",
+    "it": "Totale al checkout"
+  },
+  "feed.pricing.itemPrice": {
+    "de": "Artikelpreis",
+    "it": "Prezzo dell'articolo"
+  },
+  "feed.pricing.priceIncl": {
+    "de": "Preis inkl. Gebühren",
+    "it": "Prezzo incl. commissioni"
+  },
+  "feed.pricing.infoTitle": {
+    "de": "Endpreis ohne Lieferung",
+    "it": "Prezzo finale esclusa la consegna"
+  },
+  "feed.pricing.excludingDelivery": {
+    "de": "ohne Lieferung",
+    "it": "esclusa la consegna"
+  },
+  "feed.pricing.infoDescription": {
+    "de": "Dieser Preis beinhaltet den Artikelpreis, Käuferschutzgebühren und Servicegebühren. Lieferkosten werden beim Checkout hinzugefügt",
+    "it": "Questo prezzo include il prezzo dell'articolo, le commissioni di protezione acquirente e le commissioni di servizio. Le spese di consegna vengono aggiunte al checkout"
+  },
+  "feed.pricing.infoA11y": {
+    "de": "Preisinformationen",
+    "it": "Informazioni sul prezzo"
+  },
+  "feed.pricing.serviceGuarantee": {
+    "de": "Servicegarantie",
+    "it": "Garanzia di servizio"
+  },
+  "messages.offerCardLabel": {
+    "de": "Kaufangebot",
+    "it": "Offerta d'acquisto"
+  },
+  "messages.offerAcceptedBuyerHint": {
+    "de": "Schließe deinen Kauf mit dem Button unten ab.",
+    "it": "Completa il tuo acquisto usando il pulsante qui sotto."
+  },
+  "messages.offerAcceptedSellerHint": {
+    "de": "Warten auf die Zahlung des Käufers.",
+    "it": "In attesa del pagamento dell'acquirente."
+  },
+  "messages.includesBuyerProtection": {
+    "de": "Inklusive Käuferschutz",
+    "it": "Include la Protezione acquirente"
+  },
+  "messages.loadingConversation": {
+    "de": "Unterhaltung wird geladen…",
+    "it": "Caricamento della conversazione…"
+  },
+  "messages.noConversationsYet": {
+    "de": "Noch keine Unterhaltungen",
+    "it": "Nessuna conversazione per ora"
+  },
+  "messages.offerAcceptedSystem": {
+    "de": "Angebot angenommen.",
+    "it": "Offerta accettata."
+  },
+  "messages.generateShippingLabel": {
+    "de": "🔗 Mein Etikett erstellen",
+    "it": "🔗 Genera la mia etichetta"
+  },
+  "messages.generateLabelA11y": {
+    "de": "Mein Versandetikett erstellen",
+    "it": "Genera la mia etichetta di spedizione"
+  },
+  "messages.viewMyOrder": {
+    "de": "📦 Meine Bestellung ansehen",
+    "it": "📦 Vedi il mio ordine"
+  },
+  "messages.viewMyOrderA11y": {
+    "de": "Meine Bestellung ansehen",
+    "it": "Vedi il mio ordine"
+  },
+  "messages.sellerShipBannerTitle": {
+    "de": "🎉 Dein Artikel wurde verkauft!",
+    "it": "🎉 Il tuo articolo è stato venduto!"
+  },
+  "messages.sellerShipBannerShipping": {
+    "de": "Erstelle dein Swiss-Post-Etikett, um das Paket zu versenden.",
+    "it": "Genera la tua etichetta Swiss Post per spedire il pacco."
+  },
+  "messages.sellerShipBannerLetterAplus": {
+    "de": "⚠️ Bloomi erstellt noch kein Etikett für Lettre A+. Versende das Paket direkt über die Swiss Post und markiere es dann in deinen Bestellungen als versendet.",
+    "it": "⚠️ Bloomi non genera un'etichetta per Lettre A+. Spedisci il pacco direttamente con Swiss Post, poi segnalo come spedito nei tuoi ordini."
+  },
+  "messages.sellerShipBannerPickup": {
+    "de": "Vereinbare die Übergabe vor Ort mit deinem Käufer.",
+    "it": "Organizza la consegna a mano con il tuo acquirente."
+  },
+  "messages.system.orderPlacedParcel": {
+    "de": "🛍️ Bestellung aufgegeben — Die Zahlung ist gesichert. Der Verkäufer bereitet dein Paket vor.",
+    "it": "🛍️ Ordine effettuato — Il pagamento è sicuro. Il venditore preparerà il tuo pacco."
+  },
+  "messages.system.orderPlacedPickup": {
+    "de": "🛍️ Bestellung aufgegeben — Die Zahlung ist gesichert. Vereinbare die Übergabe vor Ort per Nachrichten.",
+    "it": "🛍️ Ordine effettuato — Il pagamento è sicuro. Organizza la consegna a mano tramite i messaggi."
+  },
+  "messages.system.orderPlacedParcelSeller": {
+    "de": "🎉 Artikel verkauft! Erstelle dein Swiss-Post-Etikett, um das Paket zu versenden.",
+    "it": "🎉 Articolo venduto! Genera la tua etichetta Swiss Post per spedire il pacco."
+  },
+  "messages.system.orderPlacedPickupSeller": {
+    "de": "🎉 Artikel verkauft! Vereinbare die Übergabe vor Ort mit deinem Käufer.",
+    "it": "🎉 Articolo venduto! Organizza la consegna a mano con il tuo acquirente."
+  },
+  "messages.system.orderAutoConfirmed": {
+    "de": "✅ Bestellung nach 7 Tagen automatisch bestätigt — Die Transaktion ist abgeschlossen. Danke, dass du Bloomi nutzt!",
+    "it": "✅ Ordine confermato automaticamente dopo 7 giorni — La transazione è conclusa. Grazie per usare Bloomi!"
+  },
+  "messages.system.orderReceiptConfirmed": {
+    "de": "✅ Erhalt bestätigt — Die Transaktion ist abgeschlossen. Danke, dass du Bloomi nutzt!",
+    "it": "✅ Ricezione confermata — La transazione è conclusa. Grazie per usare Bloomi!"
+  },
+  "messages.system.orderShipped": {
+    "de": "📦 Versandt! — Dein Paket ist unterwegs.",
+    "it": "📦 Spedito! — Il tuo pacco è in viaggio."
+  },
+  "messages.system.orderShippedTracking": {
+    "de": "📦 Versandt! [{{tracking}}] — Dein Paket ist unterwegs.",
+    "it": "📦 Spedito! [{{tracking}}] — Il tuo pacco è in viaggio."
+  },
+  "messages.deleteConversationTitle": {
+    "de": "Unterhaltung löschen?",
+    "it": "Eliminare la conversazione?"
+  },
+  "messages.deleteConversationConfirm": {
+    "de": "Diese Unterhaltung wird nur für dich gelöscht. Die andere Person sieht sie weiterhin. Sie erscheint wieder, wenn eine neue Nachricht gesendet wird.",
+    "it": "Questa conversazione verrà eliminata solo per te. L'altra persona continuerà a vederla. Riapparirà se verrà inviato un nuovo messaggio."
+  },
+  "messages.deleteConversationError": {
+    "de": "Diese Unterhaltung konnte nicht gelöscht werden.",
+    "it": "Impossibile eliminare questa conversazione."
+  },
+  "messages.events.orderConfirmedSellerLetterAplusBody": {
+    "de": "{{name}} hat bezahlt. Versende das Lettre A+-Paket direkt über die Swiss Post (Bloomi erstellt für dieses Format kein Etikett).",
+    "it": "{{name}} ha pagato. Spedisci il pacco Lettre A+ direttamente con Swiss Post (Bloomi non genera un'etichetta per questo formato)."
+  },
+  "messages.events.labelPreparingSellerLetterAplusBody": {
+    "de": "Versende das Lettre A+-Paket direkt über die Swiss Post. Bloomi erstellt für dieses Format kein Etikett.",
+    "it": "Spedisci il pacco Lettre A+ direttamente con Swiss Post. Bloomi non genera un'etichetta per questo formato."
+  },
+  "sell.sellingHeader": {
+    "de": "Einen Artikel verkaufen",
+    "it": "Vendi un articolo"
+  },
+  "sell.boostListing3d": {
+    "de": "Hervorgehobene Anzeige — 3 Tage",
+    "it": "Annuncio in evidenza — 3 giorni"
+  },
+  "sell.boostListing7d": {
+    "de": "Hervorgehobene Anzeige — 7 Tage",
+    "it": "Annuncio in evidenza — 7 giorni"
+  },
+  "sell.boostDressing3d": {
+    "de": "Kleiderschrank — 3 Tage",
+    "it": "Armadio — 3 giorni"
+  },
+  "sell.boostDressing7d": {
+    "de": "Kleiderschrank — 7 Tage",
+    "it": "Armadio — 7 giorni"
+  },
+  "sell.conditionDescNew": {
+    "de": "Neuer Artikel mit noch befestigten Etiketten.",
+    "it": "Articolo nuovo con etichette ancora attaccate."
+  },
+  "sell.conditionDescLikeNew": {
+    "de": "Nie getragen, ohne Etiketten oder mit entfernten Etiketten.",
+    "it": "Mai indossato, senza etichette o con etichette rimosse."
+  },
+  "sell.conditionDescGood": {
+    "de": "Leicht getragen, ohne größere Mängel.",
+    "it": "Indossato poco, senza difetti importanti."
+  },
+  "sell.conditionDescFair": {
+    "de": "Getragen mit sichtbaren Gebrauchsspuren, aber voll funktionsfähig.",
+    "it": "Indossato con segni visibili d'uso ma perfettamente funzionale."
+  },
+  "sell.conditionDescPoor": {
+    "de": "Deutlich getragen, mit sichtbarer Abnutzung oder kleineren Mängeln.",
+    "it": "Molto usato, con usura evidente o piccoli difetti."
+  },
+  "sell.parcelSize.title": {
+    "de": "Paketgröße",
+    "it": "Dimensione del pacco"
+  },
+  "sell.parcelSize.letterAplus": {
+    "de": "Lettre A+ (max. 500 g, 2 cm dick)",
+    "it": "Lettre A+ (max 500 g, spessore 2 cm)"
+  },
+  "sell.parcelSize.small": {
+    "de": "Klein (bis 2 kg)",
+    "it": "Piccolo (fino a 2 kg)"
+  },
+  "sell.parcelSize.large": {
+    "de": "Groß (bis 9 kg)",
+    "it": "Grande (fino a 9 kg)"
+  },
+  "sell.parcelSize.xlarge": {
+    "de": "Extragroß (bis 30 kg)",
+    "it": "Extra large (fino a 30 kg)"
+  },
+  "sell.parcelSize.required": {
+    "de": "Bitte wähle eine Paketgröße aus.",
+    "it": "Seleziona una dimensione del pacco."
+  },
+  "sell.parcelSize.shippingSuffix": {
+    "de": "· Versand {{price}}",
+    "it": "· Spedizione {{price}}"
+  },
+  "sell.parcelSize.letterAplusLabelNote": {
+    "de": "⚠️ Bloomi erstellt für dieses Format noch kein Versandetikett. Käufer und Verkäufer müssen direkt über die Swiss Post gehen.",
+    "it": "⚠️ Bloomi non genera ancora un'etichetta di spedizione per questo formato. Acquirente e venditore devono passare direttamente da Swiss Post."
+  },
+  "sell.deliveryMode.title": {
+    "de": "Liefermethode",
+    "it": "Metodo di consegna"
+  },
+  "sell.deliveryMode.both": {
+    "de": "Beide Optionen",
+    "it": "Entrambe le opzioni"
+  },
+  "sell.deliveryMode.bothHint": {
+    "de": "Der Käufer wählt Versand oder Abholung vor Ort.",
+    "it": "L'acquirente sceglie tra spedizione e ritiro a mano."
+  },
+  "sell.deliveryMode.shipping": {
+    "de": "Versand mit Swiss Post",
+    "it": "Spedizione Swiss Post"
+  },
+  "sell.deliveryMode.shippingHint": {
+    "de": "Du versendest das Paket mit einem Bloomi-Etikett.",
+    "it": "Spedisci il pacco con un'etichetta Bloomi."
+  },
+  "sell.deliveryMode.pickup": {
+    "de": "Nur Abholung vor Ort",
+    "it": "Solo ritiro a mano"
+  },
+  "sell.deliveryMode.pickupHint": {
+    "de": "Der Käufer holt den Artikel bei dir ab.",
+    "it": "L'acquirente ritira l'articolo da te."
+  },
+  "sell.brand": {
+    "de": "Marke",
+    "it": "Marca"
+  },
+  "sell.condition": {
+    "de": "Zustand",
+    "it": "Condizione"
+  },
+  "sell.description": {
+    "de": "Beschreibung",
+    "it": "Descrizione"
+  },
+  "sell.city": {
+    "de": "Stadt",
+    "it": "Città"
+  },
+  "sell.priceChf": {
+    "de": "Preis (CHF)",
+    "it": "Prezzo (CHF)"
+  },
+  "sell.invalidPrice": {
+    "de": "Bitte gib einen gültigen Preis ein.",
+    "it": "Inserisci un prezzo valido."
+  },
+  "sell.unablePublish": {
+    "de": "Anzeige konnte nicht veröffentlicht werden.",
+    "it": "Impossibile pubblicare l'annuncio."
+  },
+  "sell.photosUploadAllFailed": {
+    "de": "Keine Fotos konnten gespeichert werden. Die Anzeige wurde nicht veröffentlicht — bitte versuche es erneut.",
+    "it": "Nessuna foto è stata salvata. L'annuncio non è stato pubblicato — riprova."
+  },
+  "sell.photosPartialUploadTitle": {
+    "de": "Einige Fotos wurden nicht gespeichert",
+    "it": "Alcune foto non sono state salvate"
+  },
+  "sell.photosPartialUploadBody": {
+    "de": "{{uploaded}} von {{total}} Fotos wurden gespeichert. Du kannst die restlichen unter \"Anzeige bearbeiten\" hinzufügen.",
+    "it": "{{uploaded}} foto su {{total}} sono state salvate. Puoi aggiungere le altre da \"Modifica annuncio\"."
+  },
+  "sell.characterLeft": {
+    "de": "{{count}} Zeichen übrig",
+    "it": "{{count}} caratteri rimanenti"
+  },
+  "sell.chooseNaturalLight": {
+    "de": "Natürliches Licht wählen",
+    "it": "Scegli la luce naturale"
+  },
+  "sell.chooseOption": {
+    "de": "Wähle eine Option",
+    "it": "Scegli un'opzione"
+  },
+  "sell.payToFeatureItem": {
+    "de": "Bezahle, um diesen Artikel hervorzuheben",
+    "it": "Paga per mettere in evidenza questo articolo"
+  },
+  "sell.payToFeatureCloset": {
+    "de": "Bezahle, um deinen Kleiderschrank hervorzuheben",
+    "it": "Paga per mettere in evidenza il tuo armadio"
+  },
+  "sell.photoTipsBody": {
+    "de": "Nutze natürliches Licht und einen neutralen Hintergrund. Zeige eventuelle Mängel deutlich.",
+    "it": "Usa luce naturale e uno sfondo neutro. Mostra chiaramente eventuali difetti."
+  },
+  "sell.productGoingLive": {
+    "de": "Dein Produkt geht live!",
+    "it": "Il tuo articolo sta andando online!"
+  },
+  "sell.publishListing": {
+    "de": "Anzeige veröffentlichen",
+    "it": "Pubblica annuncio"
+  },
+  "profile.wallet.confirmPayoutMessage": {
+    "de": "{{amount}} CHF auf dein Bankkonto überweisen?",
+    "it": "Trasferire {{amount}} CHF sul tuo conto bancario?"
+  },
+  "profile.wallet.missingStripeUrl": {
+    "de": "Stripe-Dashboard-URL fehlt.",
+    "it": "Manca l'URL della dashboard Stripe."
+  },
+  "profile.wallet.payoutInitiated": {
+    "de": "Auszahlung eingeleitet.",
+    "it": "Pagamento avviato."
+  },
+  "profile.wallet.unableCreatePayout": {
+    "de": "Auszahlung konnte nicht erstellt werden.",
+    "it": "Impossibile creare il pagamento."
+  },
+  "profile.wallet.unableLoadBalance": {
+    "de": "Guthaben konnte nicht geladen werden.",
+    "it": "Impossibile caricare il saldo."
+  },
+  "profile.activateSeller.incompleteOnboarding": {
+    "de": "Stripe benötigt weitere Informationen. Starte die Bankverbindung erneut, um abzuschließen.",
+    "it": "Stripe ha bisogno di ulteriori informazioni. Riavvia il collegamento bancario per completare."
+  },
+  "profile.activateSeller.pendingReview": {
+    "de": "Dein Antrag wurde an Stripe übermittelt.",
+    "it": "La tua richiesta è stata inviata a Stripe."
+  },
+  "profile.activateSeller.pendingReviewSubtitle": {
+    "de": "Stripe prüft dein Konto noch. Du kannst bereits auf Bloomi verkaufen; Auszahlungen starten nach der Freigabe.",
+    "it": "Stripe sta ancora verificando il tuo account. Puoi già vendere su Bloomi; i pagamenti inizieranno una volta approvato."
+  },
+  "profile.activateSeller.retryCheck": {
+    "de": "Erneut prüfen",
+    "it": "Controlla di nuovo"
+  },
+  "profile.activateSeller.screenTitle": {
+    "de": "Verkäuferkonto aktivieren",
+    "it": "Attiva account venditore"
+  },
+  "profile.activateSeller.activatedTitle": {
+    "de": "Dein Verkäuferkonto ist bereit",
+    "it": "Il tuo account venditore è pronto"
+  },
+  "profile.activateSeller.activatedSubtitle": {
+    "de": "Du kannst jetzt Auszahlungen auf Bloomi erhalten.",
+    "it": "Ora puoi ricevere pagamenti su Bloomi."
+  },
+  "profile.activateSeller.unableStartOnboarding": {
+    "de": "Stripe-Onboarding konnte nicht gestartet werden.",
+    "it": "Impossibile avviare l'onboarding Stripe."
+  },
+  "profile.vacationModeInfo": {
+    "de": "Dieser Modus pausiert deine Anzeigen vorübergehend: Sie bleiben sichtbar, aber Käufer können sie nicht kaufen.",
+    "it": "Questa modalità mette temporaneamente in pausa i tuoi annunci: restano visibili, ma gli acquirenti non possono acquistarli."
+  },
+  "profile.editProfileScreen.username": {
+    "de": "Benutzername",
+    "it": "Nome utente"
+  },
+  "profile.editProfileScreen.myLocation": {
+    "de": "Mein Standort",
+    "it": "La mia posizione"
+  },
+  "profile.editProfileScreen.selectLocation": {
+    "de": "Standort auswählen",
+    "it": "Seleziona posizione"
+  },
+  "profile.editProfileScreen.chooseCanton": {
+    "de": "Kanton wählen",
+    "it": "Scegli cantone"
+  },
+  "profile.editProfileScreen.locationHelp": {
+    "de": "Dein Standort hilft Käufer:innen, Artikel in ihrer Nähe zu finden.",
+    "it": "La tua posizione aiuta gli acquirenti a trovare articoli vicino a loro."
+  },
+  "profile.accountSettings.change": {
+    "de": "Ändern",
+    "it": "Modifica"
+  },
+  "profile.accountSettings.changeEmailTitle": {
+    "de": "E-Mail ändern",
+    "it": "Modifica e-mail"
+  },
+  "profile.accountSettings.deleteConfirmMessage": {
+    "de": "Möchtest du dein Konto wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "it": "Sei sicuro di voler eliminare il tuo account? Questa azione non può essere annullata."
+  },
+  "profile.accountSettings.phoneChangeDisclaimer": {
+    "de": "Das Ändern deiner Telefonnummer erfordert eine Bestätigung.",
+    "it": "La modifica del tuo numero richiede una verifica."
+  },
+  "profile.accountSettings.saving": {
+    "de": "Speichern…",
+    "it": "Salvataggio…"
+  },
+  "profile.notificationsScreen.empty": {
+    "de": "Noch keine Benachrichtigungen",
+    "it": "Nessuna notifica per ora"
+  },
+  "profile.notificationsScreen.markReadPartial": {
+    "de": "Einige Benachrichtigungen konnten nicht als gelesen markiert werden.",
+    "it": "Alcune notifiche non hanno potuto essere segnate come lette."
+  },
+  "profile.orders.awaitingPickup": {
+    "de": "Warten auf Übergabe",
+    "it": "In attesa della consegna a mano"
+  },
+  "profile.orders.awaitingPickupSale": {
+    "de": "Warten auf Übergabe an den Käufer",
+    "it": "In attesa della consegna all'acquirente"
+  },
+  "profile.orders.trackingNumber": {
+    "de": "Sendungsverfolgung: {{number}}",
+    "it": "Tracking: {{number}}"
+  },
+  "profile.orders.generateSwissPostLabel": {
+    "de": "Swiss-Post-Etikett erstellen",
+    "it": "Genera etichetta Swiss Post"
+  },
+  "profile.orders.letterAplusShipNote": {
+    "de": "⚠️ Bloomi erstellt kein Etikett für Lettre A+. Versende das Paket direkt über die Swiss Post und markiere es dann als versendet.",
+    "it": "⚠️ Bloomi non genera un'etichetta per Lettre A+. Spedisci il pacco direttamente con Swiss Post, poi segnalo come spedito."
+  },
+  "profile.orders.unableConfirmWithDetails": {
+    "de": "Erhalt konnte nicht bestätigt werden: {{message}}",
+    "it": "Impossibile confermare la ricezione: {{message}}"
+  },
+  "profile.orders.unableCancelWithDetails": {
+    "de": "Bestellung konnte nicht storniert werden: {{message}}",
+    "it": "Impossibile annullare l'ordine: {{message}}"
+  },
+  "profile.orders.shippingAddressIncompleteForOrder": {
+    "de": "Die Lieferadresse für diese Bestellung ist unvollständig.",
+    "it": "L'indirizzo di spedizione per questo ordine è incompleto."
+  },
+  "profile.orders.cacheUnavailable": {
+    "de": "Lokaler Speicher ist nicht verfügbar.",
+    "it": "L'archiviazione locale non è disponibile."
+  },
+  "profile.orders.disputeEmailSubject": {
+    "de": "Bestellstreitfall",
+    "it": "Controversia ordine"
+  },
+  "profile.orders.disputeEmailBody": {
+    "de": "Bestell-ID: {{orderId}}",
+    "it": "ID ordine: {{orderId}}"
+  },
+  "profile.orders.unableShippedWithDetails": {
+    "de": "Bestellung konnte nicht als versendet markiert werden: {{message}}",
+    "it": "Impossibile segnare l'ordine come spedito: {{message}}"
+  },
+  "profile.orders.noOrdersYet": {
+    "de": "Noch keine Bestellungen",
+    "it": "Nessun ordine per ora"
+  },
+  "profile.orders.copyOrderId": {
+    "de": "Bestell-ID kopieren",
+    "it": "Copia ID ordine"
+  },
+  "profile.orders.openDispute": {
+    "de": "Streitfall eröffnen",
+    "it": "Apri contestazione"
+  },
+  "profile.orders.disputeMessage": {
+    "de": "Beschreibe das Problem mit deiner Bestellung. Unser Team wird es prüfen.",
+    "it": "Descrivi il problema con il tuo ordine. Il nostro team lo esaminerà."
+  },
+  "profile.orders.sellerCommission": {
+    "de": "Verkäuferprovision",
+    "it": "Commissione venditore"
+  },
+  "profile.orders.sellerPayout": {
+    "de": "Auszahlung an Verkäufer",
+    "it": "Pagamento venditore"
+  },
+  "profile.orders.sendEmail": {
+    "de": "E-Mail senden",
+    "it": "Invia e-mail"
+  },
+  "profile.orders.senderAddressTitle": {
+    "de": "Absenderadresse",
+    "it": "Indirizzo del mittente"
+  },
+  "profile.orders.senderAddressSubtitle": {
+    "de": "Gib die Adresse ein, von der du versenden wirst.",
+    "it": "Inserisci l'indirizzo da cui spedirai."
+  },
+  "profile.orders.detail.progressTitle": {
+    "de": "Bestellfortschritt",
+    "it": "Stato dell'ordine"
+  },
+  "profile.orders.stepper.labelGenerated": {
+    "de": "Etikett erstellt",
+    "it": "Etichetta generata"
+  },
+  "profile.orders.stepper.parcelDeposited": {
+    "de": "Paket abgegeben",
+    "it": "Pacco consegnato"
+  },
+  "profile.orders.stepper.parcelDepositedSeller": {
+    "de": "Paket abgegeben",
+    "it": "Pacco consegnato"
+  },
+  "profile.orders.stepper.parcelInTransit": {
+    "de": "Paket unterwegs",
+    "it": "Pacco in transito"
+  },
+  "profile.orders.stepper.parcelReceived": {
+    "de": "Paket erhalten",
+    "it": "Pacco ricevuto"
+  },
+  "profile.orders.stepper.awaitingReceipt": {
+    "de": "Warten auf Zustellung",
+    "it": "In attesa di ricezione"
+  },
+  "profile.orders.stepper.buyerConfirm": {
+    "de": "Käufer bestätigt",
+    "it": "Conferma acquirente"
+  },
+  "profile.orders.stepper.transactionComplete": {
+    "de": "Transaktion abgeschlossen",
+    "it": "Transazione completata"
+  },
+  "profile.orders.stepper.paymentReleased": {
+    "de": "Zahlung freigegeben",
+    "it": "Pagamento sbloccato"
+  },
+  "profile.orders.stepper.pickupPaidBuyer": {
+    "de": "Bestellung bestätigt",
+    "it": "Ordine confermato"
+  },
+  "profile.orders.stepper.pickupPaidSeller": {
+    "de": "Bestellung bestätigt",
+    "it": "Ordine confermato"
+  },
+  "profile.orders.stepper.pickupHandoff": {
+    "de": "Abholung vor Ort",
+    "it": "Ritiro a mano"
+  },
+  "profile.orders.stepper.inProgress": {
+    "de": "In Bearbeitung",
+    "it": "In corso"
+  },
+  "profile.orders.stepper.pending": {
+    "de": "Ausstehend",
+    "it": "In attesa"
+  },
+  "profile.blockedUsers.intro": {
+    "de": "Blockierte Nutzer können dich nicht kontaktieren oder deine Anzeigen sehen.",
+    "it": "Gli utenti bloccati non possono contattarti né vedere i tuoi annunci."
+  },
+  "profile.blockedUsers.emptyHint": {
+    "de": "Nutzer, die du blockierst, erscheinen hier.",
+    "it": "Gli utenti che blocchi appariranno qui."
+  },
+  "profile.leaveReview.reviewReceivedBody": {
+    "de": "Sieh dir an, was die Person über dich gesagt hat.",
+    "it": "Scopri cosa ha detto di te."
+  },
+  "profile.leaveReview.youAreRating": {
+    "de": "Du bewertest",
+    "it": "Stai valutando"
+  },
+  "profile.leaveReview.submitReview": {
+    "de": "Bewertung absenden",
+    "it": "Invia recensione"
+  },
+  "profile.leaveReview.alreadyReviewed": {
+    "de": "Du hast diese Bestellung bereits bewertet.",
+    "it": "Hai già recensito questo ordine."
+  },
+  "profile.leaveReview.submitError": {
+    "de": "Bewertung konnte nicht gesendet werden.",
+    "it": "Impossibile inviare la recensione."
+  },
+  "profile.editListing.uploadPhotos": {
+    "de": "Fotos hochladen",
+    "it": "Carica foto"
+  },
+  "profile.editListing.addUpToPhotos": {
+    "de": "Füge bis zu 5 Fotos hinzu.",
+    "it": "Aggiungi fino a 5 foto."
+  },
+  "profile.editListing.loading": {
+    "de": "Anzeige wird geladen…",
+    "it": "Caricamento annuncio…"
+  },
+  "profile.publicProfile.reviewsCount": {
+    "de": "Bewertungen ({{count}})",
+    "it": "Recensioni ({{count}})"
+  },
+  "profile.publicProfile.listingMenu": {
+    "de": "Anzeigenmenü",
+    "it": "Menu annuncio"
+  },
+  "profile.publicProfile.blockTitle": {
+    "de": "Nutzer blockieren",
+    "it": "Blocca utente"
+  },
+  "profile.publicProfile.couldNotBlock": {
+    "de": "Dieser Nutzer konnte nicht blockiert werden.",
+    "it": "Impossibile bloccare questo utente."
+  },
+  "profile.publicProfile.permissionRequired": {
+    "de": "Berechtigung erforderlich",
+    "it": "Autorizzazione richiesta"
+  },
+  "profile.publicProfile.safetyMenuMessage": {
+    "de": "Sicherheitsoptionen",
+    "it": "Opzioni di sicurezza"
+  },
+  "profile.publicProfile.unableCreateConversation": {
+    "de": "Unterhaltung konnte nicht gestartet werden.",
+    "it": "Impossibile avviare una conversazione."
+  },
+  "profile.publicProfile.unableFollow": {
+    "de": "Diesem Nutzer kann nicht gefolgt werden.",
+    "it": "Impossibile seguire questo utente."
+  },
+  "profile.publicProfile.unableLoadProfile": {
+    "de": "Profil konnte nicht geladen werden.",
+    "it": "Impossibile caricare il profilo."
+  },
+  "profile.publicProfile.unableUpdateCover": {
+    "de": "Titelbild konnte nicht aktualisiert werden.",
+    "it": "Impossibile aggiornare la foto di copertina."
+  },
+  "profile.sendFeedback": {
+    "de": "Feedback senden",
+    "it": "Invia feedback"
+  },
+  "profile.walletScreenTitle": {
+    "de": "Wallet",
+    "it": "Portafoglio"
+  },
+  "app.termsModal.title": {
+    "de": "Nutzungsbedingungen",
+    "it": "Termini di utilizzo"
+  },
+  "app.termsModal.body": {
+    "de": "Indem du ein Konto erstellst oder Bloomi nutzt, stimmst du unseren Nutzungsbedingungen und unserer Datenschutzrichtlinie zu. Du verpflichtest dich, andere Nutzer respektvoll zu behandeln, keine illegalen, irreführenden oder unangemessenen Inhalte zu veröffentlichen und unsere Sicherheits- und Moderationsregeln einzuhalten. Gemeldete Inhalte können überprüft und entfernt werden.",
+    "it": "Creando un account o utilizzando Bloomi, accetti i nostri Termini di utilizzo e la nostra Informativa sulla privacy. Accetti di trattare gli altri utenti con rispetto, di non pubblicare contenuti illegali, ingannevoli o inappropriati e di seguire le nostre regole di sicurezza e moderazione. I contenuti segnalati possono essere esaminati e rimossi."
+  },
+  "app.termsModal.readFullTerms": {
+    "de": "Vollständige Nutzungsbedingungen lesen",
+    "it": "Leggi i Termini di utilizzo completi"
+  },
+  "app.termsModal.readPrivacy": {
+    "de": "Datenschutzrichtlinie lesen",
+    "it": "Leggi l'Informativa sulla privacy"
+  },
+  "app.termsModal.accept": {
+    "de": "Ich akzeptiere",
+    "it": "Accetto"
+  },
+  "errors.pageNotFound.title": {
+    "de": "Seite nicht gefunden",
+    "it": "Pagina non trovata"
+  },
+  "errors.pageNotFound.message": {
+    "de": "Diese Seite existiert nicht oder wurde verschoben.",
+    "it": "Questa pagina non esiste o è stata spostata."
+  },
+  "push.likeListing.title": {
+    "de": "❤️ Deine Anzeige wurde gelikt",
+    "it": "❤️ Il tuo annuncio ha ricevuto un like"
+  },
+  "push.likeListing.body": {
+    "de": "Senke den Preis innerhalb der nächsten Stunde um 1–2 CHF, um schneller zu verkaufen!",
+    "it": "Abbassa il prezzo di 1–2 CHF entro un'ora per vendere più in fretta!"
+  },
+  "push.likesHot.title": {
+    "de": "🔥 Deine Anzeige ist sehr beliebt!",
+    "it": "🔥 Il tuo annuncio piace tantissimo!"
+  },
+  "push.likesHot.body": {
+    "de": "Mehrere Personen haben sie gespeichert. Ein guter Zeitpunkt, um den Verkauf abzuschließen!",
+    "it": "Diverse persone l'hanno salvato. È il momento giusto per concludere una vendita!"
+  },
+  "push.newOffer.title": {
+    "de": "💸 Neues Angebot erhalten",
+    "it": "💸 Nuova offerta ricevuta"
+  },
+  "push.newOffer.body": {
+    "de": "Ein Käufer hat {{amount}} CHF für deine Anzeige geboten.",
+    "it": "Un acquirente ha offerto {{amount}} CHF per il tuo annuncio."
+  },
+  "push.urgencySomeoneElse.title": {
+    "de": "⚠️ Jemand anderes interessiert sich für diese Anzeige",
+    "it": "⚠️ Qualcun altro è interessato a questo annuncio"
+  },
+  "push.urgencySomeoneElse.body": {
+    "de": "Warte nicht zu lange — andere schauen sie sich auch an.",
+    "it": "Non aspettare troppo — anche altre persone la stanno guardando."
+  },
+  "push.urgencySellingFast.title": {
+    "de": "🔥 Diese Anzeige geht schnell weg!",
+    "it": "🔥 Questo annuncio sta andando via in fretta!"
+  },
+  "push.urgencySellingFast.body": {
+    "de": "Sie bekommt gerade sehr viel Aufmerksamkeit.",
+    "it": "Sta ricevendo molta attenzione in questo momento."
+  },
+  "push.newFollower.title": {
+    "de": "👋 Neue:r Follower:in",
+    "it": "👋 Nuovo follower"
+  },
+  "push.newFollower.body": {
+    "de": "{{name}} folgt dir jetzt.",
+    "it": "{{name}} ha iniziato a seguirti."
+  }
+}

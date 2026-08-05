@@ -14,10 +14,6 @@ export default function OnboardingLayout() {
       }}
     >
       <Stack.Screen
-        name="splash"
-        options={{ headerShown: false, gestureEnabled: true }}
-      />
-      <Stack.Screen
         name="step-1"
         options={{ headerShown: false, gestureEnabled: true }}
       />

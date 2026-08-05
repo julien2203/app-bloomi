@@ -15,7 +15,8 @@
     "eas-build-post-install": "npm run icons:generate",
     "splash:generate": "node ./scripts/generate-splash.mjs",
     "locales:build": "node ./scripts/build-locale-files.mjs",
-    "fees:test": "node scripts/test-fees.mjs"
+    "fees:test": "node scripts/test-fees.mjs",
+    "images:backfill-cards": "node --env-file=.env.local scripts/backfill-listing-card-images.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

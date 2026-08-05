@@ -5,20 +5,28 @@ import { supabase } from './supabase';
 
 import en from '../locales/en.json';
 import fr from '../locales/fr.json';
+import de from '../locales/de.json';
+import it from '../locales/it.json';
+import catalogEn from '../locales/catalog/en.json';
+import catalogFr from '../locales/catalog/fr.json';
+import catalogDe from '../locales/catalog/de.json';
+import catalogIt from '../locales/catalog/it.json';
 
-export const SUPPORTED_LANGUAGES = ['en', 'fr'] as const;
+export const SUPPORTED_LANGUAGES = ['fr', 'en', 'de', 'it'] as const;
 export type AppLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-export const DEFAULT_LANGUAGE: AppLanguage = 'en';
+export const DEFAULT_LANGUAGE: AppLanguage = 'fr';
 export const LANGUAGE_STORAGE_KEY = 'bloomi_app_language_v1';
 
 const resources = {
-  en: { translation: en },
-  fr: { translation: fr }
+  fr: { translation: { ...fr, catalog: catalogFr } },
+  en: { translation: { ...en, catalog: catalogEn } },
+  de: { translation: { ...de, catalog: catalogDe } },
+  it: { translation: { ...it, catalog: catalogIt } }
 } as const;
 
 export function normalizeLanguage(lang: string | null | undefined): AppLanguage {
   const code = lang?.trim().toLowerCase().split('-')[0];
-  if (code === 'en' || code === 'fr') {
+  if (code === 'en' || code === 'fr' || code === 'de' || code === 'it') {
     return code;
   }
   return DEFAULT_LANGUAGE;
@@ -28,7 +36,12 @@ try {
   void i18n.use(initReactI18next).init({
     resources,
     lng: DEFAULT_LANGUAGE,
-    fallbackLng: DEFAULT_LANGUAGE,
+    fallbackLng: {
+      de: ['en', 'fr'],
+      it: ['en', 'fr'],
+      en: ['fr'],
+      default: ['fr']
+    },
     supportedLngs: [...SUPPORTED_LANGUAGES],
     interpolation: { escapeValue: false },
     react: { useSuspense: false }
@@ -36,10 +49,10 @@ try {
 } catch (error) {
   console.warn('[i18n] init failed, falling back to English:', error);
   void i18n.use(initReactI18next).init({
-    resources: { en: { translation: en } },
+    resources: { fr: { translation: fr }, en: { translation: en } },
     lng: DEFAULT_LANGUAGE,
-    fallbackLng: DEFAULT_LANGUAGE,
-    supportedLngs: ['en'],
+    fallbackLng: 'fr',
+    supportedLngs: ['fr', 'en'],
     interpolation: { escapeValue: false },
     react: { useSuspense: false }
   });
@@ -73,18 +86,21 @@ export async function fetchProfileLanguage(userId: string): Promise<AppLanguage 
   return normalizeLanguage(String(data.language));
 }
 
-/** Profil connecté → `profiles.language`, sinon AsyncStorage, sinon `en`. */
+/** Profil connecté → préférence locale, sinon profil, sinon `fr`. */
 export async function resolveAppLanguage(userId?: string | null): Promise<AppLanguage> {
+  const stored = await getStoredLanguage();
+  if (stored) {
+    return stored;
+  }
+
   if (userId) {
     const profileLang = await fetchProfileLanguage(userId);
     if (profileLang) {
-      await setStoredLanguage(profileLang);
       return profileLang;
     }
   }
 
-  const stored = await getStoredLanguage();
-  return stored ?? DEFAULT_LANGUAGE;
+  return DEFAULT_LANGUAGE;
 }
 
 export async function applyAppLanguage(lang: AppLanguage): Promise<void> {
@@ -112,6 +128,10 @@ export async function saveProfileLanguage(
 export async function initAppLanguage(userId?: string | null): Promise<AppLanguage> {
   const lang = await resolveAppLanguage(userId ?? undefined);
   await i18n.changeLanguage(lang);
+  const stored = await getStoredLanguage();
+  if (!stored) {
+    await setStoredLanguage(lang);
+  }
   return lang;
 }
 

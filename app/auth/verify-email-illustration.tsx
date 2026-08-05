@@ -19,7 +19,7 @@ export default function VerifyEmailIllustrationScreen() {
 
   const handleLogout = () => {
     // TODO: Implémenter la déconnexion
-    router.replace('/onboarding/splash');
+    router.replace('/onboarding/step-1');
   };
 
   return (

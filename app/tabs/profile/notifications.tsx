@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -8,7 +9,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../../lib/supabase';
@@ -16,6 +17,11 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
 import { theme } from '../../../lib/theme';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import {
+  navigateBackFromProfileShortcut,
+  ordersShortcutHref,
+  pickProfileShortcutOrigin
+} from '../../../lib/navigation/feedShortcutNav';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
@@ -65,14 +71,16 @@ function pickIconName(data: any): import('../../../lib/assets').IconName {
 export default function NotificationsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { from } = useLocalSearchParams<{ from?: string }>();
-  const notificationsOrigin = from === 'feed' || from === 'profile' ? from : undefined;
+  const pathname = usePathname();
+  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const notificationsOrigin = pickProfileShortcutOrigin(params);
   const { user } = useAuthStore();
   const userId = user?.id ?? null;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const markingReadIdsRef = useRef<Set<string>>(new Set());
   const skipFirstFocusReload = useRef(true);
@@ -182,17 +190,17 @@ export default function NotificationsScreen() {
       }
       if (orderId) {
         router.replace({
-          pathname: '/tabs/profile/orders',
+          pathname: ordersShortcutHref(notificationsOrigin, pathname),
           params: {
             from_notifications: '1',
             ...(notificationsOrigin
-              ? { from_notifications_origin: notificationsOrigin }
+              ? { from: notificationsOrigin }
               : {})
           }
         } as any);
       }
     },
-    [notificationsOrigin, router]
+    [notificationsOrigin, pathname, router]
   );
 
   const markAsReadAndNavigate = useCallback(
@@ -274,7 +282,50 @@ export default function NotificationsScreen() {
     } finally {
       setMarkingAll(false);
     }
-  }, [loadNotifications, markingAll, userId]);
+  }, [loadNotifications, markingAll, t, userId]);
+
+  const clearAllNotifications = useCallback(async () => {
+    if (!userId || clearingAll) return;
+    if (rowsRef.current.length === 0) return;
+
+    setClearingAll(true);
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', userId);
+      if (error) throw error;
+
+      setRows([]);
+      useNotificationsBadgeStore.getState().setUnreadCount(0);
+    } catch (err: unknown) {
+      const details =
+        err instanceof Error && err.message ? err.message : 'Unknown database error';
+      Alert.alert(
+        t('profile.notificationsScreen.unableClearAll'),
+        t('profile.notificationsScreen.clearAllPartial', { details })
+      );
+      await loadNotifications();
+    } finally {
+      setClearingAll(false);
+    }
+  }, [clearingAll, loadNotifications, t, userId]);
+
+  const confirmClearAll = useCallback(() => {
+    if (rowsRef.current.length === 0) return;
+    Alert.alert(
+      t('profile.notificationsScreen.clearAllTitle'),
+      t('profile.notificationsScreen.clearAllMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.notificationsScreen.clearAllConfirm'),
+          style: 'destructive',
+          onPress: () => void clearAllNotifications()
+        }
+      ]
+    );
+  }, [clearAllNotifications, t]);
 
   const renderItem = useCallback(
     ({ item }: { item: NotificationRow }) => {
@@ -308,16 +359,8 @@ export default function NotificationsScreen() {
   );
 
   const handleBack = useCallback(() => {
-    if (from === 'feed') {
-      router.replace('/tabs/feed');
-      return;
-    }
-    if (from === 'profile') {
-      router.replace('/tabs/profile');
-      return;
-    }
-    router.back();
-  }, [from, router]);
+    navigateBackFromProfileShortcut(router, notificationsOrigin);
+  }, [notificationsOrigin, router]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -328,16 +371,28 @@ export default function NotificationsScreen() {
         <Text variant="body" style={styles.headerTitle}>
           {t('profile.notifications')}
         </Text>
-        <View style={styles.headerRight}>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
+      <View style={styles.headerSeparator} />
+      {!loading && rows.length > 0 ? (
+        <View style={styles.actionsRow}>
           <Button
             title={t('profile.notificationsScreen.markAllRead')}
             onPress={() => void markAllAsRead()}
             variant="link"
-            disabled={markingAll || unreadCount === 0}
+            disabled={markingAll || clearingAll || unreadCount === 0}
+            style={styles.actionButton}
+          />
+          <Button
+            title={t('profile.notificationsScreen.clearAll')}
+            onPress={confirmClearAll}
+            variant="link"
+            disabled={markingAll || clearingAll}
+            style={styles.actionButton}
+            textStyle={styles.clearAllText}
           />
         </View>
-      </View>
-      <View style={styles.headerSeparator} />
+      ) : null}
 
       {loading ? (
         <View style={styles.skeletonWrap}>
@@ -395,9 +450,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1
   },
-  headerRight: {
-    minWidth: 44,
-    alignItems: 'flex-end'
+  headerRightPlaceholder: {
+    width: 44
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  actionButton: {
+    flex: 1
+  },
+  clearAllText: {
+    color: theme.colors.danger
   },
   headerSeparator: {
     height: StyleSheet.hairlineWidth,

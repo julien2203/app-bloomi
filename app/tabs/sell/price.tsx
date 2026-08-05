@@ -14,11 +14,13 @@ import { Button } from '../../../components/ui/Button';
 import { useSellFormStore } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { useTranslation } from 'react-i18next';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 
 export default function SellPriceScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { values, setField } = useSellFormStore();
   const [priceText, setPriceText] = useState<string>(
     typeof values.price === 'number' ? String(values.price) : ''
@@ -59,7 +61,7 @@ export default function SellPriceScreen() {
             />
           </View>
 
-          <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.footer, { paddingBottom: safeBottom + 12 }]}>
             <Button
               title={t('common.confirm')}
               onPress={handleConfirm}

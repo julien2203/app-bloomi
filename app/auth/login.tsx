@@ -25,6 +25,8 @@ import {
   type OAuthProvider
 } from '../../lib/socialAuth';
 import { useAuthStore } from '../../stores/authStore';
+import { authDebug, authDebugError } from '../../lib/authDebugLog';
+import { postAuthDestination } from '../../lib/auth/needsPhoneVerification';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -43,6 +45,7 @@ export default function LoginScreen() {
 
     setError(null);
     setLoading(true);
+    authDebug('login:password:start', { email: email.trim().toLowerCase() });
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -51,53 +54,78 @@ export default function LoginScreen() {
       });
 
       if (signInError) {
+        authDebugError('login:password:signInFailed', signInError);
         setError(signInError.message);
         setLoading(false);
         return;
       }
 
       if (!data.session) {
-        setError('Unable to sign in. Please try again.');
+        authDebug('login:password:noSession');
+        setError(t('auth.login.unableSignIn'));
         setLoading(false);
         return;
       }
 
       const userId = data.session.user.id;
       const markerKey = `profile_ensured_after_login:${userId}`;
+      authDebug('login:password:sessionOk', {
+        userId,
+        hasPhone: Boolean(data.session.user.phone),
+        emailConfirmed: Boolean(data.session.user.email_confirmed_at)
+      });
 
       // S'assurer qu'un profil existe pour cet utilisateur (nécessaire pour listings.seller_id -> profiles.id)
       // Marqueur utilisé pour éviter un doublon du chargement profil dans `AuthGate` (app/_layout.tsx).
       await AsyncStorage.setItem(markerKey, String(Date.now()));
-      await ensureProfileExists(data.session, {
+      authDebug('login:password:ensureProfile:start');
+      const profile = await ensureProfileExists(data.session, {
         // En attendant la vérification SMS réelle, on utilise un numéro de test
         phone: (data.session.user.phone as string | null | undefined) ?? '+41791234567',
         country: 'CH'
       });
+      authDebug('login:password:ensureProfile:done', { profileId: profile?.id ?? null });
 
-      // Connexion réussie : on redirige vers le feed
-      router.replace('/tabs/feed');
+      authDebug('login:password:navigateFeed:before');
+      router.replace(postAuthDestination(data.session.user));
+      authDebug('login:password:navigateFeed:after');
     } catch (e) {
-      setError('Something went wrong during sign-in.');
+      authDebugError('login:password:exception', e);
+      setError(t('auth.login.somethingWrong'));
       setLoading(false);
     }
   };
 
   const handleSocialLogin = async (provider: 'apple' | 'google' | 'facebook') => {
     if (provider === 'facebook') {
-      setError('Facebook sign-in is not available yet.');
+      setError(t('auth.login.facebookUnavailable'));
       return;
     }
+    if (oauthLoading) return;
 
     setError(null);
     setOauthLoading(true);
+    authDebug('login:oauth:start', { provider });
 
     try {
       const oauthProvider = provider as OAuthProvider;
       const { error: oauthError } = await signInWithOAuthProvider(oauthProvider);
 
       if (oauthError) {
+        const {
+          data: { session: recoveredSession }
+        } = await supabase.auth.getSession();
+        if (recoveredSession) {
+          authDebug('login:oauth:recoveredSessionDespiteError', { provider });
+          await ensureProfileAfterOAuthLogin(recoveredSession);
+          router.replace(postAuthDestination(recoveredSession.user));
+          return;
+        }
         if (!isOAuthCancelled(oauthError)) {
+          authDebugError('login:oauth:failed', oauthError, { provider });
           setError(oauthError.message);
+        } else {
+          authDebug('login:oauth:cancelled', { provider });
         }
         return;
       }
@@ -106,14 +134,23 @@ export default function LoginScreen() {
         data: { session }
       } = await supabase.auth.getSession();
       if (!session) {
-        setError('Unable to complete sign-in. Please try again.');
+        authDebug('login:oauth:noSession', { provider });
+        setError(t('onboarding.social.unableComplete'));
         return;
       }
 
+      authDebug('login:oauth:sessionOk', {
+        provider,
+        userId: session.user.id,
+        hasPhone: Boolean(session.user.phone)
+      });
       await ensureProfileAfterOAuthLogin(session);
-      router.replace('/tabs/feed');
-    } catch {
-      setError('Something went wrong during social sign-in.');
+      authDebug('login:oauth:navigateFeed:before', { provider });
+      router.replace(postAuthDestination(session.user));
+      authDebug('login:oauth:navigateFeed:after', { provider });
+    } catch (e) {
+      authDebugError('login:oauth:exception', e, { provider });
+      setError(t('onboarding.social.unableSocial'));
     } finally {
       setOauthLoading(false);
     }
@@ -228,8 +265,15 @@ export default function LoginScreen() {
                 activeOpacity={0.7}
                 onPress={() => {
                   void (async () => {
-                    await enterGuestMode();
-                    router.replace('/tabs/feed');
+                    try {
+                      authDebug('guest:button:pressed', { from: 'login' });
+                      await enterGuestMode();
+                      authDebug('guest:navigateFeed:before', { from: 'login' });
+                      router.replace('/tabs/feed');
+                      authDebug('guest:navigateFeed:after', { from: 'login' });
+                    } catch (e) {
+                      authDebugError('guest:exception', e, { from: 'login' });
+                    }
                   })();
                 }}
                 style={styles.guestLink}

@@ -9,27 +9,30 @@ import {
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Share,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Feather } from '@expo/vector-icons';
 import {
   cloneListingDetail,
-  createOrGetThreadForListing,
+  getExistingThreadForListing,
   deactivateListingToDraft,
   deleteListing,
   excludeBlockedSellers,
   getBlockedSellerIdsForCurrentUser,
+  getAllSellerClosetListings,
   getListingById,
   getListingLikesInfo,
   getPublishedListingsCountForSeller,
+  type FeedListing,
   isListingDeleteBlockedByOrders,
   likeListing,
   unlikeListing,
@@ -37,10 +40,13 @@ import {
 } from '../../../lib/api';
 import { theme } from '../../../lib/theme';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../../lib/touchTargets';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { ZoomableImage } from '../../../components/ui/ZoomableImage';
+import { ListingCoverImage } from '../../../components/ui/ListingCoverImage';
 import { OwnerListingBottomSheet } from '../../../components/listing/OwnerListingBottomSheet';
 import { ProductCard } from '../../../components/ProductCard';
 import { InfluencerBadge } from '../../../components/InfluencerBadge';
@@ -48,7 +54,6 @@ import { useAuthStore } from '../../../stores/authStore';
 import { openGuestAuthPrompt } from '../../../lib/guestAuthPrompt';
 import { useLikesStore } from '../../../stores/likesStore';
 import { supabase } from '../../../lib/supabase';
-import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
 import * as Clipboard from 'expo-clipboard';
 import { SafetyChoiceSheet } from '../../../components/safety/SafetyChoiceSheet';
 import {
@@ -58,18 +63,35 @@ import {
 } from '../../../lib/reports';
 import { translateColorList } from '../../../lib/colorI18n';
 import { translateConditionLabel } from '../../../lib/conditionI18n';
-import { computeBuyerFinalPriceChf } from '../../../lib/formatBuyerPrice';
+import { translateCategoryLabel } from '../../../lib/categoryI18n';
+import { translateSizeLabel } from '../../../lib/sizeI18n';
+import { BuyerFinalPriceRow } from '../../../components/pricing/BuyerFinalPriceRow';
+import { ListingPickupAddresses } from '../../../components/listing/ListingPickupAddresses';
+import { LetterAplusLabelNote } from '../../../components/listing/LetterAplusLabelNote';
+import { formatBuyerFinalPrice } from '../../../lib/formatBuyerPrice';
+import { getListingShareUrl, shareListing } from '../../../lib/listingShare';
 import {
-  BuyerPriceBreakdownSheet,
-  BuyerPriceInfoButton
-} from '../../../components/pricing/BuyerPriceBreakdownSheet';
-
-/** Paliers de vues déjà notifiés pour un listing (évite les doublons si l’écran se remonte). */
-const listingViewMilestonesNotified = new Map<string, Set<number>>();
+  navigateBackFromListingDetail,
+  pickListingReturnParams,
+  publicProfileHref,
+  resolveListingDetailPathBase
+} from '../../../lib/navigation/listingDetailNav';
+import { guardedPush } from '../../../lib/navigation/guardedNav';
+import { openListingDetail } from '../../../lib/navigation/openListingDetail';
+import { navigateToThread } from '../../../lib/navigation/navigateInTabs';
+import { getBuyerListingOfferGate } from '../../../lib/listingOffers';
+import {
+  deliveryModeIncludesPickup,
+  deliveryModeIncludesShipping,
+  normalizeDeliveryMode
+} from '../../../lib/deliveryMode';
+import { ensureProfileShippingAddress } from '../../../lib/profileShippingAddress';
+import { GRID_GAP_COMPACT, gridCardWidth } from '../../../lib/cardLayout';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_WIDTH = SCREEN_WIDTH - 48; // marge 16 gauche + 16 droite + 16 peek
 const ITEM_HEIGHT = ITEM_WIDTH;
+const CAROUSEL_SNAP_INTERVAL = ITEM_WIDTH + 12;
 const MODAL_IMAGE_HEIGHT = SCREEN_HEIGHT * 0.65;
 
 type PhotoItem = {
@@ -92,28 +114,37 @@ type ShippingFeeInfo = {
   is_promo: boolean;
 };
 
-function deliveryModeIncludesShipping(mode: string | undefined): boolean {
-  const dm = String(mode ?? 'both').toLowerCase();
-  return dm === 'shipping' || dm === 'both';
-}
-
-function deliveryModeIncludesPickup(mode: string | undefined): boolean {
-  const dm = String(mode ?? 'both').toLowerCase();
-  return dm === 'pickup' || dm === 'both';
-}
-
 export default function ListingDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
+  const { width: windowWidth } = useWindowDimensions();
+  const relatedCardWidth = useMemo(
+    () => gridCardWidth(windowWidth, RELATED_GRID_PADDING_X, RELATED_GRID_GAP),
+    [windowWidth]
+  );
+  const routeParams = useLocalSearchParams<{
+    id: string;
+    cover_photo?: string;
+    from_offer_chat?: string;
+    from_notifications?: string;
+    from_notifications_origin?: string;
+    return_to?: string;
+    return_user_id?: string;
+  }>();
   const { id, cover_photo, from_offer_chat, from_notifications, from_notifications_origin } =
-    useLocalSearchParams<{
-      id: string;
-      cover_photo?: string;
-      from_offer_chat?: string;
-      from_notifications?: string;
-      from_notifications_origin?: string;
-    }>();
+    routeParams;
+  const listingReturnParams = useMemo(() => pickListingReturnParams(routeParams), [
+    routeParams.return_to,
+    routeParams.return_user_id
+  ]);
+
+  const listingDetailPathBase = useMemo(
+    () => resolveListingDetailPathBase(listingReturnParams.return_to, pathname),
+    [listingReturnParams.return_to, pathname]
+  );
 
   const coverPhotoParam =
     typeof cover_photo === 'string' && cover_photo.trim().length > 0
@@ -134,7 +165,6 @@ export default function ListingDetailScreen() {
   const [togglingLike, setTogglingLike] = useState(false);
 
   const [viewsCount, setViewsCount] = useState<number>(0);
-  const prevViewsCountRef = useRef(0);
   /** Uniquement si la vue SQL n’expose pas encore seller_published_count */
   const [sellerCountFallback, setSellerCountFallback] = useState<number | 'loading' | 'error'>(
     'loading'
@@ -143,16 +173,24 @@ export default function ListingDetailScreen() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isImageModalVisible, setImageModalVisible] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
+  const [modalPagerScrollEnabled, setModalPagerScrollEnabled] = useState(true);
+  const modalPagerRef = useRef<FlatList<PhotoItem>>(null);
+  const modalThumbsRef = useRef<FlatList<PhotoItem>>(null);
+  const modalImageIndexRef = useRef(0);
+  const [modalZoomLayout, setModalZoomLayout] = useState({
+    width: SCREEN_WIDTH - 32,
+    height: MODAL_IMAGE_HEIGHT
+  });
 
   const [relatedTab, setRelatedTab] = useState<'other' | 'similar'>('other');
-  const [otherItems, setOtherItems] = useState<ListingDetail[]>([]);
+  const [otherItems, setOtherItems] = useState<FeedListing[]>([]);
   const [similarItems, setSimilarItems] = useState<ListingDetail[]>([]);
   const [loadingRelated, setLoadingRelated] = useState(false);
-  const [showBuyerProtectionInfo, setShowBuyerProtectionInfo] = useState(false);
   const [ownerSheetVisible, setOwnerSheetVisible] = useState(false);
   const [reportUi, setReportUi] = useState<ListingReportUi>(null);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [shippingFeeInfo, setShippingFeeInfo] = useState<ShippingFeeInfo | null>(null);
+  const [sellerVacationMode, setSellerVacationMode] = useState(false);
 
   const fetchListing = useCallback(async () => {
     if (!id) {
@@ -229,13 +267,9 @@ export default function ListingDetailScreen() {
       const loadRelated = async () => {
       setLoadingRelated(true);
       try {
-        const otherPromise = supabase
-          .from('v_listing_detail')
-          .select('*')
-          .eq('seller_id', listing.seller_id)
-          .eq('status', 'published')
-          .neq('id', listing.id)
-          .limit(6);
+        const otherPromise = getAllSellerClosetListings(listing.seller_id, {
+          excludeListingId: listing.id
+        });
 
         const similarPromise = (async () => {
           const { data: similarRows, error: similarErr } = await supabase.rpc(
@@ -249,7 +283,7 @@ export default function ListingDetailScreen() {
           return (similarRows || []) as any[];
         })();
 
-        const [{ data: otherRows }, similarRows] = await Promise.all([otherPromise, similarPromise]);
+        const [otherRes, similarRows] = await Promise.all([otherPromise, similarPromise]);
 
         const blockedIds = await getBlockedSellerIdsForCurrentUser();
 
@@ -262,7 +296,7 @@ export default function ListingDetailScreen() {
           return { ...(row as ListingDetail), photos: normalizedPhotos };
         };
 
-        const other = Array.isArray(otherRows) ? otherRows.map(normalizeListing) : [];
+        const other = otherRes.error ? [] : (otherRes.data ?? []);
         let similar = Array.isArray(similarRows) ? similarRows.map(normalizeListing) : [];
         similar = excludeBlockedSellers(similar, blockedIds);
 
@@ -352,41 +386,6 @@ export default function ListingDetailScreen() {
   }, [listing?.id, user?.id]);
 
   useEffect(() => {
-    prevViewsCountRef.current = 0;
-  }, [listing?.id]);
-
-  useEffect(() => {
-    if (!listing?.id || !listing.seller_id) return;
-
-    if (viewsCount < 10) {
-      prevViewsCountRef.current = viewsCount;
-      return;
-    }
-
-    const prev = prevViewsCountRef.current;
-    const notified = listingViewMilestonesNotified.get(listing.id) ?? new Set<number>();
-    if (!listingViewMilestonesNotified.has(listing.id)) {
-      listingViewMilestonesNotified.set(listing.id, notified);
-    }
-
-    for (let m = 10; m <= viewsCount; m += 10) {
-      if (prev >= m || m > viewsCount) continue;
-      if (notified.has(m)) continue;
-      notified.add(m);
-      void sendPushNotificationWithUserJwt({
-        user_id: listing.seller_id,
-        titleKey: 'feed.listingDetail.viewsMilestoneTitle',
-        bodyKey: 'feed.listingDetail.viewsMilestoneBody',
-        bodyParams: { count: m },
-        notification_type: 'new_items',
-        data: { listing_id: listing.id, views_milestone: m }
-      });
-    }
-
-    prevViewsCountRef.current = viewsCount;
-  }, [listing?.id, listing?.seller_id, viewsCount]);
-
-  useEffect(() => {
     if (!listing?.seller_id) return;
     if (typeof listing.seller_published_count === 'number') {
       return;
@@ -408,18 +407,47 @@ export default function ListingDetailScreen() {
     };
   }, [listing?.seller_id, listing?.seller_published_count]);
 
+  useEffect(() => {
+    if (!listing?.seller_id) {
+      setSellerVacationMode(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('vacation_mode')
+        .eq('id', listing.seller_id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setSellerVacationMode(false);
+        return;
+      }
+      const row = data as { vacation_mode?: boolean | null };
+      setSellerVacationMode(Boolean(row.vacation_mode));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listing?.seller_id]);
+
   const sellerItemsLabel = useMemo(() => {
     const embedded = listing?.seller_published_count;
     if (typeof embedded === 'number') {
-      return embedded === 1 ? '1 item' : `${embedded} items`;
+      return embedded === 1
+        ? t('feed.listingDetail.oneItem')
+        : t('feed.listingDetail.itemsCount', { count: embedded });
     }
     if (sellerCountFallback === 'loading') return '…';
     if (sellerCountFallback === 'error') return '—';
     if (typeof sellerCountFallback === 'number') {
-      return sellerCountFallback === 1 ? '1 item' : `${sellerCountFallback} items`;
+      return sellerCountFallback === 1
+        ? t('feed.listingDetail.oneItem')
+        : t('feed.listingDetail.itemsCount', { count: sellerCountFallback });
     }
     return '…';
-  }, [listing?.seller_published_count, sellerCountFallback]);
+  }, [listing?.seller_published_count, sellerCountFallback, t]);
 
   const photos: PhotoItem[] = useMemo(() => {
     if (listing?.photos?.length) {
@@ -438,20 +466,34 @@ export default function ListingDetailScreen() {
     return [];
   }, [listing?.photos, coverPhotoParam]);
 
-  const formattedPrice = useMemo(() => {
-    if (!listing) return '';
-    return `${listing.price.toFixed(2)} CHF`;
-  }, [listing]);
+  const modalPageWidth = useMemo(
+    () => (modalZoomLayout.width > 0 ? modalZoomLayout.width : windowWidth - 32),
+    [modalZoomLayout.width, windowWidth]
+  );
+  const modalPageHeight = useMemo(
+    () => (modalZoomLayout.height > 0 ? modalZoomLayout.height : MODAL_IMAGE_HEIGHT),
+    [modalZoomLayout.height]
+  );
 
-  const formattedProtectionPrice = useMemo(() => {
-    if (!listing) return '';
-    return `${computeBuyerFinalPriceChf(listing.price).toFixed(2)} CHF`;
-  }, [listing]);
+  modalImageIndexRef.current = modalImageIndex;
 
   const conditionLabel = useMemo(() => {
     if (!listing?.condition) return undefined;
     return translateConditionLabel(listing.condition, t);
   }, [listing?.condition, t]);
+
+  const categoryLabel = useMemo(() => {
+    if (!listing?.category) return '—';
+    return translateCategoryLabel(
+      { name: listing.category, slug: listing.category_slug },
+      t
+    );
+  }, [listing?.category, listing?.category_slug, t]);
+
+  const sizeLabel = useMemo(() => {
+    if (!listing?.size) return undefined;
+    return translateSizeLabel(listing.size, t);
+  }, [listing?.size, t]);
 
   const colorLabel = useMemo(() => {
     if (!listing?.color) return undefined;
@@ -463,11 +505,27 @@ export default function ListingDetailScreen() {
     const status = String(listing?.status ?? '').toLowerCase();
     return status !== 'published';
   }, [listing?.status]);
+  const isPurchaseDisabled = isListingReservedOrUnavailable || sellerVacationMode;
 
   const isOwner = useMemo(
     () => Boolean(user?.id && listing?.seller_id && user.id === listing.seller_id),
     [user?.id, listing?.seller_id]
   );
+
+  const exitListingDetail = useCallback(() => {
+    navigateBackFromListingDetail(router, {
+      ...listingReturnParams,
+      from_notifications,
+      from_notifications_origin,
+      from_offer_chat
+    });
+  }, [
+    from_notifications,
+    from_notifications_origin,
+    from_offer_chat,
+    listingReturnParams,
+    router
+  ]);
 
   const handleOwnerDeleteListing = useCallback(async () => {
     if (!listing?.id) return;
@@ -476,7 +534,7 @@ export default function ListingDetailScreen() {
     if (error) {
       if (isListingDeleteBlockedByOrders(error)) {
         Alert.alert(t('feed.listingDetail.cannotDelete'), error, [
-          { text: 'OK', style: 'cancel' },
+          { text: t('common.ok'), style: 'cancel' },
           {
             text: t('feed.listingDetail.deactivateListing'),
             onPress: () => {
@@ -487,11 +545,7 @@ export default function ListingDetailScreen() {
                   return;
                 }
                 setOwnerSheetVisible(false);
-                if (router.canGoBack && router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.replace('/tabs/feed');
-                }
+                exitListingDetail();
               })();
             }
           }
@@ -501,12 +555,8 @@ export default function ListingDetailScreen() {
       Alert.alert(t('common.error'), error);
       throw new Error(error);
     }
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/tabs/feed');
-    }
-  }, [listing?.id, router]);
+    exitListingDetail();
+  }, [exitListingDetail, listing?.id, router, t]);
 
   const handleDeactivateOwnListing = useCallback(async () => {
     if (!listing?.id) return;
@@ -516,12 +566,8 @@ export default function ListingDetailScreen() {
       throw new Error(error);
     }
     setOwnerSheetVisible(false);
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/tabs/feed');
-    }
-  }, [listing?.id, router]);
+    exitListingDetail();
+  }, [exitListingDetail, listing?.id, t]);
 
   const handlePermanentDeleteDraftRequest = useCallback(
     (listingId: string) => {
@@ -531,7 +577,7 @@ export default function ListingDetailScreen() {
           t('feed.listingDetail.deletePermanentlyTitle'),
           t('feed.listingDetail.deletePermanentlyMessage'),
           [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
             text: t('common.delete'),
             style: 'destructive',
@@ -542,18 +588,14 @@ export default function ListingDetailScreen() {
                   Alert.alert(t('feed.listingDetail.cannotDelete'), delErr);
                   return;
                 }
-                if (router.canGoBack && router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.replace('/tabs/feed');
-                }
+                exitListingDetail();
               })();
             }
           }
         ]);
       }, 300);
     },
-    [router]
+    [exitListingDetail, t]
   );
 
   const openOwnerListingMenu = useCallback(() => {
@@ -563,31 +605,17 @@ export default function ListingDetailScreen() {
 
   const handleEditOwnListing = useCallback(() => {
     if (!listing?.id) return;
-    router.push(`/tabs/profile/edit-listing/${listing.id}` as any);
-  }, [listing?.id, router]);
+    router.push({
+      pathname: `/tabs/profile/edit-listing/${listing.id}`,
+      params: {
+        ...listingReturnParams,
+        return_listing_id: listing.id
+      }
+    } as any);
+  }, [listing?.id, listingReturnParams, router]);
 
   const handleBack = () => {
-    if (from_notifications === '1') {
-      router.replace({
-        pathname: '/tabs/profile/notifications',
-        params:
-          from_notifications_origin === 'feed' || from_notifications_origin === 'profile'
-            ? { from: from_notifications_origin }
-            : undefined
-      });
-      return;
-    }
-    if (from_offer_chat === '1') {
-      router.replace('/tabs/feed');
-      return;
-    }
-    // Sur certains cas (deep link / ouverture directe), il n'y a pas de route précédente
-    // donc on renvoie explicitement vers le feed.
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/tabs/feed');
-    }
+    exitListingDetail();
   };
 
   const handleToggleLike = async () => {
@@ -637,15 +665,28 @@ export default function ListingDetailScreen() {
     if (user.id === listing.seller_id) return;
 
     void (async () => {
-      const { data, error } = await createOrGetThreadForListing(listing.id, listing.seller_id);
-      if (error || !data) {
-        console.warn('Erreur création/récupération thread:', error);
+      const { data: existing, error } = await getExistingThreadForListing(listing.id);
+      if (error) {
+        console.warn('Erreur récupération thread:', error);
+        return;
+      }
+
+      if (existing?.id) {
+        router.push({
+          pathname: '/tabs/messages/[id]',
+          params: { id: existing.id, from_listing_id: listing.id }
+        });
         return;
       }
 
       router.push({
         pathname: '/tabs/messages/[id]',
-        params: { id: data.id }
+        params: {
+          id: 'draft',
+          listing_id: listing.id,
+          seller_id: listing.seller_id,
+          from_listing_id: listing.id
+        }
       });
     })();
   };
@@ -683,7 +724,7 @@ export default function ListingDetailScreen() {
         const message =
           e instanceof Error && e.message
             ? e.message
-            : 'Unable to send the report.';
+            : t('feed.listingDetail.reportErrorMessage');
         setReportUi({
           step: 'done',
           title: t('feed.listingDetail.reportErrorTitle'),
@@ -696,25 +737,60 @@ export default function ListingDetailScreen() {
     [listing?.id, router]
   );
 
-  const handleMakeOffer = () => {
+  const handleMakeOffer = async () => {
     if (!listing) return;
     if (!user) {
       openGuestAuthPrompt();
       return;
     }
+    if (sellerVacationMode) {
+      Alert.alert(t('feed.listingDetail.sellerVacationTitle'), t('feed.listingDetail.sellerVacationMessage'));
+      return;
+    }
+
+    const { data: gate } = await getBuyerListingOfferGate(listing.id);
+    if (gate && !gate.canOffer) {
+      Alert.alert(
+        t('feed.makeOffer.blockedTitle'),
+        gate.reason === 'pending'
+          ? t('feed.makeOffer.pendingBlocked')
+          : t('feed.makeOffer.acceptedBlocked'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('feed.makeOffer.viewConversation'),
+            onPress: () => navigateToThread(router, gate.threadId)
+          }
+        ]
+      );
+      return;
+    }
+
     router.push({
       pathname: '/tabs/feed/make-offer',
       params: { id: listing.id }
     });
   };
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
     if (!listing) return;
     if (!user) {
       openGuestAuthPrompt();
       return;
     }
     if (user.id === listing.seller_id) return;
+    if (sellerVacationMode) {
+      Alert.alert(t('feed.listingDetail.sellerVacationTitle'), t('feed.listingDetail.sellerVacationMessage'));
+      return;
+    }
+
+    const listingDelivery = normalizeDeliveryMode(listing.delivery_mode);
+    const shippingOnly =
+      deliveryModeIncludesShipping(listingDelivery) && !deliveryModeIncludesPickup(listingDelivery);
+    if (shippingOnly) {
+      const address = await ensureProfileShippingAddress(supabase, user.id, router, t, 'buyer');
+      if (!address) return;
+    }
 
     const coverPhoto = photos?.[0]?.url;
 
@@ -732,32 +808,121 @@ export default function ListingDetailScreen() {
 
   const handleShareListing = useCallback(async () => {
     if (!listing?.id) return;
-    const deepLink = `bloomi://listing/${listing.id}`;
+    const shareUrl = getListingShareUrl(listing.id);
+    const title = listing.title ?? t('common.bloomiListing');
+    const imageUrl = photos[0]?.url;
     try {
-      await Share.share({
-        title: listing.title ?? 'Bloomi listing',
-        message: `${listing.title ?? 'Bloomi listing'}\n${deepLink}`,
-        url: deepLink
+      await shareListing({
+        listingId: listing.id,
+        imageUrl,
+        title,
+        priceLabel: formatBuyerFinalPrice(listing.price),
+        brand: listing.brand,
+        headline: t('feed.listingDetail.shareHeadline'),
+        url: shareUrl
       });
     } catch {
-      await Clipboard.setStringAsync(deepLink);
+      await Clipboard.setStringAsync(shareUrl);
       Alert.alert(t('feed.listingDetail.linkCopied'));
     }
-  }, [listing?.id, listing?.title]);
+  }, [listing?.id, listing?.title, listing?.price, listing?.brand, photos, t]);
 
   const handleImagePress = (index: number) => {
     setModalImageIndex(index);
+    setModalPagerScrollEnabled(true);
     setImageModalVisible(true);
   };
 
   const handleModalClose = () => {
+    setActiveImageIndex(modalImageIndexRef.current);
     setImageModalVisible(false);
+    setModalPagerScrollEnabled(true);
   };
 
-  const handleCarouselMomentumEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / (ITEM_WIDTH + 12));
-    setActiveImageIndex(index);
-  };
+  const scrollModalToIndex = useCallback(
+    (index: number, animated = true) => {
+      const clamped = Math.max(0, Math.min(index, photos.length - 1));
+      setModalImageIndex(clamped);
+      setModalPagerScrollEnabled(true);
+      if (modalPageWidth <= 0) return;
+      modalPagerRef.current?.scrollToOffset({
+        offset: clamped * modalPageWidth,
+        animated
+      });
+      modalThumbsRef.current?.scrollToIndex({
+        index: clamped,
+        animated,
+        viewPosition: 0.5
+      });
+    },
+    [modalPageWidth, photos.length]
+  );
+
+  const updateModalIndexFromOffset = useCallback(
+    (offsetX: number) => {
+      if (modalPageWidth <= 0) return;
+      const index = Math.round(offsetX / modalPageWidth);
+      const clamped = Math.max(0, Math.min(index, photos.length - 1));
+      setModalImageIndex((prev) => {
+        if (prev === clamped) return prev;
+        setModalPagerScrollEnabled(true);
+        return clamped;
+      });
+    },
+    [modalPageWidth, photos.length]
+  );
+
+  const handleModalPagerScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateModalIndexFromOffset(event.nativeEvent.contentOffset.x);
+    },
+    [updateModalIndexFromOffset]
+  );
+
+  const handleModalZoomChange = useCallback((index: number, zoomed: boolean) => {
+    if (index !== modalImageIndexRef.current) return;
+    setModalPagerScrollEnabled(!zoomed);
+  }, []);
+
+  useEffect(() => {
+    if (!isImageModalVisible || photos.length === 0 || modalPageWidth <= 0) return;
+    const frame = requestAnimationFrame(() => {
+      scrollModalToIndex(modalImageIndexRef.current, false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isImageModalVisible, modalPageWidth, photos.length, scrollModalToIndex]);
+
+  useEffect(() => {
+    if (!isImageModalVisible || photos.length === 0) return;
+    modalThumbsRef.current?.scrollToIndex({
+      index: modalImageIndex,
+      animated: true,
+      viewPosition: 0.5
+    });
+  }, [isImageModalVisible, modalImageIndex, photos.length]);
+
+  const updateCarouselIndexFromOffset = useCallback(
+    (offsetX: number) => {
+      const index = Math.round(offsetX / CAROUSEL_SNAP_INTERVAL);
+      const clamped = Math.max(0, Math.min(index, photos.length - 1));
+      setActiveImageIndex((prev) => (prev === clamped ? prev : clamped));
+    },
+    [photos.length]
+  );
+
+  const handleCarouselScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateCarouselIndexFromOffset(event.nativeEvent.contentOffset.x);
+    },
+    [updateCarouselIndexFromOffset]
+  );
+
+  const handleCarouselScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateCarouselIndexFromOffset(event.nativeEvent.contentOffset.x);
+    },
+    [updateCarouselIndexFromOffset]
+  );
 
   const formatUploadedDate = (dateString: string | null): string => {
     if (!dateString) return '-';
@@ -777,13 +942,13 @@ export default function ListingDetailScreen() {
     const diffMonths = Math.floor(diffDays / 30);
     const diffYears = Math.floor(diffDays / 365);
 
-    if (diffMinutes < 1) return 'Just now';
-    if (diffHours < 1) return `${diffMinutes} min ago`;
-    if (diffDays < 1) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffWeeks < 1) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    if (diffMonths < 1) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
-    if (diffYears < 1) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
-    return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+    if (diffMinutes < 1) return t('feed.listingDetail.justNow');
+    if (diffHours < 1) return t('feed.listingDetail.minutesAgo', { count: diffMinutes });
+    if (diffDays < 1) return t('feed.listingDetail.hoursAgo', { count: diffHours });
+    if (diffWeeks < 1) return t('feed.listingDetail.daysAgo', { count: diffDays });
+    if (diffMonths < 1) return t('feed.listingDetail.weeksAgo', { count: diffWeeks });
+    if (diffYears < 1) return t('feed.listingDetail.monthsAgo', { count: diffMonths });
+    return t('feed.listingDetail.yearsAgo', { count: diffYears });
   };
 
   const sellerInitials = useMemo(() => {
@@ -795,7 +960,10 @@ export default function ListingDetailScreen() {
     return (first + second).toUpperCase();
   }, [listing]);
 
-  if (loading) {
+  const hasPreviewPhotos = photos.length > 0;
+  const isShellLoading = loading && !listing;
+
+  if (loading && !hasPreviewPhotos) {
     return (
       <>
         <StatusBar style="dark" />
@@ -803,7 +971,7 @@ export default function ListingDetailScreen() {
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text variant="body" color="textSecondary" style={styles.loadingText}>
-              Chargement...
+              {t('common.loading')}
             </Text>
           </View>
         </SafeAreaView>
@@ -811,14 +979,14 @@ export default function ListingDetailScreen() {
     );
   }
 
-  if (error || !listing) {
+  if (!loading && (error || !listing)) {
     return (
       <>
         <StatusBar style="dark" />
         <SafeAreaView style={styles.container}>
           <View style={styles.centerContent}>
             <Text variant="h2" style={styles.errorTitle}>
-              {error?.message || 'Listing not found'}
+              {error?.message || t('feed.listingDetail.notFound')}
             </Text>
             <Button title={t('common.retry')} onPress={fetchListing} variant="primary" />
             <Button
@@ -879,7 +1047,7 @@ export default function ListingDetailScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + 64 }
+            { paddingBottom: safeBottom + 64 }
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -892,33 +1060,42 @@ export default function ListingDetailScreen() {
                   keyExtractor={(item, index) => item.id ?? String(index)}
                   horizontal
                   pagingEnabled={false}
-                  snapToInterval={ITEM_WIDTH + 12}
+                  snapToInterval={CAROUSEL_SNAP_INTERVAL}
                   decelerationRate="fast"
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+                  scrollEventThrottle={16}
+                  onScroll={handleCarouselScroll}
+                  onScrollEndDrag={handleCarouselScrollEnd}
+                  onMomentumScrollEnd={handleCarouselScrollEnd}
                   renderItem={({ item, index }) => (
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={() => handleImagePress(index)}
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => handleImagePress(index)}
+                    >
+                      <View
+                        style={{
+                          width: ITEM_WIDTH,
+                          height: ITEM_HEIGHT,
+                          borderRadius: 16,
+                          overflow: 'hidden',
+                          backgroundColor: '#F5F5F5'
+                        }}
                       >
-                        <Image
-                          source={{ uri: item.url }}
-                          style={{
-                            width: ITEM_WIDTH,
-                            height: ITEM_HEIGHT,
-                            borderRadius: 16,
-                            overflow: 'hidden',
-                            backgroundColor: '#F5F5F5'
-                          }}
-                          resizeMode="cover"
+                        <ListingCoverImage
+                          uri={item.url}
+                          widthDp={ITEM_WIDTH}
+                          heightDp={ITEM_HEIGHT}
+                          recyclingKey={`${listing?.id ?? id}-${item.id}`}
+                          priority={index === 0 ? 'high' : index < 3 ? 'normal' : 'low'}
                         />
-                      </TouchableOpacity>
-                    )}
-                  onMomentumScrollEnd={handleCarouselMomentumEnd}
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 />
 
                 {/* Favorite icon — hidden for your own listing */}
-                {!isOwner ? (
+                {!isOwner && !isShellLoading ? (
                   <TouchableOpacity
                     style={styles.favoriteIconContainer}
                     onPress={handleToggleLike}
@@ -929,7 +1106,9 @@ export default function ListingDetailScreen() {
                     <AppIcon
                       name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
                       size={30}
-                      color={likedByMe ? theme.colors.primary : theme.colors.textSecondary}
+                      color={likedByMe ? '#C3EA4F' : theme.colors.appleBlack}
+                      outline={!likedByMe}
+                      strokeWidth={2.4}
                     />
                   </TouchableOpacity>
                 ) : null}
@@ -964,6 +1143,13 @@ export default function ListingDetailScreen() {
           </View>
 
           {/* Product block */}
+          {isShellLoading ? (
+            <View style={styles.shellLoadingBlock}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <View style={styles.shellLine} />
+              <View style={[styles.shellLine, styles.shellLineShort]} />
+            </View>
+          ) : listing ? (
           <View style={styles.productBlock}>
             <Text variant="h1" style={styles.productTitle}>
               {listing.title}
@@ -977,7 +1163,7 @@ export default function ListingDetailScreen() {
               </View>
               <View style={styles.metaChip}>
                 <Text variant="captionSm" color="textSecondary" numberOfLines={1} ellipsizeMode="tail">
-                  {listing.size ?? '—'}
+                  {sizeLabel ?? '—'}
                 </Text>
               </View>
               <View style={styles.metaChip}>
@@ -988,9 +1174,13 @@ export default function ListingDetailScreen() {
             </View>
             <View style={styles.fullBleedSeparator} />
 
-            <Text variant="h2" color="appleBlack" style={styles.mainPrice}>
-              {formattedPrice}
-            </Text>
+            <View style={styles.mainPriceRow}>
+              <BuyerFinalPriceRow
+                itemPriceChf={listing.price}
+                variant="h2"
+                textStyle={styles.mainPrice}
+              />
+            </View>
 
             {deliveryModeIncludesShipping(listing.delivery_mode) &&
             listing.parcel_size &&
@@ -1010,30 +1200,30 @@ export default function ListingDetailScreen() {
                 ) : null}
               </View>
             ) : null}
-            {deliveryModeIncludesPickup(listing.delivery_mode) ? (
-              <Text style={styles.deliveryText}>{t('feed.listingDetail.pickup')}</Text>
+            {deliveryModeIncludesShipping(listing.delivery_mode) &&
+            listing.parcel_size === 'letter_aplus' ? (
+              <LetterAplusLabelNote style={styles.letterAplusNote} />
             ) : null}
-
-            <View style={styles.protectionRow}>
-              <Text
-                variant="captionSm"
-                style={styles.protectionPrice}
-              >
-                {t('feed.listingDetail.includesBuyerProtection', { price: formattedProtectionPrice })}
-              </Text>
-              <BuyerPriceInfoButton onPress={() => setShowBuyerProtectionInfo(true)} />
-            </View>
+            {deliveryModeIncludesPickup(listing.delivery_mode) ? (
+              <View style={styles.pickupBlock}>
+                <Text style={styles.deliveryText}>{t('feed.listingDetail.pickup')}</Text>
+                <ListingPickupAddresses listing={listing} />
+              </View>
+            ) : null}
           </View>
+          ) : null}
 
+          {!isShellLoading && listing ? (
+          <>
           {/* Seller block — juste sous le prix (même espacement que ligne → prix) */}
           <View style={styles.sellerBlock}>
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() =>
-                router.push({
-                  pathname: '/tabs/public-profile' as any,
-                  params: { user_id: listing.seller_id }
-                })
+                guardedPush(
+                  router,
+                  publicProfileHref(listing.seller_id, listingReturnParams)
+                )
               }
               style={styles.sellerInfo}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1042,18 +1232,23 @@ export default function ListingDetailScreen() {
                 <Image source={{ uri: listing.seller_avatar_url }} style={styles.sellerAvatar} />
               ) : (
                 <View style={styles.sellerAvatarPlaceholder}>
-                  <Text variant="body" color="appleBlack">
+                  <Text variant="h3" color="appleBlack">
                     {sellerInitials}
                   </Text>
                 </View>
               )}
               <View style={styles.sellerText}>
                 <View style={styles.sellerNameRow}>
-                  <Text variant="body" style={styles.sellerName}>
-                    {listing.seller_display_name ?? 'Seller'}
+                  <Text
+                    variant="h3"
+                    style={styles.sellerName}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {listing.seller_display_name ?? t('common.seller')}
                   </Text>
                   {listing.seller_is_influencer ? (
-                    <InfluencerBadge size={20} style={styles.sellerInfluencerBadge} />
+                    <InfluencerBadge size={22} style={styles.sellerInfluencerBadge} />
                   ) : null}
                 </View>
                 <Text variant="captionSm" color="textSecondary">
@@ -1100,7 +1295,9 @@ export default function ListingDetailScreen() {
                     <AppIcon
                       name={likedByMe ? 'likeHeartBold' : 'likeHeartOutline'}
                       size={18}
-                      color={likedByMe ? theme.colors.primary : theme.colors.textPrimary}
+                      color={likedByMe ? '#C3EA4F' : theme.colors.appleBlack}
+                      outline={!likedByMe}
+                      strokeWidth={2.2}
                     />
                     <Text variant="captionSm" color="textPrimary">
                       {t('feed.listingDetail.favorite')}
@@ -1129,8 +1326,8 @@ export default function ListingDetailScreen() {
 
             {/* Details table */}
             <View style={styles.detailsList}>
-              <DetailRow label={t('feed.listingDetail.category')} value={listing.category ?? '—'} />
-              <DetailRow label={t('feed.listingDetail.size')} value={listing.size ?? '—'} />
+              <DetailRow label={t('feed.listingDetail.category')} value={categoryLabel} />
+              <DetailRow label={t('feed.listingDetail.size')} value={sizeLabel ?? '—'} />
               <DetailRow label={t('feed.listingDetail.condition')} value={conditionLabel ?? '—'} />
               <DetailRow label={t('feed.listingDetail.color')} value={colorLabel ?? '—'} />
               <DetailRow label={t('feed.listingDetail.views')} value={viewsCount != null ? String(viewsCount) : '—'} />
@@ -1195,10 +1392,10 @@ export default function ListingDetailScreen() {
                 </Text>
               ) : (
                 (relatedTab === 'other' ? otherItems : similarItems).map((l) => {
-                  const cover =
-                    l.photos && l.photos.length > 0
-                      ? l.photos[0]?.url ?? null
-                      : null;
+                  const isOtherTab = relatedTab === 'other';
+                  const cover = isOtherTab
+                    ? (l as FeedListing).cover_photo_url ?? null
+                    : (l as ListingDetail).photos?.[0]?.url ?? null;
                   return (
                     <ProductCard
                       key={l.id}
@@ -1214,12 +1411,15 @@ export default function ListingDetailScreen() {
                       condition={l.condition ?? undefined}
                       imageUrl={cover}
                       style={styles.relatedCard}
-                      cardWidth={(SCREEN_WIDTH - RELATED_GRID_PADDING_X * 2 - RELATED_GRID_GAP) / 2}
+                      cardWidth={relatedCardWidth}
                       imageRatio={1.3}
                       onPress={() =>
-                        router.push({
-                          pathname: '/tabs/feed/[id]',
-                          params: { id: l.id, ...(cover ? { cover_photo: cover } : {}) }
+                        openListingDetail(router, l.id, {
+                          ...listingReturnParams,
+                          cover_photo: cover,
+                          detailPathBase: listingDetailPathBase,
+                          imageWidthDp: relatedCardWidth,
+                          imageHeightDp: Math.round(relatedCardWidth * 1.3)
                         })
                       }
                     />
@@ -1228,8 +1428,11 @@ export default function ListingDetailScreen() {
               )}
             </View>
           </View>
+          </>
+          ) : null}
         </ScrollView>
 
+        {listing ? (
         <OwnerListingBottomSheet
           visible={ownerSheetVisible}
           onClose={() => setOwnerSheetVisible(false)}
@@ -1244,12 +1447,14 @@ export default function ListingDetailScreen() {
           listingStatus={listing?.status ?? null}
           onRequestPermanentDeleteDraft={handlePermanentDeleteDraftRequest}
         />
+        ) : null}
 
         {/* Bottom CTAs — buyer vs seller (owner) */}
+        {listing && !isShellLoading ? (
         <View
           style={[
             styles.bottomCtas,
-            { paddingBottom: insets.bottom + 16 }
+            { paddingBottom: safeBottom + 16 }
           ]}
         >
           {isOwner ? (
@@ -1263,43 +1468,49 @@ export default function ListingDetailScreen() {
             <>
               <Button
                 title={
-                  isListingReservedOrUnavailable
+                  sellerVacationMode
+                    ? t('feed.listingDetail.sellerOnVacation')
+                    : isListingReservedOrUnavailable
                     ? t('feed.listingDetail.reserved')
                     : t('feed.listingDetail.makeOffer')
                 }
                 onPress={handleMakeOffer}
                 variant="secondary"
                 style={
-                  isListingReservedOrUnavailable
+                  isPurchaseDisabled
                     ? styles.bottomButtonSecondaryDisabled
                     : styles.bottomButtonSecondary
                 }
-                disabled={isListingReservedOrUnavailable}
+                disabled={isPurchaseDisabled}
               />
               <Button
                 title={
-                  isListingReservedOrUnavailable
+                  sellerVacationMode
+                    ? t('feed.listingDetail.sellerOnVacation')
+                    : isListingReservedOrUnavailable
                     ? t('feed.listingDetail.reserved')
                     : t('feed.listingDetail.buyNow')
                 }
                 onPress={handleBuyNow}
                 variant="google"
                 style={
-                  isListingReservedOrUnavailable
+                  isPurchaseDisabled
                     ? styles.bottomButtonDisabled
                     : styles.bottomButtonBuyNow
                 }
-                disabled={isListingReservedOrUnavailable}
+                disabled={isPurchaseDisabled}
               />
             </>
           )}
         </View>
+        ) : null}
 
         {/* Image modal */}
         <Modal
           visible={isImageModalVisible}
           animationType="fade"
           transparent
+          presentationStyle="fullScreen"
           onRequestClose={handleModalClose}
         >
           <SafeAreaView style={styles.modalContainer}>
@@ -1320,12 +1531,53 @@ export default function ListingDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalImageContainer}>
-              {photos[modalImageIndex]?.url ? (
-                <Image
-                  source={{ uri: photos[modalImageIndex]!.url }}
-                  style={styles.modalImage}
-                  resizeMode="contain"
+            <View
+              style={styles.modalImageContainer}
+              onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                if (width > 0 && height > 0) {
+                  setModalZoomLayout({ width, height });
+                }
+              }}
+            >
+              {photos.length > 0 ? (
+                <FlatList
+                  ref={modalPagerRef}
+                  data={photos}
+                  keyExtractor={(item, index) => item.id ?? String(index)}
+                  horizontal
+                  pagingEnabled
+                  bounces={photos.length > 1}
+                  nestedScrollEnabled
+                  scrollEnabled={modalPagerScrollEnabled}
+                  showsHorizontalScrollIndicator={false}
+                  style={{ width: modalPageWidth, height: modalPageHeight }}
+                  getItemLayout={(_, index) => ({
+                    length: modalPageWidth,
+                    offset: modalPageWidth * index,
+                    index
+                  })}
+                  onMomentumScrollEnd={handleModalPagerScrollEnd}
+                  onScrollEndDrag={handleModalPagerScrollEnd}
+                  onScrollToIndexFailed={(info) => {
+                    modalPagerRef.current?.scrollToOffset({
+                      offset: info.index * modalPageWidth,
+                      animated: false
+                    });
+                  }}
+                  renderItem={({ item, index }) => {
+                    return (
+                      <ZoomableImage
+                        uri={item.url}
+                        width={modalPageWidth}
+                        height={modalPageHeight}
+                        maxScale={4}
+                        allowPagerSwipe={photos.length > 1}
+                        isActive={index === modalImageIndex}
+                        onZoomChange={(zoomed) => handleModalZoomChange(index, zoomed)}
+                      />
+                    );
+                  }}
                 />
               ) : (
                 <View style={styles.carouselPlaceholder}>
@@ -1338,37 +1590,40 @@ export default function ListingDetailScreen() {
 
             <View style={styles.modalThumbnails}>
               <FlatList
+                ref={modalThumbsRef}
                 data={photos}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item, index) => item.id ?? String(index)}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.modalThumbsContent}
+                onScrollToIndexFailed={(info) => {
+                  modalThumbsRef.current?.scrollToOffset({
+                    offset: Math.max(0, info.index * 72 - 32),
+                    animated: true
+                  });
+                }}
                 renderItem={({ item, index }) => (
-                  <TouchableOpacity
-                    onPress={() => setModalImageIndex(index)}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.modalThumbWrapper,
-                      index === modalImageIndex && styles.modalThumbWrapperActive
-                    ]}
-                  >
-                    <Image
-                      source={{ uri: item.url }}
-                      style={styles.modalThumb}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => scrollModalToIndex(index)}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.modalThumbWrapper,
+                        index === modalImageIndex && styles.modalThumbWrapperActive
+                      ]}
+                    >
+                      <ListingCoverImage
+                        uri={item.url}
+                        widthDp={64}
+                        heightDp={64}
+                        recyclingKey={`modal-thumb-${item.id}`}
+                        priority={index === modalImageIndex ? 'high' : 'low'}
+                      />
+                    </TouchableOpacity>
                 )}
               />
             </View>
           </SafeAreaView>
         </Modal>
-
-        <BuyerPriceBreakdownSheet
-          visible={showBuyerProtectionInfo}
-          itemPriceChf={listing?.price ?? 0}
-          onClose={() => setShowBuyerProtectionInfo(false)}
-        />
 
         {reportUi?.step === 'reasons' ? (
           <SafetyChoiceSheet
@@ -1455,6 +1710,22 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: theme.spacing.gapSm
+  },
+  shellLoadingBlock: {
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingVertical: theme.spacing.gapLg,
+    alignItems: 'center',
+    gap: theme.spacing.gapMd
+  },
+  shellLine: {
+    alignSelf: 'stretch',
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#EFEFEF'
+  },
+  shellLineShort: {
+    width: '55%',
+    alignSelf: 'center'
   },
   inlineLoadingRow: {
     paddingVertical: theme.spacing.gapMd,
@@ -1546,8 +1817,10 @@ const styles = StyleSheet.create({
   },
   sellerBlock: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    columnGap: theme.spacing.gapSm,
+    rowGap: theme.spacing.gapMd,
     paddingHorizontal: theme.spacing.screenPaddingX,
     marginTop: theme.spacing.gapMd,
     paddingBottom: 0
@@ -1555,25 +1828,28 @@ const styles = StyleSheet.create({
   sellerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
-    marginRight: theme.spacing.gapSm
+    // Réserve assez de place au nom ; si bouton + nom ne tiennent pas → wrap
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 200,
+    minWidth: 0
   },
   sellerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22
+    width: 56,
+    height: 56,
+    borderRadius: 28
   },
   sellerAvatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: theme.colors.muted,
     alignItems: 'center',
     justifyContent: 'center'
   },
   sellerText: {
-    marginLeft: theme.spacing.gapSm,
+    marginLeft: theme.spacing.gapMd,
+    flex: 1,
     flexShrink: 1,
     minWidth: 0
   },
@@ -1585,13 +1861,18 @@ const styles = StyleSheet.create({
   },
   sellerName: {
     fontFamily: theme.fontFamily.semiBold,
-    flexShrink: 1
+    fontSize: 18,
+    lineHeight: 24,
+    flexShrink: 1,
+    minWidth: 0
   },
   sellerInfluencerBadge: {
     flexShrink: 0
   },
   sellerButton: {
-    flex: 0,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 148,
     borderRadius: theme.radius.button,
     height: theme.spacing.buttonHeight,
     paddingHorizontal: theme.spacing.gapMd,
@@ -1628,10 +1909,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: theme.colors.backgroundWhite
   },
+  mainPriceRow: {
+    marginBottom: theme.spacing.gapSm
+  },
   mainPrice: {
     ...theme.typography.h2,
-    fontFamily: theme.fontFamily.bold,
-    marginBottom: theme.spacing.gapSm
+    fontFamily: theme.fontFamily.bold
   },
   deliveryRow: {
     flexDirection: 'row',
@@ -1641,10 +1924,16 @@ const styles = StyleSheet.create({
     rowGap: 4,
     marginBottom: 4
   },
+  letterAplusNote: {
+    marginBottom: 4
+  },
   deliveryText: {
     fontSize: 13,
     lineHeight: 18,
     color: '#666666'
+  },
+  pickupBlock: {
+    marginBottom: 4
   },
   shippingPromoBadge: {
     backgroundColor: '#C3EA4F',
@@ -1657,25 +1946,6 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: '#000000',
     fontFamily: theme.fontFamily.semiBold
-  },
-  protectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 0
-  },
-  protectionPrice: {
-    ...theme.typography.captionSm,
-    color: '#C3EA4F',
-    fontFamily: theme.fontFamily.semiBold,
-    marginRight: theme.spacing.gapSm
-  },
-  protectionIcon: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  protectionInfoButton: {
-    alignItems: 'center',
-    justifyContent: 'center'
   },
   bpModalOverlay: {
     flex: 1,
@@ -1757,7 +2027,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12
   },
   relatedCard: {
-    width: (SCREEN_WIDTH - RELATED_GRID_PADDING_X * 2 - RELATED_GRID_GAP) / 2
+    flexGrow: 0,
+    flexShrink: 0
   },
   relatedLoadingRow: {
     width: '100%',
@@ -1860,8 +2131,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center'
+    backgroundColor: 'rgba(0,0,0,0.7)'
   },
   modalHeader: {
     position: 'absolute',
@@ -1880,16 +2150,15 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   modalImageContainer: {
-    height: MODAL_IMAGE_HEIGHT,
-    alignItems: 'center'
-  },
-  modalImage: {
-    width: SCREEN_WIDTH - 32,
-    height: '100%',
-    borderRadius: 16
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    minHeight: MODAL_IMAGE_HEIGHT
   },
   modalThumbnails: {
-    marginTop: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
     paddingHorizontal: 16
   },
   modalThumbsContent: {

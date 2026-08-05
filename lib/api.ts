@@ -7,6 +7,16 @@ import { supabase } from './supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import * as Location from 'expo-location';
+import {
+  buildListingStorageFilename,
+  LISTING_CARD_JPEG_QUALITY,
+  LISTING_CARD_MAX_EDGE_PX,
+  prepareListingPhotoForUpload,
+  temporaryListingPhotoOrderIndex,
+  toListingCardStorageFilename
+} from './listingPhotoUtils';
+import { deliveryModeIncludesPickup } from './deliveryMode';
+import { listingHasPublicPickupCity } from './pickupAddress';
 import type {
   Listing,
   ListingInsert,
@@ -23,21 +33,49 @@ import type {
   OrderInsert,
   OrderUpdate,
   ApiResponse,
-  PaginatedResponse
+  PaginatedResponse,
+  ParcelSize
 } from './types';
 import type { FeedFilters } from './store/feedFilters';
+import { expandConditionFilterValues } from './conditionI18n';
 import { sendPushNotificationWithUserJwt } from './pushNotifications';
+import { SUPABASE_URL } from './env';
+import { getBuyerListingOfferGate } from './listingOffers';
+import {
+  getBlockedSellerIdsForCurrentUser,
+  invalidateBlockedSellerIdsCache
+} from './blockedSellerIdsCache';
+
+export { getBlockedSellerIdsForCurrentUser, invalidateBlockedSellerIdsCache };
+
+async function readLocalImageBinary(uri: string): Promise<Uint8Array> {
+  try {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64'
+    });
+    return new Uint8Array(decodeBase64(base64));
+  } catch {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error(`Unable to read file (${response.status})`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+}
 
 async function resolveFilterLabels(filters?: FeedFilters): Promise<{
   brandLabels: string[];
   sizeLabels: string[];
   colorLabels: string[];
+  includeOtherBrand: boolean;
 }> {
   if (!filters) {
-    return { brandLabels: [], sizeLabels: [], colorLabels: [] };
+    return { brandLabels: [], sizeLabels: [], colorLabels: [], includeOtherBrand: false };
   }
 
-  const brandIds = filters.brandIds ?? [];
+  const rawBrandIds = filters.brandIds ?? [];
+  const includeOtherBrand = rawBrandIds.includes('__other__');
+  const brandIds = rawBrandIds.filter((id) => id !== '__other__');
   const sizeIds = filters.sizeIds ?? [];
   const colorIds = filters.colorIds ?? [];
 
@@ -50,7 +88,8 @@ async function resolveFilterLabels(filters?: FeedFilters): Promise<{
   return {
     brandLabels: (brandsRes.data || []).map((r: any) => String(r.name)).filter(Boolean),
     sizeLabels: (sizesRes.data || []).map((r: any) => String(r.label)).filter(Boolean),
-    colorLabels: (colorsRes.data || []).map((r: any) => String(r.name)).filter(Boolean)
+    colorLabels: (colorsRes.data || []).map((r: any) => String(r.name)).filter(Boolean),
+    includeOtherBrand
   };
 }
 
@@ -89,36 +128,74 @@ export type FeedListing = {
 function applyFeedListingFilters(
   query: any,
   filters: FeedFilters | undefined,
-  labels: { brandLabels: string[]; sizeLabels: string[]; colorLabels: string[] }
+  labels: { brandLabels: string[]; sizeLabels: string[]; colorLabels: string[]; includeOtherBrand: boolean }
 ) {
   let q = query;
   if (filters?.categoryIds && filters.categoryIds.length > 0) {
     q = q.in('category_id', filters.categoryIds.map((id) => Number(id)));
   }
-  if (filters?.conditionIds && filters.conditionIds.length > 0) q = q.in('condition', filters.conditionIds);
+  if (filters?.conditionIds && filters.conditionIds.length > 0) {
+    const conditions = expandConditionFilterValues(filters.conditionIds);
+    if (conditions.length > 0) q = q.in('condition', conditions);
+  }
   if (filters?.priceMin != null) q = q.gte('price', filters.priceMin);
   if (filters?.priceMax != null) q = q.lte('price', filters.priceMax);
-  if (labels.brandLabels.length > 0) q = q.in('brand', labels.brandLabels);
+  if (labels.brandLabels.length > 0 && labels.includeOtherBrand) {
+    const escaped = labels.brandLabels.map((label) => `"${String(label).replace(/"/g, '\\"')}"`).join(',');
+    q = q.or(`brand.in.(${escaped}),brand.is.null,brand.eq.""`);
+  } else if (labels.brandLabels.length > 0) {
+    q = q.in('brand', labels.brandLabels);
+  } else if (labels.includeOtherBrand) {
+    q = q.or('brand.is.null,brand.eq.""');
+  }
   if (labels.sizeLabels.length > 0) q = q.in('size', labels.sizeLabels);
   if (labels.colorLabels.length > 0) q = q.in('color', labels.colorLabels);
   return q;
 }
 
-export async function getBlockedSellerIdsForCurrentUser(): Promise<string[]> {
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  if (!user?.id) return [];
+export type MemberSearchRow = {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  company_name: string | null;
+  is_influencer: boolean | null;
+};
+
+const MEMBER_SEARCH_PAGE_SIZE = 20;
+
+/** Recherche membres par `display_name` ou `company_name` (tous les profils). */
+export async function searchMemberProfiles(params: {
+  query: string;
+  limit?: number;
+  offset?: number;
+}): Promise<ApiResponse<MemberSearchRow[]>> {
+  const trimmed = String(params.query ?? '').trim();
+  if (!trimmed) {
+    return { data: [], error: null };
+  }
+
+  const limit = Math.min(Math.max(params.limit ?? MEMBER_SEARCH_PAGE_SIZE, 1), 50);
+  const offset = Math.max(params.offset ?? 0, 0);
+  const escaped = trimmed.replace(/"/g, '""');
+  const pattern = `"*${escaped}*"`;
+  const orFilter = `display_name.ilike.${pattern},company_name.ilike.${pattern}`;
+
+  const blockedIds = await getBlockedSellerIdsForCurrentUser();
+  const blocked = new Set(blockedIds);
 
   const { data, error } = await supabase
-    .from('blocked_users')
-    .select('blocked_id')
-    .eq('blocker_id', user.id);
+    .from('profiles')
+    .select('id, display_name, avatar_url, company_name, is_influencer')
+    .or(orFilter)
+    .order('display_name', { ascending: true, nullsFirst: false })
+    .range(offset, offset + limit - 1);
 
-  if (error) return [];
-  return (data || [])
-    .map((row: any) => String(row.blocked_id ?? ''))
-    .filter(Boolean);
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  const rows = ((data || []) as MemberSearchRow[]).filter((row) => !blocked.has(String(row.id)));
+  return { data: rows, error: null };
 }
 
 export type BlockedUserRow = {
@@ -221,6 +298,11 @@ export function excludeBlockedSellers<T extends { seller_id?: string | null }>(
   return rows.filter((row) => !blocked.has(String(row.seller_id ?? '')));
 }
 
+/** Copie défensive des lignes feed avant mise en state (évite les mutations partagées). */
+export function cloneFeedListings<T extends FeedListing>(rows: T[]): T[] {
+  return rows.map((row) => ({ ...row }));
+}
+
 // ============================================
 // LISTINGS - FEED
 // ============================================
@@ -233,11 +315,14 @@ export async function getFeedListings(params?: {
   limit?: number;
   offset?: number;
   filters?: FeedFilters;
+  /** Évite un second appel getUser/blocked_users si déjà résolu par l'appelant. */
+  blockedSellerIds?: string[];
 }): Promise<{ data: FeedListing[]; error: Error | null }> {
-  const { limit = 20, offset = 0, filters } = params || {};
+  const { limit = 20, offset = 0, filters, blockedSellerIds: blockedSellerIdsParam } = params || {};
 
   try {
-    const blockedSellerIds = await getBlockedSellerIdsForCurrentUser();
+    const blockedSellerIds =
+      blockedSellerIdsParam ?? (await getBlockedSellerIdsForCurrentUser());
     const { brandLabels, sizeLabels, colorLabels } = await resolveFilterLabels(filters);
 
     // Nearby: use RPC that filters + sorts by distance.
@@ -258,7 +343,9 @@ export async function getFeedListings(params?: {
         p_section: 'feed',
         p_query: null,
           p_category: null,
-          p_conditions: (filters.conditionIds.length ? filters.conditionIds : null) as any,
+          p_conditions: (filters.conditionIds.length
+            ? expandConditionFilterValues(filters.conditionIds)
+            : null) as any,
         p_price_min: filters.priceMin ?? null,
         p_price_max: filters.priceMax ?? null,
           p_brands: (brandLabels.length ? brandLabels : null) as any,
@@ -462,7 +549,8 @@ export async function getPriceBounds(filters?: FeedFilters): Promise<{
         query = query.in('category_id', filters.categoryIds.map((id) => Number(id)));
       }
       if (filters?.conditionIds && filters.conditionIds.length > 0) {
-        query = query.in('condition', filters.conditionIds);
+        const conditions = expandConditionFilterValues(filters.conditionIds);
+        if (conditions.length > 0) query = query.in('condition', conditions);
       }
       if (filters?.priceMin != null) {
         query = query.gte('price', filters.priceMin);
@@ -604,6 +692,7 @@ export type ListingDetail = {
   status: string;
   category: string | null;
   category_id?: number | null;
+  category_slug?: string | null;
   condition: string | null;
   delivery_mode: string;
   latitude: number | null;
@@ -621,6 +710,13 @@ export type ListingDetail = {
   brand?: string | null;
   size?: string | null;
   color?: string | null;
+  parcel_size?: ParcelSize | null;
+  pickup_primary_street?: string | null;
+  pickup_primary_postal_code?: string | null;
+  pickup_primary_city?: string | null;
+  pickup_work_street?: string | null;
+  pickup_work_postal_code?: string | null;
+  pickup_work_city?: string | null;
   photos: Array<{
     id: string;
     url: string;
@@ -631,50 +727,134 @@ export type ListingDetail = {
   seller_published_count?: number | null;
 };
 
+/** Copie défensive d'une fiche produit avant mise en state. */
+export function cloneListingDetail(listing: ListingDetail): ListingDetail {
+  return {
+    ...listing,
+    photos: listing.photos ? listing.photos.map((photo) => ({ ...photo })) : null
+  };
+}
+
 /**
  * Récupère une annonce par son ID depuis v_listing_detail
  */
+function coerceListingPrice(raw: unknown): number {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  const parsed = Number(String(raw ?? '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function coerceParcelSize(raw: unknown): ListingDetail['parcel_size'] {
+  const value = String(raw ?? '').toLowerCase();
+  if (
+    value === 'letter_aplus' ||
+    value === 'small' ||
+    value === 'large' ||
+    value === 'xlarge'
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeListingPhotos(raw: unknown): NonNullable<ListingDetail['photos']> | null {
+  if (raw == null) return null;
+
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(parsed)) return null;
+
+  type PhotoRow = NonNullable<ListingDetail['photos']>[number];
+  return (parsed as PhotoRow[])
+    .map((photo) => ({ ...photo }))
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+}
+
+function normalizeListingPhotoUrl(rawUrl: string): string {
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return rawUrl;
+  }
+
+  const { data: publicData } = supabase.storage.from('listings').getPublicUrl(rawUrl);
+  return publicData?.publicUrl ?? rawUrl;
+}
+
 export async function getListingById(id: string): Promise<{ data: ListingDetail | null; error: Error | null }> {
   try {
-    const { data, error } = await supabase
-      .from('v_listing_detail')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const [{ data, error }, { data: listingRow }] = await Promise.all([
+      supabase.from('v_listing_detail').select('*').eq('id', id).single(),
+      supabase
+        .from('listings')
+        .select('category_id, parcel_size, pickup_primary_city, pickup_work_city')
+        .eq('id', id)
+        .maybeSingle()
+    ]);
 
     if (error) {
       return { data: null, error: new Error(error.message) };
     }
 
-    const listing = data as ListingDetail;
+    const categoryId =
+      listingRow?.category_id != null ? Number(listingRow.category_id) : null;
 
-    // Normaliser les URLs des photos :
-    // - si `photo.url` est déjà une URL absolue (http/https), on la garde telle quelle
-    // - sinon, on génère une URL publique à partir du chemin stocké
+    let categorySlug: string | null = null;
+    if (categoryId != null) {
+      const { data: categoryRow } = await supabase
+        .from('categories')
+        .select('slug')
+        .eq('id', categoryId)
+        .maybeSingle();
+      categorySlug = categoryRow?.slug ? String(categoryRow.slug) : null;
+    }
+
+    const listing = data as ListingDetail;
+    const parsedPhotos = normalizeListingPhotos(listing.photos);
+
     const normalizedListing: ListingDetail = {
       ...listing,
-      photos: listing.photos
-        ? listing.photos.map((photo) => {
-            const rawUrl = photo.url;
-
-            if (
-              typeof rawUrl === 'string' &&
-              (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
-            ) {
-              return photo;
-            }
-
-            const { data: publicData } = supabase.storage
-              .from('listings')
-              .getPublicUrl(rawUrl);
-
-            return {
-              ...photo,
-              url: publicData?.publicUrl ?? rawUrl
-            };
-          })
+      price: coerceListingPrice(listing.price),
+      category_id: categoryId ?? listing.category_id ?? null,
+      category_slug: categorySlug,
+      parcel_size: coerceParcelSize(listingRow?.parcel_size ?? listing.parcel_size),
+      // Fiche publique : jamais de rue / NPA (confidentialité)
+      pickup_primary_street: null,
+      pickup_primary_postal_code: null,
+      pickup_primary_city: listingRow?.pickup_primary_city ?? listing.pickup_primary_city ?? null,
+      pickup_work_street: null,
+      pickup_work_postal_code: null,
+      pickup_work_city: listingRow?.pickup_work_city ?? listing.pickup_work_city ?? null,
+      photos: parsedPhotos
+        ? parsedPhotos.map((photo) => ({
+            ...photo,
+            url: normalizeListingPhotoUrl(String(photo.url ?? ''))
+          }))
         : null
     };
+
+    if (
+      deliveryModeIncludesPickup(normalizedListing.delivery_mode) &&
+      !listingHasPublicPickupCity(normalizedListing) &&
+      normalizedListing.seller_id
+    ) {
+      const { data: sellerCities } = await supabase
+        .from('profiles')
+        .select('city, work_city')
+        .eq('id', normalizedListing.seller_id)
+        .maybeSingle();
+      if (sellerCities) {
+        normalizedListing.pickup_primary_city =
+          String(sellerCities.city ?? '').trim() || null;
+        normalizedListing.pickup_work_city =
+          String(sellerCities.work_city ?? '').trim() || null;
+      }
+    }
 
     return { data: normalizedListing, error: null };
   } catch (err) {
@@ -773,39 +953,73 @@ export async function createListing(
  * @param filename - Nom du fichier
  */
 export async function uploadListingPhoto(
-  file: { uri: string; type?: string; name?: string },
+  file: { uri: string; type?: string; name?: string; width?: number; height?: number },
   userId: string,
   listingId: string,
   filename: string
 ): Promise<{ data: string | null; error: Error | null }> {
   try {
-    // Lire le fichier local en base64 (compatible iOS/Android/Expo)
-    const base64 = await FileSystem.readAsStringAsync(file.uri, {
-      // Certaines versions d'Expo n'exposent pas EncodingType, on fallback sur la string 'base64'
-      encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64'
-    });
-    const arrayBuffer = decodeBase64(base64);
-    const binary = new Uint8Array(arrayBuffer);
-    const fileExt = (filename.split('.').pop() || 'jpg').toLowerCase();
-    const filePath = `${userId}/${listingId}/${filename}`;
+    const preparedFull = await prepareListingPhotoForUpload(file);
+    const binary = await readLocalImageBinary(preparedFull.uri);
 
-    // Upload vers Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('listings')
-      .upload(filePath, binary, {
-        // Forcer un content-type d'image valide pour React Native / navigateurs
-        contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
-        upsert: false
+    // Always JPEG after prepareListingPhotoForUpload (keeps Storage + CDN simple).
+    const safeFilename = String(filename || preparedFull.name || `photo-${Date.now()}.jpg`)
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/\.[^.]+$/, '.jpg');
+    const contentType = 'image/jpeg';
+
+    const uploadToPath = async (storageFilename: string, body: Uint8Array, upsert = false) => {
+      const filePath = `${userId}/${listingId}/${storageFilename}`;
+      const { error: uploadError } = await supabase.storage.from('listings').upload(filePath, body, {
+        contentType,
+        upsert,
+        cacheControl: '31536000'
       });
+      return { filePath, uploadError };
+    };
+
+    let { filePath, uploadError } = await uploadToPath(safeFilename, binary);
+
+    if (uploadError && /already exists|duplicate|409/i.test(uploadError.message ?? '')) {
+      const retryFilename = buildListingStorageFilename(0, safeFilename)
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .replace(/\.[^.]+$/, '.jpg');
+      ({ filePath, uploadError } = await uploadToPath(retryFilename, binary));
+    }
 
     if (uploadError) {
       return { data: null, error: new Error(uploadError.message) };
     }
 
-    // Récupérer l'URL publique
-    const { data: urlData } = supabase.storage
-      .from('listings')
-      .getPublicUrl(filePath);
+    // Best-effort card sibling for feed/grids (no transform billing).
+    try {
+      const preparedCard = await prepareListingPhotoForUpload(
+        {
+          uri: preparedFull.uri,
+          type: 'image/jpeg',
+          name: preparedFull.name,
+          width: preparedFull.width,
+          height: preparedFull.height
+        },
+        {
+          maxEdgePx: LISTING_CARD_MAX_EDGE_PX,
+          quality: LISTING_CARD_JPEG_QUALITY
+        }
+      );
+      const cardBinary = await readLocalImageBinary(preparedCard.uri);
+      const cardFilename = toListingCardStorageFilename(filePath.split('/').pop() || safeFilename);
+      const cardPath = `${userId}/${listingId}/${cardFilename}`;
+      await supabase.storage.from('listings').upload(cardPath, cardBinary, {
+        contentType,
+        upsert: true,
+        cacheControl: '31536000'
+      });
+    } catch {
+      // Full upload already succeeded; feed will fall back to full until backfill.
+    }
+
+    const { data: urlData } = supabase.storage.from('listings').getPublicUrl(filePath);
 
     if (!urlData?.publicUrl) {
       return { data: null, error: new Error('Unable to retrieve the public URL') };
@@ -843,6 +1057,153 @@ export async function addListingPhoto(
   }
 
   return { data: data as ListingPhoto, error: null };
+}
+
+export type ListingPhotoUploadInput = {
+  uri: string;
+  type?: string;
+  name?: string;
+  width?: number;
+  height?: number;
+};
+
+export type UploadListingPhotosResult = {
+  uploadedCount: number;
+  failedCount: number;
+  errors: string[];
+};
+
+/**
+ * Upload et enregistre toutes les photos d'une annonce (publication ou édition).
+ * Utilise des noms de fichiers uniques et vérifie chaque insertion en BDD.
+ */
+export async function uploadAndAttachListingPhotos(
+  photos: ListingPhotoUploadInput[],
+  userId: string,
+  listingId: string
+): Promise<UploadListingPhotosResult> {
+  const errors: string[] = [];
+  let uploadedCount = 0;
+
+  for (let i = 0; i < photos.length; i++) {
+    const photo = photos[i]!;
+    const filename = buildListingStorageFilename(i, photo.name);
+
+    const { data: photoUrl, error: uploadError } = await uploadListingPhoto(
+      photo,
+      userId,
+      listingId,
+      filename
+    );
+
+    if (uploadError || !photoUrl) {
+      errors.push(
+        uploadError?.message ??
+          `Photo ${i + 1}: upload failed`
+      );
+      continue;
+    }
+
+    const { error: addError } = await addListingPhoto(
+      listingId,
+      photoUrl,
+      uploadedCount
+    );
+
+    if (addError) {
+      errors.push(
+        typeof addError === 'string'
+          ? addError
+          : `Photo ${i + 1}: unable to save`
+      );
+      continue;
+    }
+
+    uploadedCount += 1;
+  }
+
+  return {
+    uploadedCount,
+    failedCount: Math.max(0, photos.length - uploadedCount),
+    errors
+  };
+}
+
+/**
+ * Supprime une photo d'une annonce appartenant à l'utilisateur connecté.
+ */
+export async function deleteListingPhoto(
+  photoId: string,
+  listingId: string
+): Promise<ApiResponse<null>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'User not signed in' };
+  }
+
+  const { error } = await supabase
+    .from('listing_photos')
+    .delete()
+    .eq('id', photoId)
+    .eq('listing_id', listingId);
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: null, error: null };
+}
+
+/**
+ * Réordonne les photos d'une annonce selon l'ordre fourni.
+ * Deux passes (indices temporaires puis finaux) pour respecter UNIQUE(listing_id, order_index).
+ */
+export async function reorderListingPhotos(
+  listingId: string,
+  orderedPhotoIds: string[]
+): Promise<ApiResponse<null>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'User not signed in' };
+  }
+
+  if (orderedPhotoIds.length === 0) {
+    return { data: null, error: null };
+  }
+
+  for (let i = 0; i < orderedPhotoIds.length; i++) {
+    const photoId = orderedPhotoIds[i];
+    const { error } = await supabase
+      .from('listing_photos')
+      .update({ order_index: temporaryListingPhotoOrderIndex(i) })
+      .eq('id', photoId)
+      .eq('listing_id', listingId);
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+  }
+
+  for (let i = 0; i < orderedPhotoIds.length; i++) {
+    const photoId = orderedPhotoIds[i];
+    const { error } = await supabase
+      .from('listing_photos')
+      .update({ order_index: i })
+      .eq('id', photoId)
+      .eq('listing_id', listingId);
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+  }
+
+  return { data: null, error: null };
 }
 
 /**
@@ -892,6 +1253,71 @@ export async function getMyListingsFeed(): Promise<ApiResponse<FeedListing[]>> {
   }
 
   return { data: (data || []) as FeedListing[], error: null };
+}
+
+/**
+ * Annonces publiées d'un vendeur pour le dressing (closet profil), avec pagination.
+ */
+export async function getSellerClosetListings(
+  sellerId: string,
+  params?: { offset?: number; limit?: number }
+): Promise<ApiResponse<FeedListing[]>> {
+  const offset = params?.offset ?? 0;
+  const limit = params?.limit ?? 20;
+
+  const { data, error } = await supabase
+    .from('v_feed_listings')
+    .select('*')
+    .eq('seller_id', sellerId)
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  return { data: (data || []) as FeedListing[], error: null };
+}
+
+const SELLER_CLOSET_PAGE_SIZE = 20;
+
+/**
+ * Toutes les annonces publiées d'un vendeur (pagination interne), pour affichage complet du dressing.
+ */
+export async function getAllSellerClosetListings(
+  sellerId: string,
+  options?: { excludeListingId?: string }
+): Promise<ApiResponse<FeedListing[]>> {
+  let offset = 0;
+  const all: FeedListing[] = [];
+
+  while (true) {
+    const { data, error } = await getSellerClosetListings(sellerId, {
+      offset,
+      limit: SELLER_CLOSET_PAGE_SIZE
+    });
+
+    if (error) {
+      return { data: [], error };
+    }
+
+    const rows = data ?? [];
+    all.push(...rows);
+
+    if (rows.length < SELLER_CLOSET_PAGE_SIZE) {
+      break;
+    }
+
+    offset += rows.length;
+  }
+
+  const excludeId = options?.excludeListingId;
+  if (excludeId) {
+    return { data: all.filter((listing) => listing.id !== excludeId), error: null };
+  }
+
+  return { data: all, error: null };
 }
 
 /**
@@ -1215,10 +1641,58 @@ export async function likeListing(listingId: string): Promise<ApiResponse<{ id: 
   if (sellerId) {
     void sendPushNotificationWithUserJwt({
       user_id: sellerId,
-      title: '❤️ Someone liked your listing!',
-      body: 'Someone is interested in your item. It might be a good time to adjust the price!',
+      titleKey: 'push.likeListing.title',
+      bodyKey: 'push.likeListing.body',
+      notification_type: 'favorite_items',
       data: { listing_id: listingId }
     });
+
+    const { count: likesCount } = await supabase
+      .from('likes')
+      .select('id', { count: 'exact', head: true })
+      .eq('listing_id', listingId);
+
+    if (likesCount === 5) {
+      void sendPushNotificationWithUserJwt({
+        user_id: sellerId,
+        titleKey: 'push.likesHot.title',
+        bodyKey: 'push.likesHot.body',
+        notification_type: 'favorite_items',
+        data: { listing_id: listingId, likes_milestone: 5 }
+      });
+    }
+
+    if (likesCount != null && likesCount >= 2) {
+      const { data: otherLikers } = await supabase
+        .from('likes')
+        .select('user_id')
+        .eq('listing_id', listingId)
+        .neq('user_id', user.id);
+
+      for (const row of otherLikers ?? []) {
+        const likerId = String((row as { user_id?: string }).user_id ?? '').trim();
+        if (!likerId || likerId === sellerId) continue;
+
+        if (likesCount === 2) {
+          void sendPushNotificationWithUserJwt({
+            user_id: likerId,
+            titleKey: 'push.urgencySomeoneElse.title',
+            bodyKey: 'push.urgencySomeoneElse.body',
+            notification_type: 'favorite_items',
+            data: { listing_id: listingId }
+          });
+        }
+        if (likesCount === 3) {
+          void sendPushNotificationWithUserJwt({
+            user_id: likerId,
+            titleKey: 'push.urgencySellingFast.title',
+            bodyKey: 'push.urgencySellingFast.body',
+            notification_type: 'favorite_items',
+            data: { listing_id: listingId }
+          });
+        }
+      }
+    }
   }
 
   return { data: { id: (data as any).id as string }, error: null };
@@ -1434,6 +1908,69 @@ export async function getThreads(): Promise<ApiResponse<ThreadWithRelations[]>> 
 }
 
 /**
+ * Récupère le thread d'une commande (listing + acheteur), s'il existe.
+ */
+export async function getExistingThreadForOrder(
+  listingId: string,
+  buyerId: string
+): Promise<ApiResponse<Thread | null>> {
+  try {
+    const { data: existing, error } = await supabase
+      .from('threads')
+      .select('*')
+      .eq('listing_id', listingId)
+      .eq('buyer_id', buyerId)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      return { data: null, error: error.message };
+    }
+
+    return { data: (existing as Thread | null) ?? null, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'Error loading conversation'
+    };
+  }
+}
+
+/**
+ * Récupère un thread existant pour un listing (sans en créer).
+ */
+export async function getExistingThreadForListing(
+  listingId: string
+): Promise<ApiResponse<Thread | null>> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'User not signed in' };
+  }
+
+  try {
+    const { data: existing, error } = await supabase
+      .from('threads')
+      .select('*')
+      .eq('listing_id', listingId)
+      .eq('buyer_id', user.id)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      return { data: null, error: error.message };
+    }
+
+    return { data: (existing as Thread | null) ?? null, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'Error loading conversation'
+    };
+  }
+}
+
+/**
  * Crée ou récupère un thread pour un listing donné entre l'acheteur connecté et le vendeur.
  */
 export async function createOrGetThreadForListing(
@@ -1575,7 +2112,45 @@ export async function sendOfferMessage(params: {
     return { data: null, error: 'User not signed in' };
   }
 
+  const { data: offerGate, error: offerGateError } = await getBuyerListingOfferGate(listingId);
+  if (offerGateError) {
+    return { data: null, error: offerGateError };
+  }
+  if (offerGate && !offerGate.canOffer) {
+    return {
+      data: null,
+      error: offerGate.reason === 'pending' ? 'OFFER_ALREADY_PENDING' : 'OFFER_ALREADY_ACCEPTED'
+    };
+  }
+
   const fallbackBody = `Offer: ${amount.toFixed(2)} ${currency} (status: pending)`;
+
+  // Évite les doublons si l'utilisateur appuie deux fois vite (race avant disabled UI).
+  const dedupeSince = new Date(Date.now() - 10_000).toISOString();
+  const { data: recentDuplicate, error: dedupeError } = await supabase
+    .from('messages')
+    .select(
+      `
+      *,
+      sender:profiles!messages_sender_id_fkey(id, display_name, avatar_url)
+    `
+    )
+    .eq('thread_id', threadId)
+    .eq('sender_id', user.id)
+    .eq('type', 'offer')
+    .eq('offer_amount', amount)
+    .eq('offer_status', 'pending')
+    .gte('created_at', dedupeSince)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (dedupeError) {
+    return { data: null, error: dedupeError.message };
+  }
+  if (recentDuplicate) {
+    return { data: recentDuplicate as Message, error: null };
+  }
 
   const { data, error } = await supabase
     .from('messages')
@@ -1606,6 +2181,39 @@ export async function sendOfferMessage(params: {
     .from('threads')
     .update({ last_message_at: (data as any)?.created_at ?? new Date().toISOString() })
     .eq('id', threadId);
+
+  const { data: listingRow } = await supabase
+    .from('listings')
+    .select('seller_id')
+    .eq('id', listingId)
+    .maybeSingle();
+  const offerSellerId = listingRow
+    ? String((listingRow as { seller_id?: string }).seller_id ?? '').trim()
+    : '';
+  if (offerSellerId && offerSellerId !== user.id) {
+    void (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) return;
+        await fetch(`${SUPABASE_URL}/functions/v1/notify-new-offer`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            thread_id: threadId,
+            listing_id: listingId,
+            message_id: (data as Message).id,
+            amount
+          })
+        });
+      } catch {
+        // silent
+      }
+    })();
+  }
 
   return { data: data as Message, error: null };
 }

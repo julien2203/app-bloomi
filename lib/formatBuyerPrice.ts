@@ -1,4 +1,10 @@
-import { computeBuyerFees, computeBuyerFinalPriceChf, roundChf } from './fees';
+import {
+  computeBuyerFees,
+  computeBuyerDisplayPriceChf,
+  computeBuyerFinalPriceChf,
+  roundChf,
+  roundChfToInteger
+} from './fees';
 
 export function formatChf(amount: number): string {
   try {
@@ -7,6 +13,32 @@ export function formatChf(amount: number): string {
     const safe = Number(amount);
     return `${(Number.isFinite(safe) ? safe : 0).toFixed(2)} CHF`;
   }
+}
+
+/** Prix catalogue / checkout acheteur : entier CHF, sans décimales (ex. 61 CHF). */
+export function formatCatalogPriceChf(amount: number, currency = 'CHF'): string {
+  try {
+    return `${roundChfToInteger(amount)} ${currency}`;
+  } catch {
+    const safe = Number(amount);
+    return `${Number.isFinite(safe) ? Math.round(safe) : 0} ${currency}`;
+  }
+}
+
+/**
+ * Ligne « prix article / offre » dans un récap : toujours 2 décimales.
+ * Ne pas utiliser formatCatalogPriceChf ici (ceil → 2.70 devient 3).
+ */
+export function formatItemPriceChf(amount: number, currency = 'CHF'): string {
+  return formatChf(amount).replace(' CHF', ` ${currency}`);
+}
+
+/**
+ * Ligne frais Bloomi dans un récap (peut être décimal).
+ * Préfixe « + » optionnel côté UI.
+ */
+export function formatFeeLineChf(amount: number, currency = 'CHF'): string {
+  return formatItemPriceChf(amount, currency);
 }
 
 export function formatChfAmount(amount: number): string {
@@ -20,15 +52,11 @@ export function formatChfAmount(amount: number): string {
 
 export function formatBuyerFinalPrice(price: number, currency = 'CHF'): string {
   try {
-    const fees = price > 0 && !isNaN(price) ? computeBuyerFees(price) : null;
-    if (!fees) {
-      const safe = Number(price);
-      return `${(Number.isFinite(safe) ? roundChf(safe) : 0).toFixed(2)} ${currency}`;
-    }
-    return `${fees.finalPriceChf.toFixed(2)} ${currency}`;
+    const display = computeBuyerDisplayPriceChf(price);
+    return formatCatalogPriceChf(display, currency);
   } catch {
     const safe = Number(price);
-    return `${(Number.isFinite(safe) ? roundChf(safe) : 0).toFixed(2)} ${currency}`;
+    return formatCatalogPriceChf(Number.isFinite(safe) ? safe : 0, currency);
   }
 }
 
@@ -40,4 +68,9 @@ export function formatPercent(rate: number): number {
   }
 }
 
-export { computeBuyerFees, computeBuyerFinalPriceChf };
+export {
+  computeBuyerFees,
+  computeBuyerDisplayPriceChf,
+  computeBuyerFinalPriceChf,
+  roundChfToInteger
+};

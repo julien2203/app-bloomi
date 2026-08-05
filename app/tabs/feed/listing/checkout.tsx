@@ -4,18 +4,18 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStripe } from '@stripe/stripe-react-native';
+import { getSafeBottomInset } from '../../../../lib/safeArea';
 import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../../../lib/supabase';
 import { isStripePublishableKeyConfigured, SUPABASE_URL } from '../../../../lib/env';
 import { theme } from '../../../../lib/theme';
@@ -24,12 +24,27 @@ import { Text } from '../../../../components/ui/Text';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { useAuthStore } from '../../../../stores/authStore';
 import { openGuestAuthPrompt } from '../../../../lib/guestAuthPrompt';
-import { computeBuyerFees } from '../../../../lib/fees';
-import { formatChf, formatPercent } from '../../../../lib/formatBuyerPrice';
+import { computeBuyerFees, type BuyerFeesBreakdown } from '../../../../lib/fees';
+import { formatCatalogPriceChf } from '../../../../lib/formatBuyerPrice';
 import {
   BuyerPriceBreakdownSheet,
   BuyerPriceInfoButton
 } from '../../../../components/pricing/BuyerPriceBreakdownSheet';
+import {
+  defaultCheckoutDeliveryMode,
+  deliveryModeIncludesPickup,
+  deliveryModeIncludesShipping,
+  isCheckoutDeliveryAllowed,
+  type CheckoutDeliveryMode,
+  type ListingDeliveryMode
+} from '../../../../lib/deliveryMode';
+import { LetterAplusLabelNote } from '../../../../components/listing/LetterAplusLabelNote';
+import { buildStripePaymentSheetParams } from '../../../../lib/stripePaymentSheet';
+import {
+  fetchProfileShippingAddress,
+  promptCompleteProfileAddress,
+  type ProfileShippingAddress
+} from '../../../../lib/profileShippingAddress';
 
 type CheckoutParams = {
   listing_id: string;
@@ -38,40 +53,18 @@ type CheckoutParams = {
   title: string;
   cover_photo?: string;
   offer_message_id?: string;
+  from_messages_thread?: string;
 };
 
-type DeliveryMode = 'pickup' | 'shipping';
-
-type SavedProfileAddress = {
-  street: string;
-  postal_code: string;
-  city: string;
-  country: string;
-};
-
-type CountryCode = 'CH' | 'FR' | 'DE' | 'IT';
-
-function isSavedAddressComplete(a: SavedProfileAddress | null): a is SavedProfileAddress {
-  if (!a) return false;
-  return Boolean(
-    a.street.trim() && a.postal_code.trim() && a.city.trim() && String(a.country ?? '').trim()
-  );
-}
+type DeliveryMode = CheckoutDeliveryMode;
+type CheckoutPaymentMethod = 'card' | 'twint';
 
 export default function CheckoutScreen() {
   const { t } = useTranslation();
-  const countryOptions = React.useMemo(
-    () =>
-      [
-        { code: 'CH' as const, label: t('feed.checkout.countryCH') },
-        { code: 'FR' as const, label: t('feed.checkout.countryFR') },
-        { code: 'DE' as const, label: t('feed.checkout.countryDE') },
-        { code: 'IT' as const, label: t('feed.checkout.countryIT') }
-      ] as const,
-    [t]
-  );
+  const shippingCountryLabel = t('feed.checkout.countryCH');
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const { user } = useAuthStore();
@@ -87,29 +80,45 @@ export default function CheckoutScreen() {
   const title = params.title ?? 'Item';
   const coverPhoto = params.cover_photo ?? null;
   const offerMessageId = typeof params.offer_message_id === 'string' ? params.offer_message_id.trim() : '';
+  const fromMessagesThread =
+    typeof params.from_messages_thread === 'string' ? params.from_messages_thread.trim() : '';
+
+  const handleCheckoutBack = useCallback(() => {
+    if (fromMessagesThread && router.canGoBack?.()) {
+      router.back();
+      return;
+    }
+    if (router.canGoBack && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (fromMessagesThread) {
+      router.replace({
+        pathname: '/tabs/messages/[id]',
+        params: { id: fromMessagesThread, from_inbox: '1' }
+      });
+      return;
+    }
+    router.replace('/tabs/feed');
+  }, [fromMessagesThread, router]);
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('pickup');
-  const [street, setStreet] = useState('');
-  const [city, setCity] = useState('');
-  const [postalCode, setPostalCode] = useState('');
-  const [country, setCountry] = useState<CountryCode>('CH');
-  const [showCountryPicker, setShowCountryPicker] = useState(false);
 
-  const [savedProfileAddress, setSavedProfileAddress] = useState<SavedProfileAddress | null>(null);
-  /** Shipping address: saved profile or manual entry */
-  const [shippingAddressMode, setShippingAddressMode] = useState<'profile' | 'custom'>('custom');
-  const prevDeliveryModeRef = useRef<DeliveryMode>(deliveryMode);
-  /** Prevents overwriting “Different address” when the profile loads or updates */
-  const userChoseCustomShippingRef = useRef(false);
+  const [profileShippingAddress, setProfileShippingAddress] =
+    useState<ProfileShippingAddress | null>(null);
+  const [profileAddressLoaded, setProfileAddressLoaded] = useState(false);
+  const shippingAddressAlertShownRef = useRef(false);
 
   const [paying, setPaying] = useState(false);
   const guestCheckoutPromptedRef = useRef(false);
+  const [sellerVacationMode, setSellerVacationMode] = useState(false);
 
   const [parcelSize, setParcelSize] = useState<string | null>(null);
+  const [listingDeliveryMode, setListingDeliveryMode] = useState<ListingDeliveryMode>('both');
+  const [listingMetaLoaded, setListingMetaLoaded] = useState(false);
   const [shippingFeeCents, setShippingFeeCents] = useState<number | null>(null);
-  const [isPromoShipping, setIsPromoShipping] = useState(false);
-  const [loadingShippingFee, setLoadingShippingFee] = useState(false);
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>('card');
 
   useEffect(() => {
     if (user?.id) {
@@ -129,45 +138,80 @@ export default function CheckoutScreen() {
   useEffect(() => {
     if (!listingId) return;
     let cancelled = false;
+    setListingMetaLoaded(false);
     void (async () => {
       const { data, error } = await supabase
         .from('listings')
-        .select('parcel_size')
+        .select('parcel_size, delivery_mode')
         .eq('id', listingId)
         .maybeSingle();
-      if (cancelled || error || !data) return;
-      const ps = (data as { parcel_size?: string | null }).parcel_size;
+      if (cancelled) return;
+      if (error || !data) {
+        setListingMetaLoaded(true);
+        return;
+      }
+      const row = data as { parcel_size?: string | null; delivery_mode?: string | null };
+      const ps = row.parcel_size;
       if (ps) setParcelSize(String(ps));
+      const dm = String(row.delivery_mode ?? 'both').toLowerCase() as ListingDeliveryMode;
+      const normalized: ListingDeliveryMode =
+        dm === 'pickup' || dm === 'shipping' || dm === 'both' ? dm : 'both';
+      setListingDeliveryMode(normalized);
+      setDeliveryMode(defaultCheckoutDeliveryMode(normalized));
+      if (!cancelled) setListingMetaLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
   }, [listingId]);
 
+  const showPickupOption = deliveryModeIncludesPickup(listingDeliveryMode);
+  const showShippingOption = deliveryModeIncludesShipping(listingDeliveryMode);
+
+  useEffect(() => {
+    if (!sellerId) {
+      setSellerVacationMode(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('vacation_mode')
+        .eq('id', sellerId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setSellerVacationMode(false);
+        return;
+      }
+      const row = data as { vacation_mode?: boolean | null };
+      setSellerVacationMode(Boolean(row.vacation_mode));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sellerId]);
+
   useEffect(() => {
     if (!parcelSize) {
       setShippingFeeCents(null);
-      setIsPromoShipping(false);
       return;
     }
 
     let cancelled = false;
-    setLoadingShippingFee(true);
     setShippingFeeCents(null);
-    setIsPromoShipping(false);
 
     void (async () => {
       const { data, error } = await supabase.rpc('get_shipping_fee', {
         p_parcel_size: parcelSize
       });
       if (cancelled) return;
-      setLoadingShippingFee(false);
       if (error || !data) return;
 
-      const row = data as { fee_cents?: number; is_promo?: boolean };
+      const row = data as { fee_cents?: number };
       if (typeof row.fee_cents !== 'number') return;
       setShippingFeeCents(row.fee_cents);
-      setIsPromoShipping(Boolean(row.is_promo));
     })();
 
     return () => {
@@ -175,7 +219,20 @@ export default function CheckoutScreen() {
     };
   }, [parcelSize]);
 
-  const buyerFees = useMemo(() => computeBuyerFees(amountNum), [amountNum]);
+  const buyerFees = useMemo((): BuyerFeesBreakdown => {
+    const fees = computeBuyerFees(amountNum);
+    if (fees) return fees;
+    return {
+      itemPriceChf: amountNum,
+      tier: 'low',
+      protectionRate: 0,
+      bankingRate: 0,
+      protectionChf: 0,
+      bankingChf: 0,
+      totalBuyerFeesChf: 0,
+      finalPriceChf: amountNum
+    };
+  }, [amountNum]);
   const shippingFeeChf = useMemo(() => {
     if (deliveryMode !== 'shipping' || shippingFeeCents == null) return 0;
     return shippingFeeCents / 100;
@@ -184,101 +241,78 @@ export default function CheckoutScreen() {
     () => buyerFees.finalPriceChf + shippingFeeChf,
     [buyerFees.finalPriceChf, shippingFeeChf]
   );
+  const twintMaxChf = 100;
+  const isTwintEligible = total <= twintMaxChf + 1e-9;
 
-  const formattedPrice = useMemo(() => formatChf(amountNum), [amountNum]);
-  const formattedCommission = useMemo(() => formatChf(buyerFees.protectionChf), [buyerFees.protectionChf]);
-  const formattedBankingFee = useMemo(() => formatChf(buyerFees.bankingChf), [buyerFees.bankingChf]);
-  const formattedShippingFee = useMemo(
-    () => `${shippingFeeChf.toFixed(2)} CHF`,
-    [shippingFeeChf]
+  const formattedFinalPrice = useMemo(
+    () => formatCatalogPriceChf(buyerFees.finalPriceChf),
+    [buyerFees.finalPriceChf]
   );
-  const formattedTotal = useMemo(() => `${total.toFixed(2)} CHF`, [total]);
+  const formattedShippingFee = useMemo(
+    () => (shippingFeeCents != null ? formatCatalogPriceChf(shippingFeeChf) : '…'),
+    [shippingFeeCents, shippingFeeChf]
+  );
+  const formattedTotal = useMemo(() => formatCatalogPriceChf(total), [total]);
+  const paymentMethodSummary = paymentMethod === 'twint' ? 'TWINT' : 'Carte';
 
-  const countryLabel = useMemo(() => {
-    return countryOptions.find((c) => c.code === country)?.label ?? t('feed.checkout.countryCH');
-  }, [country]);
+  const shippingAddressComplete = useMemo(
+    () => profileShippingAddress != null,
+    [profileShippingAddress]
+  );
 
-  const applySavedAddressToForm = useCallback((a: SavedProfileAddress) => {
-    setStreet(a.street.trim());
-    setPostalCode(a.postal_code.trim());
-    setCity(a.city.trim());
-    const c = String(a.country ?? 'CH').toUpperCase();
-    setCountry(countryOptions.some((o) => o.code === c) ? (c as CountryCode) : 'CH');
-  }, []);
-
-  useEffect(() => {
+  const loadProfileShippingAddress = useCallback(async () => {
     if (!user?.id) {
-      setSavedProfileAddress(null);
+      setProfileShippingAddress(null);
+      setProfileAddressLoaded(true);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('street, postal_code, city, country')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (cancelled) return;
-      if (error || !data) {
-        setSavedProfileAddress(null);
-        return;
-      }
-      const row = data as Record<string, unknown>;
-      const next: SavedProfileAddress = {
-        street: String(row.street ?? ''),
-        postal_code: String(row.postal_code ?? ''),
-        city: String(row.city ?? ''),
-        country: String(row.country ?? 'CH')
-      };
-      setSavedProfileAddress(isSavedAddressComplete(next) ? next : null);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setProfileAddressLoaded(false);
+    const address = await fetchProfileShippingAddress(supabase, user.id);
+    setProfileShippingAddress(address);
+    setProfileAddressLoaded(true);
   }, [user?.id]);
 
   useEffect(() => {
-    const prev = prevDeliveryModeRef.current;
-    prevDeliveryModeRef.current = deliveryMode;
+    void loadProfileShippingAddress();
+  }, [loadProfileShippingAddress]);
 
-    if (deliveryMode === 'pickup') {
-      userChoseCustomShippingRef.current = false;
-      return;
-    }
-
-    if (deliveryMode !== 'shipping') return;
-
-    const justEnteredShipping = prev !== 'shipping';
-    if (!justEnteredShipping) return;
-
-    userChoseCustomShippingRef.current = false;
-    const complete = savedProfileAddress && isSavedAddressComplete(savedProfileAddress);
-    if (complete) {
-      setShippingAddressMode('profile');
-      applySavedAddressToForm(savedProfileAddress);
-    } else {
-      setShippingAddressMode('custom');
-    }
-  }, [deliveryMode, savedProfileAddress, applySavedAddressToForm]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadProfileShippingAddress();
+    }, [loadProfileShippingAddress])
+  );
 
   useEffect(() => {
-    if (deliveryMode !== 'shipping') return;
-    if (!savedProfileAddress || !isSavedAddressComplete(savedProfileAddress)) return;
-    if (userChoseCustomShippingRef.current) return;
-    if (shippingAddressMode !== 'custom') return;
-    const formEmpty = !street.trim() && !city.trim() && !postalCode.trim();
-    if (!formEmpty) return;
-    setShippingAddressMode('profile');
-    applySavedAddressToForm(savedProfileAddress);
+    if (deliveryMode !== 'shipping') {
+      shippingAddressAlertShownRef.current = false;
+      return;
+    }
+    if (!profileAddressLoaded || profileShippingAddress) return;
+    if (shippingAddressAlertShownRef.current) return;
+    shippingAddressAlertShownRef.current = true;
+    promptCompleteProfileAddress(router, t, 'buyer');
+  }, [deliveryMode, profileAddressLoaded, profileShippingAddress, router, t]);
+
+  const canProceedToPay = useMemo(() => {
+    if (!listingMetaLoaded || sellerVacationMode || !profileAddressLoaded) return false;
+    if (deliveryMode === 'shipping' && !shippingAddressComplete) return false;
+    if (paymentMethod === 'twint' && !isTwintEligible) return false;
+    return true;
   }, [
     deliveryMode,
-    savedProfileAddress,
-    applySavedAddressToForm,
-    shippingAddressMode,
-    street,
-    city,
-    postalCode
+    isTwintEligible,
+    listingMetaLoaded,
+    paymentMethod,
+    profileAddressLoaded,
+    sellerVacationMode,
+    shippingAddressComplete
   ]);
+
+  useEffect(() => {
+    if (!isTwintEligible && paymentMethod === 'twint') {
+      setPaymentMethod('card');
+    }
+  }, [isTwintEligible, paymentMethod]);
 
   const handlePay = async () => {
     if (paying) return;
@@ -293,15 +327,29 @@ export default function CheckoutScreen() {
       Alert.alert(t('common.error'), t('feed.checkout.missingParams'));
       return;
     }
+    if (sellerVacationMode) {
+      Alert.alert(t('feed.listingDetail.sellerVacationTitle'), t('feed.listingDetail.sellerVacationMessage'));
+      return;
+    }
 
     if (amountNum <= 0) {
       Alert.alert(t('common.error'), t('feed.checkout.invalidAmount'));
       return;
     }
 
+    if (!listingMetaLoaded) {
+      Alert.alert(t('common.error'), t('common.loading'));
+      return;
+    }
+
+    if (!isCheckoutDeliveryAllowed(listingDeliveryMode, deliveryMode)) {
+      Alert.alert(t('common.error'), t('feed.checkout.deliveryNotAllowed'));
+      return;
+    }
+
     if (deliveryMode === 'shipping') {
-      if (!street.trim() || !city.trim() || !postalCode.trim() || !country.trim()) {
-        Alert.alert(t('feed.checkout.incompleteAddress'), t('feed.checkout.incompleteAddressMessage'));
+      if (!profileShippingAddress) {
+        promptCompleteProfileAddress(router, t, 'buyer');
         return;
       }
     }
@@ -311,6 +359,10 @@ export default function CheckoutScreen() {
         t('feed.checkout.stripeNotConfigured'),
         t('feed.checkout.stripeNotConfiguredMessage')
       );
+      return;
+    }
+    if (paymentMethod === 'twint' && !isTwintEligible) {
+      Alert.alert(t('common.error'), t('feed.checkout.twintMaxError'));
       return;
     }
 
@@ -337,12 +389,18 @@ export default function CheckoutScreen() {
           delivery_mode: deliveryMode,
           ...(parcelSize ? { parcel_size: parcelSize } : {}),
           shipping_address:
-            deliveryMode === 'shipping' ? street.trim() : null,
-          shipping_city: deliveryMode === 'shipping' ? city.trim() : null,
+            deliveryMode === 'shipping' ? profileShippingAddress!.street : null,
+          shipping_city: deliveryMode === 'shipping' ? profileShippingAddress!.city : null,
           shipping_postal_code:
-            deliveryMode === 'shipping' ? postalCode.trim() : null,
-          shipping_country: deliveryMode === 'shipping' ? country : null,
-          ...(offerMessageId ? { offer_message_id: offerMessageId } : {})
+            deliveryMode === 'shipping' ? profileShippingAddress!.postal_code : null,
+          shipping_country:
+            deliveryMode === 'shipping' ? profileShippingAddress!.country : null,
+          shipping_first_name:
+            deliveryMode === 'shipping' ? profileShippingAddress!.first_name : null,
+          shipping_last_name:
+            deliveryMode === 'shipping' ? profileShippingAddress!.last_name : null,
+          ...(offerMessageId ? { offer_message_id: offerMessageId } : {}),
+          payment_method: paymentMethod
         })
       });
 
@@ -359,15 +417,12 @@ export default function CheckoutScreen() {
         throw new Error('Missing client_secret');
       }
 
-      const initRes = await initPaymentSheet({
-        merchantDisplayName: 'Bloomi',
-        paymentIntentClientSecret: clientSecret,
-        defaultBillingDetails: {
-          address: {
-            country: 'CH'
-          }
-        }
-      });
+      const initRes = await initPaymentSheet(
+        buildStripePaymentSheetParams({
+          clientSecret,
+          includeWalletPay: paymentMethod === 'card'
+        })
+      );
       if (initRes.error) {
         throw new Error(initRes.error.message);
       }
@@ -404,8 +459,13 @@ export default function CheckoutScreen() {
       if (!orderId) throw new Error('Missing order_id');
 
       router.replace({
-        pathname: '/tabs/feed/listing/order-confirmation',
-        params: { order_id: orderId }
+        pathname: fromMessagesThread
+          ? '/tabs/messages/listing/order-confirmation'
+          : '/tabs/feed/listing/order-confirmation',
+        params: {
+          order_id: orderId,
+          ...(fromMessagesThread ? { from_messages_thread: fromMessagesThread } : {})
+        }
       });
     } catch (e) {
       Alert.alert(t('feed.checkout.paymentFailed'), e instanceof Error ? e.message : 'Unknown error');
@@ -421,7 +481,7 @@ export default function CheckoutScreen() {
     >
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
-          <HeaderBackButton onPress={() => router.back()} />
+          <HeaderBackButton onPress={handleCheckoutBack} />
           <Text variant="body" style={styles.headerTitle}>
             {t('feed.checkout.title')}
           </Text>
@@ -449,67 +509,30 @@ export default function CheckoutScreen() {
 
             <View style={styles.moneyBlock}>
               <View style={styles.moneyRow}>
-                <Text variant="body" color="textSecondary">
-                  {t('feed.checkout.itemPrice')}
-                </Text>
-                <Text variant="body" color="textPrimary">
-                  {formattedPrice}
-                </Text>
-              </View>
-              <View style={styles.moneyRow}>
-                <Text variant="body" color="textSecondary">
-                  {t('feed.checkout.buyerProtection', {
-                    percent: formatPercent(buyerFees.protectionRate)
-                  })}
-                </Text>
-                <Text variant="body" color="textPrimary">
-                  +{formattedCommission}
-                </Text>
-              </View>
-              <View style={styles.moneyRow}>
-                <Text variant="body" color="textSecondary">
-                  {t('feed.checkout.bankingFee', {
-                    percent: formatPercent(buyerFees.bankingRate)
-                  })}
-                </Text>
-                <Text variant="body" color="textPrimary">
-                  +{formattedBankingFee}
-                </Text>
-              </View>
-              {deliveryMode === 'shipping' ? (
-                <View style={styles.moneyRow}>
-                  <View style={styles.shippingFeeLabelCol}>
-                    <Text variant="body" color="textSecondary">
-                      {t('feed.checkout.shippingFee')}
-                    </Text>
-                    {isPromoShipping ? (
-                      <View style={styles.shippingPromoBadge}>
-                        <Text style={styles.shippingPromoBadgeText}>
-                          {t('feed.checkout.shippingPromo')}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  {loadingShippingFee ? (
-                    <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-                  ) : (
-                    <Text variant="body" color="textPrimary">
-                      +{formattedShippingFee}
-                    </Text>
-                  )}
-                </View>
-              ) : null}
-              <View style={[styles.moneyRow, styles.moneyRowTotal]}>
                 <View style={styles.totalLabelRow}>
                   <Text variant="body" style={styles.totalLabel}>
-                    {t('feed.checkout.total')}
+                    {t('feed.pricing.finalPrice')}
+                    <Text style={styles.excludingDelivery}>
+                      {' '}
+                      ({t('feed.pricing.excludingDelivery')})
+                    </Text>
                   </Text>
                   <BuyerPriceInfoButton onPress={() => setShowPriceBreakdown(true)} />
                 </View>
                 <Text variant="body" style={styles.totalAmount}>
-                  {formattedTotal}
+                  {formattedFinalPrice}
                 </Text>
               </View>
+              {deliveryMode === 'shipping' ? (
+                <View style={[styles.moneyRow, styles.moneyRowTotal]}>
+                  <Text variant="body" color="textSecondary">
+                    {t('feed.checkout.shippingFee')}
+                  </Text>
+                  <Text variant="body" color="textPrimary">
+                    +{formattedShippingFee}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -518,35 +541,50 @@ export default function CheckoutScreen() {
               {t('feed.checkout.deliveryMethod')}
             </Text>
 
-            <View style={styles.toggleRow}>
-              <TouchableOpacity
-                style={[styles.toggleCard, deliveryMode === 'pickup' && styles.toggleCardActive]}
-                onPress={() => setDeliveryMode('pickup')}
-                activeOpacity={0.8}
-              >
-                <Text
-                  variant="body"
-                  color={deliveryMode === 'pickup' ? 'appleBlack' : 'textSecondary'}
-                  style={styles.toggleText}
+            {showPickupOption && showShippingOption ? (
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[styles.toggleCard, deliveryMode === 'pickup' && styles.toggleCardActive]}
+                  onPress={() => setDeliveryMode('pickup')}
+                  activeOpacity={0.8}
                 >
-                  {t('feed.checkout.localPickup')}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    variant="body"
+                    color={deliveryMode === 'pickup' ? 'appleBlack' : 'textSecondary'}
+                    style={styles.toggleText}
+                  >
+                    {t('feed.checkout.localPickup')}
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.toggleCard, deliveryMode === 'shipping' && styles.toggleCardActive]}
-                onPress={() => setDeliveryMode('shipping')}
-                activeOpacity={0.8}
-              >
-                <Text
-                  variant="body"
-                  color={deliveryMode === 'shipping' ? 'appleBlack' : 'textSecondary'}
-                  style={styles.toggleText}
+                <TouchableOpacity
+                  style={[styles.toggleCard, deliveryMode === 'shipping' && styles.toggleCardActive]}
+                  onPress={() => setDeliveryMode('shipping')}
+                  activeOpacity={0.8}
                 >
-                  {t('feed.checkout.shipping')}
+                  <Text
+                    variant="body"
+                    color={deliveryMode === 'shipping' ? 'appleBlack' : 'textSecondary'}
+                    style={styles.toggleText}
+                  >
+                    {t('feed.checkout.shipping')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.singleDeliveryCard}>
+                <Text variant="body" style={styles.singleDeliveryText}>
+                  {showPickupOption
+                    ? t('feed.checkout.localPickup')
+                    : t('feed.checkout.shipping')}
                 </Text>
-              </TouchableOpacity>
-            </View>
+                <Text variant="captionSm" color="textSecondary" style={styles.singleDeliveryHint}>
+                  {showPickupOption
+                    ? t('feed.checkout.pickupOnlyHint')
+                    : t('feed.checkout.shippingOnlyHint')}
+                </Text>
+              </View>
+            )}
           </View>
 
           {deliveryMode === 'shipping' && (
@@ -555,201 +593,161 @@ export default function CheckoutScreen() {
                 {t('feed.orderConfirmation.shippingTo')}
               </Text>
 
-              {savedProfileAddress && isSavedAddressComplete(savedProfileAddress) ? (
-                <>
-                  <View style={styles.shippingModeRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.shippingModeCard,
-                        shippingAddressMode === 'profile' && styles.shippingModeCardActive
-                      ]}
-                      onPress={() => {
-                        userChoseCustomShippingRef.current = false;
-                        setShippingAddressMode('profile');
-                        applySavedAddressToForm(savedProfileAddress);
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text
-                        variant="body"
-                        color={shippingAddressMode === 'profile' ? 'appleBlack' : 'textSecondary'}
-                        style={styles.shippingModeTitle}
-                      >
-                        {t('feed.checkout.savedAddress')}
-                      </Text>
-                      <Text variant="captionSm" color="textSecondary" style={styles.shippingModeHint}>
-                        {t('feed.checkout.fromProfile')}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.shippingModeCard,
-                        shippingAddressMode === 'custom' && styles.shippingModeCardActive
-                      ]}
-                      onPress={() => {
-                        userChoseCustomShippingRef.current = true;
-                        setShippingAddressMode('custom');
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text
-                        variant="body"
-                        color={shippingAddressMode === 'custom' ? 'appleBlack' : 'textSecondary'}
-                        style={styles.shippingModeTitle}
-                      >
-                        {t('feed.checkout.differentAddress')}
-                      </Text>
-                      <Text variant="captionSm" color="textSecondary" style={styles.shippingModeHint}>
-                        {t('feed.checkout.enterManually')}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+              {parcelSize === 'letter_aplus' ? (
+                <LetterAplusLabelNote style={styles.letterAplusNote} />
+              ) : null}
 
-                  {shippingAddressMode === 'profile' ? (
-                    <View style={styles.savedAddressBox}>
-                      <Text variant="body" color="textPrimary" style={styles.savedAddressLine}>
-                        {savedProfileAddress.street.trim()}
-                      </Text>
-                      <Text variant="body" color="textSecondary">
-                        {savedProfileAddress.postal_code.trim()} {savedProfileAddress.city.trim()}
-                      </Text>
-                      <Text variant="captionSm" color="textSecondary" style={styles.savedAddressCountry}>
-                        {countryOptions.find(
-                          (c) => c.code === String(savedProfileAddress.country).toUpperCase()
-                        )?.label ?? savedProfileAddress.country}
-                      </Text>
-                    </View>
-                  ) : (
-                    <>
-                      <TextInput
-                        style={styles.input}
-                        placeholder={t('feed.checkout.street')}
-                        placeholderTextColor={theme.colors.textSecondary}
-                        value={street}
-                        onChangeText={setStreet}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder={t('feed.checkout.city')}
-                        placeholderTextColor={theme.colors.textSecondary}
-                        value={city}
-                        onChangeText={setCity}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder={t('feed.checkout.postalCode')}
-                        placeholderTextColor={theme.colors.textSecondary}
-                        value={postalCode}
-                        onChangeText={setPostalCode}
-                        keyboardType="numbers-and-punctuation"
-                      />
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        style={[styles.input, styles.countrySelect]}
-                        onPress={() => setShowCountryPicker(true)}
-                      >
-                        <Text style={styles.countrySelectText}>{countryLabel}</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </>
+              {!profileAddressLoaded ? (
+                <ActivityIndicator color={theme.colors.primary} style={styles.addressLoading} />
+              ) : profileShippingAddress ? (
+                <View style={styles.savedAddressBox}>
+                  <Text variant="body" color="textPrimary" style={styles.savedAddressLine}>
+                    {profileShippingAddress.full_name}
+                  </Text>
+                  <Text variant="body" color="textPrimary" style={styles.savedAddressLine}>
+                    {profileShippingAddress.street}
+                  </Text>
+                  <Text variant="body" color="textSecondary">
+                    {profileShippingAddress.postal_code} {profileShippingAddress.city}
+                  </Text>
+                  <Text variant="captionSm" color="textSecondary" style={styles.savedAddressCountry}>
+                    {shippingCountryLabel}
+                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => router.push('/tabs/profile/my-address')}
+                    style={styles.editAddressLink}
+                  >
+                    <Text variant="captionSm" style={styles.addAddressLinkText}>
+                      {t('profile.myAddress.title')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
-                <>
-                  <Text variant="captionSm" color="textSecondary" style={styles.noSavedHint}>
+                <View style={styles.missingAddressBox}>
+                  <Text variant="body" color="textSecondary" style={styles.noSavedHint}>
                     {t('feed.checkout.noSavedAddressHint')}
                   </Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('feed.checkout.street')}
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={street}
-                    onChangeText={setStreet}
+                  <Button
+                    title={t('profile.addressRequired.cta')}
+                    variant="secondary"
+                    onPress={() => router.push('/tabs/profile/my-address')}
+                    style={styles.addAddressButton}
                   />
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('feed.checkout.city')}
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={city}
-                    onChangeText={setCity}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('feed.checkout.postalCode')}
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={postalCode}
-                    onChangeText={setPostalCode}
-                    keyboardType="numbers-and-punctuation"
-                  />
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.input, styles.countrySelect]}
-                    onPress={() => setShowCountryPicker(true)}
-                  >
-                    <Text style={styles.countrySelectText}>{countryLabel}</Text>
-                  </TouchableOpacity>
-                </>
+                </View>
               )}
             </View>
           )}
-        </ScrollView>
 
-        <Modal
-          transparent
-          animationType="fade"
-          visible={showCountryPicker}
-          onRequestClose={() => setShowCountryPicker(false)}
-        >
-          <View style={styles.countryModalOverlay}>
-            <TouchableOpacity
-              style={styles.countryModalBackdrop}
-              activeOpacity={1}
-              onPress={() => setShowCountryPicker(false)}
-            />
-            <View style={styles.countryModalCard}>
-              <Text style={styles.countryModalTitle}>{t('feed.checkout.country')}</Text>
-              {countryOptions.map((opt) => {
-                const selected = opt.code === country;
-                return (
-                  <TouchableOpacity
-                    key={opt.code}
-                    activeOpacity={0.8}
+          <View style={styles.section}>
+            <Text variant="captionSm" color="textSecondary" style={styles.sectionTitle}>
+              Méthode de paiement
+            </Text>
+            <Text variant="captionSm" color="textSecondary" style={styles.paymentMethodLegend}>
+              Choisissez comment vous souhaitez payer
+            </Text>
+            <View style={styles.paymentMethodStack}>
+              <TouchableOpacity
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod === 'card' && styles.paymentMethodCardActive
+                ]}
+                onPress={() => setPaymentMethod('card')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.paymentMethodTopRow}>
+                  <View style={styles.paymentMethodTextBlock}>
+                    <Text
+                      variant="body"
+                      color={paymentMethod === 'card' ? 'appleBlack' : 'textPrimary'}
+                      style={styles.paymentMethodTitle}
+                    >
+                      Carte
+                    </Text>
+                    <Text variant="captionSm" color="textSecondary" style={styles.paymentMethodSubtitle}>
+                      Visa, Mastercard, Apple Pay, Google Pay
+                    </Text>
+                  </View>
+                  <View
                     style={[
-                      styles.countryOptionRow,
-                      selected && styles.countryOptionRowSelected
+                      styles.radioOuter,
+                      paymentMethod === 'card' && styles.radioOuterActive
                     ]}
-                    onPress={() => {
-                      setCountry(opt.code);
-                      setShowCountryPicker(false);
-                    }}
                   >
-                    <Text style={styles.countryOptionLabel}>{opt.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-              <View style={styles.countryModalFooter}>
-                <Button
-                  title={t('common.close')}
-                  onPress={() => setShowCountryPicker(false)}
-                  variant="google"
-                />
-              </View>
+                    {paymentMethod === 'card' ? <View style={styles.radioInner} /> : null}
+                  </View>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod === 'twint' && styles.paymentMethodCardActive,
+                  !isTwintEligible && styles.paymentMethodCardDisabled
+                ]}
+                onPress={() => {
+                  if (!isTwintEligible) return;
+                  setPaymentMethod('twint');
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.paymentMethodTopRow}>
+                  <View style={styles.paymentMethodTextBlock}>
+                    <Text
+                      variant="body"
+                      color={paymentMethod === 'twint' ? 'appleBlack' : 'textPrimary'}
+                      style={styles.paymentMethodTitle}
+                    >
+                      TWINT
+                    </Text>
+                    <Text variant="captionSm" color="textSecondary" style={styles.paymentMethodSubtitle}>
+                      {isTwintEligible
+                        ? t('feed.checkout.twintAvailable')
+                        : t('feed.checkout.twintUnavailable')}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.radioOuter,
+                      paymentMethod === 'twint' && styles.radioOuterActive
+                    ]}
+                  >
+                    {paymentMethod === 'twint' ? <View style={styles.radioInner} /> : null}
+                  </View>
+                </View>
+                {isTwintEligible ? (
+                  <Text variant="captionSm" color="textSecondary" style={styles.twintDisclaimer}>
+                    {t('feed.checkout.twintDisclaimer')}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </ScrollView>
 
         <BuyerPriceBreakdownSheet
           visible={showPriceBreakdown}
-          itemPriceChf={amountNum}
           onClose={() => setShowPriceBreakdown(false)}
         />
 
-        <View style={[styles.ctaContainer, { paddingBottom: insets.bottom + 80 }]}>
+        <View style={[styles.ctaContainer, { paddingBottom: safeBottom + 14 }]}>
+          <View style={styles.ctaSummaryRow}>
+            <View>
+              <Text variant="captionSm" color="textSecondary">
+                {t('feed.pricing.finalPrice')} · {paymentMethodSummary}
+              </Text>
+              <Text variant="body" style={styles.ctaSummaryTotal}>
+                {formattedTotal}
+              </Text>
+            </View>
+          </View>
           <Button
             title={paying ? t('common.loading') : t('feed.checkout.pay')}
             onPress={handlePay}
             variant="primary"
-            disabled={paying}
+            disabled={paying || !canProceedToPay}
             loading={paying}
+            style={styles.ctaButton}
+            textStyle={styles.ctaButtonText}
           />
         </View>
       </SafeAreaView>
@@ -832,30 +830,13 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.border
   },
-  shippingFeeLabelCol: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    columnGap: 8,
-    rowGap: 4,
-    marginRight: theme.spacing.gapSm
-  },
-  shippingPromoBadge: {
-    backgroundColor: '#C3EA4F',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2
-  },
-  shippingPromoBadgeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    color: '#000000',
-    fontFamily: theme.fontFamily.semiBold
-  },
   totalLabel: {
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.textPrimary
+  },
+  excludingDelivery: {
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.textSecondary
   },
   totalAmount: {
     fontFamily: theme.fontFamily.bold,
@@ -869,7 +850,10 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.gapMd
   },
   sectionTitle: {
-    marginBottom: theme.spacing.gapMd
+    marginBottom: theme.spacing.gapSm
+  },
+  letterAplusNote: {
+    marginBottom: theme.spacing.gapSm
   },
   toggleRow: {
     flexDirection: 'row',
@@ -880,7 +864,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.card,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: theme.colors.background
   },
@@ -891,6 +875,81 @@ const styles = StyleSheet.create({
   toggleText: {
     textAlign: 'center',
     fontWeight: '600'
+  },
+  paymentMethodLegend: {
+    marginBottom: theme.spacing.gapSm,
+    lineHeight: 17
+  },
+  paymentMethodStack: {
+    rowGap: theme.spacing.gapSm
+  },
+  paymentMethodCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.card,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.background
+  },
+  paymentMethodCardActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary
+  },
+  paymentMethodCardDisabled: {
+    opacity: 0.55
+  },
+  paymentMethodTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  paymentMethodTextBlock: {
+    flex: 1
+  },
+  paymentMethodTitle: {
+    fontWeight: '600',
+    marginBottom: 4
+  },
+  paymentMethodSubtitle: {
+    lineHeight: 16
+  },
+  twintDisclaimer: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 15
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+    backgroundColor: theme.colors.background
+  },
+  radioOuterActive: {
+    borderColor: theme.colors.appleBlack
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.appleBlack
+  },
+  singleDeliveryCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.card,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.background
+  },
+  singleDeliveryText: {
+    fontWeight: '600'
+  },
+  singleDeliveryHint: {
+    marginTop: 4
   },
   input: {
     borderWidth: 1,
@@ -903,58 +962,21 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     backgroundColor: theme.colors.background
   },
-  countrySelect: {
-    justifyContent: 'center'
-  },
   countrySelectText: {
-    color: theme.colors.textPrimary,
+    color: theme.colors.textSecondary,
     fontFamily: theme.fontFamily.regular
   },
-  countryModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 16
+  countryReadonly: {
+    justifyContent: 'center',
+    backgroundColor: theme.colors.muted
   },
-  countryModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent'
-  },
-  countryModalCard: {
-    backgroundColor: theme.colors.backgroundWhite,
-    borderRadius: 14,
-    paddingVertical: 12,
-    overflow: 'hidden'
-  },
-  countryModalTitle: {
-    textAlign: 'center',
-    paddingVertical: 10,
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.textPrimary
-  },
-  countryOptionRow: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border
-  },
-  countryOptionRowSelected: {
-    backgroundColor: theme.colors.googleWhite
-  },
-  countryOptionLabel: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.fontFamily.regular
-  },
-  countryModalFooter: {
-    paddingTop: 12,
-    paddingHorizontal: 16
+  fieldLabel: {
+    marginBottom: theme.spacing.gapSm
   },
   shippingModeRow: {
     flexDirection: 'row',
     columnGap: theme.spacing.gapSm,
-    marginBottom: theme.spacing.gapMd
+    marginBottom: theme.spacing.gapSm
   },
   shippingModeCard: {
     flex: 1,
@@ -992,14 +1014,54 @@ const styles = StyleSheet.create({
     marginTop: 6
   },
   noSavedHint: {
-    marginBottom: theme.spacing.gapMd,
+    marginBottom: theme.spacing.gapSm,
     lineHeight: 18
+  },
+  addAddressLink: {
+    alignSelf: 'flex-start',
+    marginBottom: theme.spacing.gapMd
+  },
+  addAddressLinkText: {
+    color: theme.colors.textPrimary,
+    textDecorationLine: 'underline',
+    fontFamily: theme.fontFamily.semiBold
+  },
+  addressLoading: {
+    marginVertical: 12
+  },
+  missingAddressBox: {
+    gap: 12
+  },
+  addAddressButton: {
+    alignSelf: 'stretch'
+  },
+  editAddressLink: {
+    alignSelf: 'flex-start',
+    marginTop: 8
   },
   ctaContainer: {
     paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: 10,
     backgroundColor: theme.colors.background,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border
+  },
+  ctaSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
+  ctaSummaryTotal: {
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.textPrimary
+  },
+  ctaButton: {
+    height: 48,
+    borderRadius: 14
+  },
+  ctaButtonText: {
+    fontSize: 15
   }
 });
 

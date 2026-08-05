@@ -27,46 +27,96 @@ import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from '../../../components/ui/Button';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import { navigateInTabs } from '../../../lib/navigation/navigateInTabs';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
-import { createListing, uploadListingPhoto, addListingPhoto } from '../../../lib/api';
+import { createListing, deleteListing, uploadAndAttachListingPhotos } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../../../lib/env';
+import { buildStripePaymentSheetParams } from '../../../lib/stripePaymentSheet';
 import { ensureProfileExists } from '../../../lib/profile';
 import type { ListingInsert } from '../../../lib/types';
-import { useSellFormStore, type ParcelSizeValue } from '../../../lib/store/sellForm';
+import { useSellFormStore } from '../../../lib/store/sellForm';
 import * as Location from 'expo-location';
 import { translateColorName } from '../../../lib/colorI18n';
 import { translateConditionLabel } from '../../../lib/conditionI18n';
+import { translateSizeLabel } from '../../../lib/sizeI18n';
+import { translateCategoryLabel } from '../../../lib/categoryI18n';
 import { BOOST_OPTIONS, type BoostSponsorType } from '../../../lib/fees';
+import { ParcelSizeSelector } from '../../../components/listing/ParcelSizeSelector';
+import { DeliveryModeSelector } from '../../../components/listing/DeliveryModeSelector';
+import { PickupAddressesSection } from '../../../components/listing/PickupAddressesSection';
+import {
+  deliveryModeIncludesShipping as listingIncludesShipping,
+  deliveryModeIncludesPickup as listingIncludesPickup,
+  normalizeDeliveryMode,
+  type ListingDeliveryMode
+} from '../../../lib/deliveryMode';
+import {
+  fetchProfilePickupAddresses,
+  listingPickupSnapshotFromProfile
+} from '../../../lib/profilePickupAddresses';
+import { BLOOMI_COUNTRY_CODE } from '../../../lib/bloomiRegion';
+import {
+  brandSelectionToStorageName,
+  formatBrandDisplayLabel,
+  isBlockedBrandName
+} from '../../../lib/brandConstants';
 
 type Photo = {
   uri: string;
   type?: string;
   name?: string;
+  width?: number;
+  height?: number;
 };
+
+function inferFileExtension(asset: ImagePicker.ImagePickerAsset): string {
+  const mime = String((asset as any).mimeType ?? '').toLowerCase();
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('webp')) return 'webp';
+  if (mime.includes('heic')) return 'heic';
+  if (mime.includes('heif')) return 'heif';
+  if (mime.includes('jpg') || mime.includes('jpeg')) return 'jpg';
+
+  const source = String(asset.fileName ?? asset.uri ?? '').toLowerCase();
+  const dotIndex = source.lastIndexOf('.');
+  if (dotIndex >= 0 && dotIndex < source.length - 1) {
+    return source.slice(dotIndex + 1).replace(/[^a-z0-9]/g, '') || 'jpg';
+  }
+  return 'jpg';
+}
+
+function inferMimeType(asset: ImagePicker.ImagePickerAsset, ext: string): string {
+  const mime = String((asset as any).mimeType ?? '').toLowerCase();
+  if (mime.startsWith('image/')) return mime;
+
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'heic':
+      return 'image/heic';
+    case 'heif':
+      return 'image/heif';
+    case 'jpg':
+    case 'jpeg':
+    default:
+      return 'image/jpeg';
+  }
+}
 
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 300;
 
-const ALLOWED_COUNTRIES = ['CH', 'FR', 'DE', 'IT'] as const;
-type AllowedCountry = (typeof ALLOWED_COUNTRIES)[number];
-
-const PARCEL_SIZE_OPTIONS: { value: ParcelSizeValue; labelKey: string }[] = [
-  { value: 'small', labelKey: 'sell.parcelSize.small' },
-  { value: 'large', labelKey: 'sell.parcelSize.large' },
-  { value: 'xlarge', labelKey: 'sell.parcelSize.xlarge' }
-];
-
-function deliveryModeIncludesShipping(mode: string | undefined): boolean {
-  const dm = String(mode ?? 'both').toLowerCase();
-  return dm === 'shipping' || dm === 'both';
-}
 
 export default function SellScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { user } = useAuthStore();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { values: sellValues, resetForm, setField } = useSellFormStore();
@@ -82,7 +132,10 @@ export default function SellScreen() {
     price?: string;
     photos?: string;
     parcel_size?: string;
+    pickup_primary?: string;
+    brand?: string;
   }>({});
+  const [pickupPrimaryComplete, setPickupPrimaryComplete] = useState(false);
   const [showPublishSheet, setShowPublishSheet] = useState(false);
   const [showPhotoTips, setShowPhotoTips] = useState(false);
   const [lastPublishedListingId, setLastPublishedListingId] = useState<string | null>(null);
@@ -91,17 +144,14 @@ export default function SellScreen() {
     durationDays: 3 | 7;
   } | null>(null);
   const [boostPaying, setBoostPaying] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const listSectionY = useRef(0);
 
-  const scrollToListSection = () => {
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, listSectionY.current - 24),
-        animated: true
-      });
-    }, Platform.OS === 'ios' ? 250 : 100);
-  };
+  const selectedCategoryLabel = useMemo(() => {
+    if (!sellValues.category) return null;
+    return translateCategoryLabel(
+      { name: sellValues.category.name, slug: sellValues.category.slug },
+      t
+    );
+  }, [sellValues.category, t]);
 
   const navigateSellField = (path: string) => {
     Keyboard.dismiss();
@@ -157,9 +207,9 @@ export default function SellScreen() {
     latitude: number | null;
     longitude: number | null;
     city: string | null;
-    country_code: AllowedCountry | null;
+    country_code: typeof BLOOMI_COUNTRY_CODE;
   }> => {
-    // 1) Try GPS
+    // 1) Try GPS (Switzerland only)
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status === 'granted') {
@@ -177,12 +227,12 @@ export default function SellScreen() {
           null;
         const iso = String((place as any)?.isoCountryCode ?? '').toUpperCase();
 
-        if (ALLOWED_COUNTRIES.includes(iso as any)) {
+        if (iso === BLOOMI_COUNTRY_CODE) {
           return {
             latitude: Number.isFinite(lat) ? lat : null,
             longitude: Number.isFinite(lng) ? lng : null,
             city: cityDetected ? String(cityDetected) : null,
-            country_code: iso as AllowedCountry
+            country_code: BLOOMI_COUNTRY_CODE
           };
         }
       }
@@ -198,11 +248,6 @@ export default function SellScreen() {
         .eq('id', user?.id ?? '')
         .maybeSingle();
 
-      const rawCountry = String((data as any)?.country ?? '').toUpperCase();
-      const cc: AllowedCountry | null = ALLOWED_COUNTRIES.includes(rawCountry as any)
-        ? (rawCountry as AllowedCountry)
-        : null;
-
       const lat = (data as any)?.latitude;
       const lng = (data as any)?.longitude;
       const latNum = typeof lat === 'number' ? lat : lat != null ? Number(lat) : null;
@@ -212,10 +257,15 @@ export default function SellScreen() {
         latitude: Number.isFinite(latNum as any) ? (latNum as number) : null,
         longitude: Number.isFinite(lngNum as any) ? (lngNum as number) : null,
         city: (data as any)?.city ? String((data as any).city) : null,
-        country_code: cc
+        country_code: BLOOMI_COUNTRY_CODE
       };
     } catch {
-      return { latitude: null, longitude: null, city: null, country_code: null };
+      return {
+        latitude: null,
+        longitude: null,
+        city: null,
+        country_code: BLOOMI_COUNTRY_CODE
+      };
     }
   };
 
@@ -232,11 +282,22 @@ export default function SellScreen() {
   };
 
   const appendPickedAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
-    const newPhotos = assets.map((asset) => ({
-      uri: asset.uri,
-      type: asset.type || 'image/jpeg',
-      name: asset.fileName || `photo-${Date.now()}.jpg`
-    }));
+    const ts = Date.now();
+    const newPhotos = assets.map((asset, index) => {
+      const ext = inferFileExtension(asset);
+      const mime = inferMimeType(asset, ext);
+      const rawName = String(asset.fileName ?? '').trim();
+      const safeBase = rawName
+        ? rawName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9-_]/g, '_')
+        : `photo-${ts}-${index}`;
+      return {
+        uri: asset.uri,
+        type: mime,
+        name: `${safeBase}.${ext}`,
+        width: typeof asset.width === 'number' ? asset.width : undefined,
+        height: typeof asset.height === 'number' ? asset.height : undefined
+      };
+    });
     setPhotos((prev) => [...prev, ...newPhotos]);
     if (errors.photos) {
       setErrors((prev) => ({ ...prev, photos: undefined }));
@@ -304,8 +365,15 @@ export default function SellScreen() {
     }
 
     const deliveryMode = sellValues.delivery_mode ?? 'both';
-    if (deliveryModeIncludesShipping(deliveryMode) && !sellValues.parcel_size) {
+    if (listingIncludesShipping(deliveryMode) && !sellValues.parcel_size) {
       newErrors.parcel_size = t('sell.parcelSize.required');
+    }
+    if (listingIncludesPickup(deliveryMode) && !pickupPrimaryComplete) {
+      newErrors.pickup_primary = t('sell.pickupAddresses.primaryRequired');
+    }
+
+    if (sellValues.brand?.name && isBlockedBrandName(sellValues.brand.name)) {
+      newErrors.brand = t('sell.blockedBrand');
     }
 
     setErrors(newErrors);
@@ -317,6 +385,8 @@ export default function SellScreen() {
         newErrors.price ||
         newErrors.photos ||
         newErrors.parcel_size ||
+        newErrors.pickup_primary ||
+        newErrors.brand ||
         t('sell.incompleteForm');
 
       Alert.alert(t('sell.incompleteForm'), firstError);
@@ -400,7 +470,21 @@ export default function SellScreen() {
 
       const geo = await resolveGeoForListing();
       const deliveryMode = sellValues.delivery_mode ?? 'both';
-      const requiresParcelSize = deliveryModeIncludesShipping(deliveryMode);
+      const requiresParcelSize = listingIncludesShipping(deliveryMode);
+      const requiresPickup = listingIncludesPickup(deliveryMode);
+
+      let pickupSnapshot = listingPickupSnapshotFromProfile({ primary: null, work: null });
+      if (requiresPickup) {
+        const pickupAddresses = await fetchProfilePickupAddresses(supabase, user.id);
+        if (!pickupAddresses.primary) {
+          Alert.alert(
+            t('sell.incompleteForm'),
+            t('sell.pickupAddresses.primaryRequired')
+          );
+          return;
+        }
+        pickupSnapshot = listingPickupSnapshotFromProfile(pickupAddresses);
+      }
 
       const listingData: ListingInsert = {
         seller_id: user.id,
@@ -412,7 +496,7 @@ export default function SellScreen() {
         category: sellValues.category?.name ?? null,
         category_id: sellValues.category?.id ?? null,
         condition: sellValues.condition ?? null,
-        brand: sellValues.brand?.name ?? null,
+        brand: brandSelectionToStorageName(sellValues.brand),
         size: sellValues.size?.label ?? null,
         color:
           sellValues.color && sellValues.color.length > 0
@@ -420,8 +504,9 @@ export default function SellScreen() {
             : null,
         delivery_mode: deliveryMode,
         parcel_size: requiresParcelSize ? (sellValues.parcel_size ?? null) : null,
+        ...pickupSnapshot,
         city: geo.city ?? (city.trim() ? city.trim() : null),
-        country_code: geo.country_code ?? 'CH',
+        country_code: BLOOMI_COUNTRY_CODE,
         latitude: geo.latitude,
         longitude: geo.longitude
       };
@@ -436,29 +521,27 @@ export default function SellScreen() {
       setLastPublishedListingId(listing.id);
       setSelectedBoost(null);
 
-      // Upload les photos
-      for (let i = 0; i < photos.length; i++) {
-        const photo = photos[i];
-        const filename = photo.name || `photo-${i}-${Date.now()}.jpg`;
+      const photoResult = await uploadAndAttachListingPhotos(
+        photos,
+        user.id,
+        listing.id
+      );
 
-        const { data: photoUrl, error: uploadError } = await uploadListingPhoto(
-          photo,
-          user.id,
-          listing.id,
-          filename
-        );
-
-        if (uploadError || !photoUrl) {
-          // On log en warning pour éviter un écran rouge en dev, mais on ne bloque pas la publication
-          console.warn('Erreur upload photo (non bloquant):', uploadError);
-          continue; // Continue avec les autres photos même si une échoue
-        }
-
-        // Ajouter la photo au listing
-        await addListingPhoto(listing.id, photoUrl, i);
+      if (photoResult.uploadedCount === 0) {
+        await deleteListing(listing.id);
+        throw new Error(t('sell.photosUploadAllFailed'));
       }
 
-      // Afficher la bottom sheet de mise en avant (la publication se fera après)
+      if (photoResult.failedCount > 0) {
+        Alert.alert(
+          t('sell.photosPartialUploadTitle'),
+          t('sell.photosPartialUploadBody', {
+            uploaded: photoResult.uploadedCount,
+            total: photos.length
+          })
+        );
+      }
+
       setShowPublishSheet(true);
     } catch (error) {
       Alert.alert(
@@ -479,17 +562,16 @@ export default function SellScreen() {
           style={styles.keyboardAvoid}
         >
           <View style={styles.header}>
-            <HeaderBackButton onPress={() => router.back()} />
+            <HeaderBackButton onPress={() => navigateInTabs('/tabs/feed')} />
             <Text style={styles.headerTitle}>{t('sell.sellingHeader')}</Text>
             <View style={styles.headerRightPlaceholder} />
           </View>
 
           <ScrollView
-            ref={scrollRef}
             style={styles.scrollView}
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingBottom: insets.bottom + 24 }
+              { paddingBottom: safeBottom + 24 }
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -603,7 +685,7 @@ export default function SellScreen() {
 
           {/* Description */}
           <View style={[styles.fieldGroup, { marginTop: 20 }]}>
-            <Text style={styles.fieldLabel}>{t('profile.editProfileScreen.aboutMe')}</Text>
+            <Text style={styles.fieldLabel}>{t('feed.listingDetail.itemDescription')}</Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -615,9 +697,8 @@ export default function SellScreen() {
               onChangeText={(text) => {
                 setDescription(text);
               }}
-              onFocus={scrollToListSection}
               multiline
-              blurOnSubmit
+              scrollEnabled={false}
               maxLength={DESCRIPTION_MAX}
             />
             <View style={styles.fieldFooterRow}>
@@ -626,12 +707,6 @@ export default function SellScreen() {
               </Text>
             </View>
           </View>
-
-          <View
-            onLayout={(event) => {
-              listSectionY.current = event.nativeEvent.layout.y;
-            }}
-          />
 
           {/* List fields */}
           <View style={styles.listSection}>
@@ -656,8 +731,8 @@ export default function SellScreen() {
             >
               <Text style={styles.listRowLabel}>{t('sell.category')}</Text>
               <View style={styles.listRowRight}>
-                {sellValues.category ? (
-                  <Text style={styles.listRowValue}>{sellValues.category.name}</Text>
+                {selectedCategoryLabel ? (
+                  <Text style={styles.listRowValue}>{selectedCategoryLabel}</Text>
                 ) : null}
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
@@ -678,7 +753,10 @@ export default function SellScreen() {
               <Text style={styles.listRowLabel}>{t('filters.searchBrands')}</Text>
               <View style={styles.listRowRight}>
                 {sellValues.brand ? (
-                  <Text style={styles.listRowValue}>{sellValues.brand.name}</Text>
+                  <Text style={styles.listRowValue}>
+                    {formatBrandDisplayLabel(sellValues.brand, t('filters.other')) ??
+                      sellValues.brand.name}
+                  </Text>
                 ) : null}
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
@@ -710,7 +788,9 @@ export default function SellScreen() {
               <Text style={styles.listRowLabel}>{t('sell.size')}</Text>
               <View style={styles.listRowRight}>
                 {sellValues.size ? (
-                  <Text style={styles.listRowValue}>{sellValues.size.label}</Text>
+                  <Text style={styles.listRowValue}>
+                    {translateSizeLabel(sellValues.size.label, t)}
+                  </Text>
                 ) : null}
                 <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
               </View>
@@ -751,47 +831,51 @@ export default function SellScreen() {
             })()}
           </View>
 
-          {deliveryModeIncludesShipping(sellValues.delivery_mode ?? 'both') ? (
-            <View style={styles.parcelSection}>
-              <Text style={styles.parcelSectionTitle}>{t('sell.parcelSize.title')}</Text>
-              {PARCEL_SIZE_OPTIONS.map((option, index) => {
-                const isSelected = sellValues.parcel_size === option.value;
-                return (
-                  <React.Fragment key={option.value}>
-                    {index > 0 ? <View style={styles.parcelSeparator} /> : null}
-                    <TouchableOpacity
-                      style={[styles.parcelOptionRow, isSelected && styles.parcelOptionRowSelected]}
-                      onPress={() => {
-                        setField('parcel_size', option.value);
-                        if (errors.parcel_size) {
-                          setErrors((prev) => ({ ...prev, parcel_size: undefined }));
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.parcelOptionLabel,
-                          isSelected && styles.parcelOptionLabelSelected
-                        ]}
-                      >
-                        {t(option.labelKey)}
-                      </Text>
-                      <View style={[styles.parcelRadioOuter, isSelected && styles.parcelRadioOuterSelected]}>
-                        {isSelected ? <View style={styles.parcelRadioInner} /> : null}
-                      </View>
-                    </TouchableOpacity>
-                  </React.Fragment>
-                );
-              })}
-              {errors.parcel_size ? (
-                <Text style={styles.error}>{errors.parcel_size}</Text>
-              ) : null}
-            </View>
+          <DeliveryModeSelector
+            selected={normalizeDeliveryMode(sellValues.delivery_mode)}
+            onSelect={(value: ListingDeliveryMode) => {
+              setField('delivery_mode', value);
+              if (!listingIncludesShipping(value)) {
+                setField('parcel_size', undefined);
+                setErrors((prev) => ({ ...prev, parcel_size: undefined }));
+              }
+              if (!listingIncludesPickup(value)) {
+                setErrors((prev) => ({ ...prev, pickup_primary: undefined }));
+              }
+            }}
+          />
+
+          {listingIncludesPickup(sellValues.delivery_mode ?? 'both') ? (
+            <PickupAddressesSection
+              addressRoutes={{
+                primary: '/tabs/sell/my-address',
+                work: '/tabs/sell/work-address'
+              }}
+              onPrimaryCompleteChange={(complete) => {
+                setPickupPrimaryComplete(complete);
+                if (complete && errors.pickup_primary) {
+                  setErrors((prev) => ({ ...prev, pickup_primary: undefined }));
+                }
+              }}
+              error={errors.pickup_primary}
+            />
+          ) : null}
+
+          {listingIncludesShipping(sellValues.delivery_mode ?? 'both') ? (
+            <ParcelSizeSelector
+              selected={sellValues.parcel_size}
+              onSelect={(value) => {
+                setField('parcel_size', value);
+                if (errors.parcel_size) {
+                  setErrors((prev) => ({ ...prev, parcel_size: undefined }));
+                }
+              }}
+              error={errors.parcel_size}
+            />
           ) : null}
           </ScrollView>
 
-          <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.footer, { paddingBottom: safeBottom + 16 }]}>
             <Button
               title={loading ? t('common.loading') : t('sell.publishListing')}
               onPress={handlePublish}
@@ -876,7 +960,7 @@ export default function SellScreen() {
               // Ne rien faire : l'utilisateur doit payer ou passer
             }}
           />
-          <View style={styles.sheetContainer}>
+          <View style={[styles.sheetContainer, { paddingBottom: safeBottom + 24 }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>{t('sell.productGoingLive')}</Text>
 
@@ -992,13 +1076,9 @@ export default function SellScreen() {
                   const clientSecret = createJson.client_secret;
                   if (!clientSecret) throw new Error('Missing client_secret');
 
-                  const initRes = await initPaymentSheet({
-                    merchantDisplayName: 'Bloomi',
-                    paymentIntentClientSecret: clientSecret,
-                    defaultBillingDetails: {
-                      address: { country: 'CH' }
-                    }
-                  });
+                  const initRes = await initPaymentSheet(
+                    buildStripePaymentSheetParams({ clientSecret })
+                  );
                   if (initRes.error) throw new Error(initRes.error.message);
 
                   const presentRes = await presentPaymentSheet();
@@ -1007,46 +1087,59 @@ export default function SellScreen() {
                   const paymentIntentId = clientSecret.split('_secret')[0];
                   if (!paymentIntentId) throw new Error('Invalid payment_intent_id');
 
-                  const confirmRes = await fetch(`${SUPABASE_URL}/functions/v1/boost-listing`, {
-                    method: 'POST',
-                    headers: {
-                      Authorization: `Bearer ${accessToken}`,
-                      apikey: SUPABASE_ANON_KEY,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      action: 'confirm',
-                      payment_intent_id: paymentIntentId
-                    })
-                  });
+                  const confirmBoost = async () => {
+                    const confirmRes = await fetch(`${SUPABASE_URL}/functions/v1/boost-listing`, {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        apikey: SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        action: 'confirm',
+                        payment_intent_id: paymentIntentId
+                      })
+                    });
 
-                  const confirmJson = (await confirmRes.json()) as {
-                    success?: boolean;
-                    updated_count?: number;
-                    error?: string;
-                    details?: string;
+                    const confirmJson = (await confirmRes.json()) as {
+                      success?: boolean;
+                      updated_count?: number;
+                      error?: string;
+                      details?: string;
+                    };
+
+                    if (!confirmRes.ok || confirmJson.success !== true) {
+                      throw new Error(
+                        confirmJson.error && confirmJson.details
+                          ? `${confirmJson.error} (${confirmJson.details})`
+                          : confirmJson.error || confirmJson.details || 'boost-listing confirm failed'
+                      );
+                    }
                   };
 
-                  if (!confirmRes.ok || confirmJson.success !== true) {
-                    throw new Error(
-                      confirmJson.error && confirmJson.details
-                        ? `${confirmJson.error} (${confirmJson.details})`
-                        : confirmJson.error || confirmJson.details || 'boost-listing confirm failed'
-                    );
-                  }
+                  const publishListing = async () => {
+                    const { error: publishErr } = await supabase
+                      .from('listings')
+                      .update({
+                        status: 'published',
+                        published_at: new Date().toISOString()
+                      })
+                      .eq('id', lastPublishedListingId)
+                      .eq('seller_id', user.id);
 
-                  // Publier l'annonce maintenant (après paiement réussi)
-                  const { error: publishErr } = await supabase
-                    .from('listings')
-                    .update({
-                      status: 'published',
-                      published_at: new Date().toISOString()
-                    })
-                    .eq('id', lastPublishedListingId)
-                    .eq('seller_id', user.id);
+                    if (publishErr) {
+                      throw new Error(publishErr.message);
+                    }
+                  };
 
-                  if (publishErr) {
-                    throw new Error(publishErr.message);
+                  // Dressing : publier d'abord pour inclure la nouvelle annonce dans le boost.
+                  // Listing : booster le brouillon puis publier.
+                  if (selectedBoost.sponsorType === 'dressing') {
+                    await publishListing();
+                    await confirmBoost();
+                  } else {
+                    await confirmBoost();
+                    await publishListing();
                   }
 
                   // Réinitialiser le formulaire (store + état local) uniquement après publication
@@ -1287,6 +1380,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5E5'
   },
   descriptionInput: {
+    minHeight: 120,
     textAlignVertical: 'top'
   },
   fieldFooterRow: {
@@ -1310,58 +1404,6 @@ const styles = StyleSheet.create({
   listSection: {
     marginTop: 20,
     marginBottom: 16
-  },
-  parcelSection: {
-    marginTop: 8,
-    marginBottom: 16
-  },
-  parcelSectionTitle: {
-    ...theme.typography.body,
-    color: theme.colors.textPrimary,
-    fontFamily: theme.fontFamily.semiBold,
-    marginBottom: 8
-  },
-  parcelOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 8
-  },
-  parcelOptionRowSelected: {
-    borderRadius: theme.radius.cardRadius,
-    backgroundColor: '#C3EA4F'
-  },
-  parcelOptionLabel: {
-    ...theme.typography.body,
-    color: theme.colors.textPrimary,
-    flex: 1,
-    marginRight: 12
-  },
-  parcelOptionLabelSelected: {
-    fontFamily: theme.fontFamily.semiBold
-  },
-  parcelRadioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: '#CCCCCC',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  parcelRadioOuterSelected: {
-    borderColor: theme.colors.textPrimary
-  },
-  parcelRadioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: theme.colors.textPrimary
-  },
-  parcelSeparator: {
-    height: 1,
-    backgroundColor: theme.colors.border
   },
   listRow: {
     flexDirection: 'row',

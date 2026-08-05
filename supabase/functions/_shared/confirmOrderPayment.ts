@@ -1,13 +1,14 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   findOrCreateThreadForOrderChat,
-  insertThreadSystemMessage,
+  insertThreadEventMessage,
 } from "./orderChatSystemMessage.ts";
 import { chfToCents, computeSellerFees, roundChf } from "./fees.ts";
 import {
   fetchRecipientLanguage,
-  orderConfirmedPushText,
   paymentReceivedPushText,
+  paymentReleasedBuyerPushText,
+  transactionCompleteBuyerPushText,
 } from "./pushNotificationI18n.ts";
 
 export type ConfirmOrderRow = {
@@ -181,28 +182,64 @@ export async function captureAndTransferOrder(params: {
     };
   }
 
-  const captureResp = await fetch(
-    `https://api.stripe.com/v1/payment_intents/${encodeURIComponent(row.stripe_payment_intent_id)}/capture`,
+  const paymentIntentResp = await fetch(
+    `https://api.stripe.com/v1/payment_intents/${encodeURIComponent(row.stripe_payment_intent_id)}`,
     {
-      method: "POST",
+      method: "GET",
       headers: {
         Authorization: `Bearer ${params.stripeSecretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
       },
     },
   );
-
-  const captureJson = (await captureResp.json()) as {
+  const paymentIntentJson = (await paymentIntentResp.json()) as {
+    status?: string;
     latest_charge?: string | null;
     error?: { message?: string };
   };
 
-  if (!captureResp.ok) {
+  if (!paymentIntentResp.ok) {
     return {
       success: false,
-      error: "Erreur Stripe lors de la capture du paiement",
-      details: captureJson?.error?.message ?? "capture failed",
+      error: "Erreur Stripe lors de la récupération du paiement",
+      details: paymentIntentJson?.error?.message ?? "payment_intent retrieve failed",
       httpStatus: 500,
+    };
+  }
+  let latestCharge = paymentIntentJson.latest_charge ?? null;
+  const paymentStatus = paymentIntentJson.status ?? null;
+
+  if (paymentStatus === "requires_capture") {
+    const captureResp = await fetch(
+      `https://api.stripe.com/v1/payment_intents/${encodeURIComponent(row.stripe_payment_intent_id)}/capture`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.stripeSecretKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      },
+    );
+
+    const captureJson = (await captureResp.json()) as {
+      latest_charge?: string | null;
+      error?: { message?: string };
+    };
+
+    if (!captureResp.ok) {
+      return {
+        success: false,
+        error: "Erreur Stripe lors de la capture du paiement",
+        details: captureJson?.error?.message ?? "capture failed",
+        httpStatus: 500,
+      };
+    }
+    latestCharge = captureJson.latest_charge ?? latestCharge;
+  } else if (paymentStatus !== "succeeded") {
+    return {
+      success: false,
+      error: "Paiement non capturable pour cette commande",
+      details: `payment_intent.status=${paymentStatus ?? "unknown"}`,
+      httpStatus: 409,
     };
   }
 
@@ -214,8 +251,8 @@ export async function captureAndTransferOrder(params: {
     "metadata[buyer_id]": row.buyer_id,
     "metadata[seller_id]": row.seller_id,
   });
-  if (captureJson.latest_charge) {
-    transferBody.set("source_transaction", captureJson.latest_charge);
+  if (latestCharge) {
+    transferBody.set("source_transaction", latestCharge);
   }
 
   const transferResp = await fetch("https://api.stripe.com/v1/transfers", {
@@ -277,10 +314,6 @@ export async function captureAndTransferOrder(params: {
     };
   }
 
-  const systemMessage =
-    params.systemMessage ??
-    "✅ Receipt confirmed — The transaction is complete. Thanks for using Bloomi!";
-
   try {
     const threadId = await findOrCreateThreadForOrderChat(params.supabaseAdmin, {
       listingId: row.listing_id,
@@ -288,7 +321,14 @@ export async function captureAndTransferOrder(params: {
       sellerId: row.seller_id,
     });
     if (threadId) {
-      await insertThreadSystemMessage(params.supabaseAdmin, threadId, systemMessage);
+      await insertThreadEventMessage(params.supabaseAdmin, threadId, {
+        kind: "payment_released",
+        order_id: row.id,
+      });
+      await insertThreadEventMessage(params.supabaseAdmin, threadId, {
+        kind: "transaction_complete",
+        order_id: row.id,
+      });
     }
   } catch {
     // silent
@@ -297,13 +337,27 @@ export async function captureAndTransferOrder(params: {
   if (params.sendNotifications !== false) {
     try {
       const buyerLang = await fetchRecipientLanguage(params.supabaseAdmin, row.buyer_id);
-      const buyerCopy = orderConfirmedPushText(buyerLang);
+      const releasedCopy = paymentReleasedBuyerPushText(buyerLang);
       await sendNotification({
         supabaseUrl: params.supabaseUrl,
         supabaseServiceRoleKey: params.supabaseServiceRoleKey,
         user_id: row.buyer_id,
-        title: buyerCopy.title,
-        body: buyerCopy.body,
+        title: releasedCopy.title,
+        body: releasedCopy.body,
+        data: { order_id: row.id, notification_type: "new_items" },
+      });
+    } catch {
+      // silent
+    }
+    try {
+      const buyerLang = await fetchRecipientLanguage(params.supabaseAdmin, row.buyer_id);
+      const completeCopy = transactionCompleteBuyerPushText(buyerLang);
+      await sendNotification({
+        supabaseUrl: params.supabaseUrl,
+        supabaseServiceRoleKey: params.supabaseServiceRoleKey,
+        user_id: row.buyer_id,
+        title: completeCopy.title,
+        body: completeCopy.body,
         data: { order_id: row.id, notification_type: "new_items" },
       });
     } catch {

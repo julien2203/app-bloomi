@@ -1,0 +1,702 @@
+{
+  "app.termsModal.title": {
+    "en": "Terms of use",
+    "fr": "Conditions d'utilisation"
+  },
+  "app.termsModal.body": {
+    "en": "By creating an account or using Bloomi, you agree to our Terms of Use and Privacy Policy. You agree to treat other users with respect, not to post any illegal, misleading, or inappropriate content, and to follow our safety and moderation rules. Reported content may be reviewed and removed.",
+    "fr": "En créant un compte ou en utilisant Bloomi, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité. Vous vous engagez à traiter les autres utilisateurs avec respect, à ne pas publier de contenu illégal, trompeur ou inapproprié, et à respecter nos règles de sécurité et de modération. Les contenus signalés peuvent être examinés et supprimés."
+  },
+  "app.termsModal.readFullTerms": {
+    "en": "Read full Terms of Use",
+    "fr": "Lire les Conditions d'utilisation"
+  },
+  "app.termsModal.readPrivacy": {
+    "en": "Read Privacy Policy",
+    "fr": "Lire la Politique de confidentialité"
+  },
+  "app.termsModal.accept": {
+    "en": "I accept",
+    "fr": "J'accepte"
+  },
+  "errors.pageNotFound.title": {
+    "en": "Page not found",
+    "fr": "Page introuvable"
+  },
+  "errors.pageNotFound.message": {
+    "en": "This page does not exist or has been moved.",
+    "fr": "Cette page n'existe pas ou a été déplacée."
+  },
+  "common.learnMore": {
+    "en": "Learn more",
+    "fr": "En savoir plus"
+  },
+  "common.permissionRequired": {
+    "en": "Permission required",
+    "fr": "Autorisation requise"
+  },
+  "auth.email": {
+    "en": "Email",
+    "fr": "Email"
+  },
+  "auth.emailPlaceholder": {
+    "en": "your@email.com",
+    "fr": "your@email.com"
+  },
+  "auth.password": {
+    "en": "Password",
+    "fr": "Mot de passe"
+  },
+  "auth.login.continueGuest": {
+    "en": "Continue as guest",
+    "fr": "Continuer en tant qu'invité"
+  },
+  "auth.signUp.browseWithoutAccount": {
+    "en": "Browse without an account",
+    "fr": "Parcourir sans compte"
+  },
+  "auth.forgotPassword.subtitle": {
+    "en": "Enter your email to receive a reset link.",
+    "fr": "Saisissez votre e-mail pour recevoir un lien de réinitialisation."
+  },
+  "auth.forgotPassword.sentMessage": {
+    "en": "We sent a reset link to your email.",
+    "fr": "Nous avons envoyé un lien de réinitialisation à votre e-mail."
+  },
+  "auth.resetPassword.subtitle": {
+    "en": "Choose a new password for your account.",
+    "fr": "Choisissez un nouveau mot de passe pour votre compte."
+  },
+  "auth.resetPassword.noMatch": {
+    "en": "Passwords do not match.",
+    "fr": "Les mots de passe ne correspondent pas."
+  },
+  "auth.resetPassword.updatedTitle": {
+    "en": "Password updated",
+    "fr": "Mot de passe mis à jour"
+  },
+  "auth.resetPassword.updatedMessage": {
+    "en": "Your password has been updated.",
+    "fr": "Votre mot de passe a été mis à jour."
+  },
+  "auth.checkEmail.messageGeneric": {
+    "en": "We sent a verification link to your email.",
+    "fr": "Nous avons envoyé un lien de vérification à votre e-mail."
+  },
+  "auth.checkEmail.messageWithEmail": {
+    "en": "We sent a verification link to {{email}}.",
+    "fr": "Nous avons envoyé un lien de vérification à {{email}}."
+  },
+  "auth.verifyEmail.noEmail": {
+    "en": "No email address found.",
+    "fr": "Aucune adresse e-mail trouvée."
+  },
+  "auth.verifyEmail.resendLink": {
+    "en": "Resend verification email",
+    "fr": "Renvoyer l'e-mail de vérification"
+  },
+  "auth.verify.title": {
+    "en": "Verification",
+    "fr": "Vérification"
+  },
+  "auth.verify.subtitle": {
+    "en": "Enter the code we sent to your phone.",
+    "fr": "Saisissez le code envoyé sur votre téléphone."
+  },
+  "auth.verify.smsFootnote": {
+    "en": "Standard SMS rates may apply.",
+    "fr": "Des frais SMS standards peuvent s'appliquer."
+  },
+  "auth.verify.yourNumber": {
+    "en": "your number",
+    "fr": "votre numéro"
+  },
+  "auth.verify.phoneNotFound": {
+    "en": "Phone not found.",
+    "fr": "Téléphone introuvable."
+  },
+  "auth.verify.signInFailed": {
+    "en": "Sign-in failed.",
+    "fr": "Échec de la connexion."
+  },
+  "auth.verify.verifyError": {
+    "en": "Unable to verify.",
+    "fr": "Impossible de vérifier."
+  },
+  "auth.verify.testAuthError": {
+    "en": "Test auth error.",
+    "fr": "Erreur d'authentification test."
+  },
+  "auth.verifyPhone.titleStep1": {
+    "en": "Verify your phone",
+    "fr": "Vérifiez votre téléphone"
+  },
+  "auth.verifyPhone.titleStep2": {
+    "en": "Enter verification code",
+    "fr": "Saisissez le code de vérification"
+  },
+  "auth.verifyPhone.subtitleStep1": {
+    "en": "We will send you a verification code by SMS.",
+    "fr": "Nous vous enverrons un code de vérification par SMS."
+  },
+  "auth.verifyPhone.subtitleStep2": {
+    "en": "Enter the 6-digit code we sent you.",
+    "fr": "Saisissez le code à 6 chiffres que nous vous avons envoyé."
+  },
+  "auth.verifyPhone.phoneLabel": {
+    "en": "Phone number",
+    "fr": "Numéro de téléphone"
+  },
+  "auth.verifyPhone.phonePlaceholder": {
+    "en": "+41 79 000 00 00",
+    "fr": "+41 79 000 00 00"
+  },
+  "auth.verifyPhone.phoneMissing": {
+    "en": "Phone number is missing.",
+    "fr": "Numéro de téléphone manquant."
+  },
+  "auth.verifyPhone.regionOnly": {
+    "en": "Bloomi is only available in Switzerland, France, Germany, and Italy.",
+    "fr": "Bloomi est disponible uniquement en Suisse, en France, en Allemagne et en Italie."
+  },
+  "auth.verifyPhone.validPhone": {
+    "en": "Enter a valid phone number.",
+    "fr": "Saisissez un numéro de téléphone valide."
+  },
+  "auth.verifyPhone.sendCodeError": {
+    "en": "Unable to send code.",
+    "fr": "Impossible d'envoyer le code."
+  },
+  "auth.verifyPhone.verifyCodeError": {
+    "en": "Unable to verify code.",
+    "fr": "Impossible de vérifier le code."
+  },
+  "auth.verifyPhone.codeIncorrect": {
+    "en": "Incorrect code. Please try again.",
+    "fr": "Code incorrect. Veuillez réessayer."
+  },
+  "auth.verifyPhone.codeExpired": {
+    "en": "The code has expired. Request a new one.",
+    "fr": "Le code a expiré. Demandez-en un nouveau."
+  },
+  "auth.verifyPhone.enterAllDigits": {
+    "en": "Enter all 6 digits.",
+    "fr": "Saisissez les 6 chiffres."
+  },
+  "auth.verifyPhone.resendCode": {
+    "en": "Resend code",
+    "fr": "Renvoyer le code"
+  },
+  "auth.verifyPhone.resendSeconds": {
+    "en": "Resend in {{seconds}}s",
+    "fr": "Renvoyer dans {{seconds}}s"
+  },
+  "auth.verifyPhone.abandonTitle": {
+    "en": "Leave verification?",
+    "fr": "Quitter la vérification ?"
+  },
+  "auth.verifyPhone.abandonMessage": {
+    "en": "Your progress will be lost.",
+    "fr": "Votre progression sera perdue."
+  },
+  "auth.verifyPhone.abandonConfirm": {
+    "en": "Leave",
+    "fr": "Quitter"
+  },
+  "auth.verifyPhone.deleteAccountError": {
+    "en": "Unable to delete account.",
+    "fr": "Impossible de supprimer le compte."
+  },
+  "auth.verifyPhone.sessionRestoreError": {
+    "en": "Unable to restore session.",
+    "fr": "Impossible de restaurer la session."
+  },
+  "auth.verifyPhoneCode.screenTitle": {
+    "en": "Verify your phone number",
+    "fr": "Vérifiez votre numéro de téléphone"
+  },
+  "auth.verifyPhoneCode.screenSubtitle": {
+    "en": "Enter the 6-digit code we sent you.",
+    "fr": "Saisissez le code à 6 chiffres que nous vous avons envoyé."
+  },
+  "auth.verifyPhoneInfo.pleaseVerifyTitle": {
+    "en": "Please verify your phone number to continue.",
+    "fr": "Veuillez vérifier votre numéro de téléphone pour continuer."
+  },
+  "auth.verifyPhoneInfo.subtitle": {
+    "en": "We will send you a verification code by SMS.",
+    "fr": "Nous vous enverrons un code de vérification par SMS."
+  },
+  "auth.verifyPhoneInfo.phonePlaceholder": {
+    "en": "+41 79 000 00 00",
+    "fr": "+41 79 000 00 00"
+  },
+  "onboarding.legal.prefix": {
+    "en": "By continuing, you agree to our",
+    "fr": "En continuant, vous acceptez nos"
+  },
+  "onboarding.legal.andRead": {
+    "en": "and read our",
+    "fr": "et avoir lu notre"
+  },
+  "onboarding.social.apple": {
+    "en": "Continue with Apple",
+    "fr": "Continuer avec Apple"
+  },
+  "onboarding.social.google": {
+    "en": "Continue with Google",
+    "fr": "Continuer avec Google"
+  },
+  "onboarding.social.facebook": {
+    "en": "Continue with Facebook",
+    "fr": "Continuer avec Facebook"
+  },
+  "onboarding.social.facebookSoon": {
+    "en": "Facebook sign-in is coming soon.",
+    "fr": "La connexion Facebook n'est pas encore disponible."
+  },
+  "onboarding.social.unableSocial": {
+    "en": "Something went wrong during social sign-in.",
+    "fr": "Une erreur s'est produite lors de la connexion sociale."
+  },
+  "onboarding.social.unableComplete": {
+    "en": "Unable to complete sign-in. Please try again.",
+    "fr": "Connexion impossible. Veuillez réessayer."
+  },
+  "onboarding.step3.headline": {
+    "en": "Your marketplace awaits",
+    "fr": "Votre marketplace vous attend"
+  },
+  "onboarding.step3.subheadline": {
+    "en": "Join thousands of buyers and sellers",
+    "fr": "Rejoignez des milliers d'acheteurs et vendeurs"
+  },
+  "onboarding.step3.signUp": {
+    "en": "Sign up to Bloomi",
+    "fr": "S'inscrire sur Bloomi"
+  },
+  "feed.checkout.bankingFee": {
+    "en": "Banking fee",
+    "fr": "Frais bancaires"
+  },
+  "feed.checkout.buyerProtection": {
+    "en": "Buyer Protection",
+    "fr": "Protection acheteur"
+  },
+  "feed.checkout.country": {
+    "en": "Country",
+    "fr": "Pays"
+  },
+  "feed.checkout.differentAddress": {
+    "en": "Use a different address",
+    "fr": "Utiliser une autre adresse"
+  },
+  "feed.checkout.enterManually": {
+    "en": "Enter address manually",
+    "fr": "Saisir l'adresse manuellement"
+  },
+  "feed.checkout.itemPrice": {
+    "en": "Item price",
+    "fr": "Prix de l'article"
+  },
+  "feed.checkout.noSavedAddressHint": {
+    "en": "Add a delivery address in your profile to use saved addresses.",
+    "fr": "Ajoutez une adresse de livraison dans votre profil pour utiliser les adresses enregistrées."
+  },
+  "feed.checkout.shippingFee": {
+    "en": "Shipping fee",
+    "fr": "Frais d'expédition"
+  },
+  "feed.checkout.shippingPromo": {
+    "en": "Free shipping promo",
+    "fr": "Livraison offerte (promo)"
+  },
+  "feed.orderConfirmation.bankingFee": {
+    "en": "Banking fee",
+    "fr": "Frais bancaires"
+  },
+  "feed.pricing.bankingFee": {
+    "en": "Banking fee",
+    "fr": "Frais bancaires"
+  },
+  "feed.pricing.breakdownTitle": {
+    "en": "Price breakdown",
+    "fr": "Détail du prix"
+  },
+  "feed.pricing.buyerProtection": {
+    "en": "Buyer Protection",
+    "fr": "Protection acheteur"
+  },
+  "feed.pricing.finalPrice": {
+    "en": "Final price",
+    "fr": "Prix final"
+  },
+  "feed.pricing.itemPrice": {
+    "en": "Item price",
+    "fr": "Prix de l'article"
+  },
+  "feed.pricing.priceIncl": {
+    "en": "Price incl. fees",
+    "fr": "Prix incl. frais"
+  },
+  "feed.pricing.serviceGuarantee": {
+    "en": "Service guarantee",
+    "fr": "Garantie de service"
+  },
+  "feed.listingDetail.hoursAgo": {
+    "en": "{{count}}h ago",
+    "fr": "il y a {{count}} h"
+  },
+  "feed.listingDetail.daysAgo": {
+    "en": "{{count}}d ago",
+    "fr": "il y a {{count}} j"
+  },
+  "feed.listingDetail.weeksAgo": {
+    "en": "{{count}}w ago",
+    "fr": "il y a {{count}} sem."
+  },
+  "feed.listingDetail.monthsAgo": {
+    "en": "{{count}}mo ago",
+    "fr": "il y a {{count}} mois"
+  },
+  "feed.listingDetail.yearsAgo": {
+    "en": "{{count}}y ago",
+    "fr": "il y a {{count}} an(s)"
+  },
+  "messages.includesBuyerProtection": {
+    "en": "Includes Buyer Protection",
+    "fr": "Inclut la Protection acheteur"
+  },
+  "messages.loadingConversation": {
+    "en": "Loading conversation…",
+    "fr": "Chargement de la conversation…"
+  },
+  "messages.noConversationsYet": {
+    "en": "No conversations yet",
+    "fr": "Aucune conversation pour le moment"
+  },
+  "messages.offerAcceptedSystem": {
+    "en": "Offer accepted.",
+    "fr": "Offre acceptée."
+  },
+  "profile.accountSettings.change": {
+    "en": "Change",
+    "fr": "Modifier"
+  },
+  "profile.accountSettings.changeEmailTitle": {
+    "en": "Change email",
+    "fr": "Modifier l'e-mail"
+  },
+  "profile.accountSettings.deleteConfirmMessage": {
+    "en": "Are you sure you want to delete your account? This action cannot be undone.",
+    "fr": "Voulez-vous vraiment supprimer votre compte ? Cette action est irréversible."
+  },
+  "profile.accountSettings.phoneChangeDisclaimer": {
+    "en": "Changing your phone number requires verification.",
+    "fr": "La modification de votre numéro nécessite une vérification."
+  },
+  "profile.accountSettings.saving": {
+    "en": "Saving…",
+    "fr": "Enregistrement…"
+  },
+  "profile.activateSeller.screenTitle": {
+    "en": "Activate seller account",
+    "fr": "Activer le compte vendeur"
+  },
+  "profile.activateSeller.activatedTitle": {
+    "en": "Your seller account is ready",
+    "fr": "Votre compte vendeur est prêt"
+  },
+  "profile.activateSeller.activatedSubtitle": {
+    "en": "You can now receive payouts on Bloomi.",
+    "fr": "Vous pouvez maintenant recevoir des paiements sur Bloomi."
+  },
+  "profile.activateSeller.connectDescription": {
+    "en": "Connect your bank account via Stripe to receive payouts.",
+    "fr": "Connectez votre compte bancaire via Stripe pour recevoir vos paiements."
+  },
+  "profile.activateSeller.unableStartOnboarding": {
+    "en": "Unable to start Stripe onboarding.",
+    "fr": "Impossible de démarrer l'onboarding Stripe."
+  },
+  "profile.blockedUsers.intro": {
+    "en": "Blocked users cannot contact you or see your listings.",
+    "fr": "Les utilisateurs bloqués ne peuvent pas vous contacter ni voir vos annonces."
+  },
+  "profile.blockedUsers.emptyHint": {
+    "en": "Users you block will appear here.",
+    "fr": "Les utilisateurs que vous bloquez apparaîtront ici."
+  },
+  "profile.editListing.uploadPhotos": {
+    "en": "Upload photos",
+    "fr": "Télécharger des photos"
+  },
+  "profile.editListing.addUpToPhotos": {
+    "en": "Add up to 5 photos.",
+    "fr": "Ajoutez jusqu'à 5 photos."
+  },
+  "profile.editListing.loading": {
+    "en": "Loading listing…",
+    "fr": "Chargement de l'annonce…"
+  },
+  "profile.editListing.saveChanges": {
+    "en": "Save changes",
+    "fr": "Enregistrer les modifications"
+  },
+  "profile.editListing.updatedSuccess": {
+    "en": "Listing updated successfully.",
+    "fr": "Annonce mise à jour avec succès."
+  },
+  "profile.editProfileScreen.username": {
+    "en": "Username",
+    "fr": "Nom d'utilisateur"
+  },
+  "profile.editProfileScreen.myLocation": {
+    "en": "My location",
+    "fr": "Ma localisation"
+  },
+  "profile.editProfileScreen.selectLocation": {
+    "en": "Select location",
+    "fr": "Sélectionner la localisation"
+  },
+  "profile.editProfileScreen.chooseCanton": {
+    "en": "Choose canton",
+    "fr": "Choisir le canton"
+  },
+  "profile.editProfileScreen.locationHelp": {
+    "en": "Your location helps buyers find items near them.",
+    "fr": "Votre localisation aide les acheteurs à trouver des articles près de chez eux."
+  },
+  "profile.leaveReview.youAreRating": {
+    "en": "You are rating",
+    "fr": "Vous évaluez"
+  },
+  "profile.leaveReview.submitReview": {
+    "en": "Submit review",
+    "fr": "Envoyer l'avis"
+  },
+  "profile.leaveReview.alreadyReviewed": {
+    "en": "You have already reviewed this order.",
+    "fr": "Vous avez déjà évalué cette commande."
+  },
+  "profile.leaveReview.submitError": {
+    "en": "Unable to submit review.",
+    "fr": "Impossible d'envoyer l'avis."
+  },
+  "profile.myAddress.countryInfo": {
+    "en": "Deliveries are available in Switzerland, France, Germany and Italy.",
+    "fr": "Les livraisons sont disponibles en Suisse, en France, en Allemagne et en Italie."
+  },
+  "profile.notificationsScreen.empty": {
+    "en": "No notifications yet",
+    "fr": "Aucune notification pour le moment"
+  },
+  "profile.notificationsScreen.markReadPartial": {
+    "en": "Some notifications could not be marked as read.",
+    "fr": "Certaines notifications n'ont pas pu être marquées comme lues."
+  },
+  "profile.orders.noOrdersYet": {
+    "en": "No orders yet",
+    "fr": "Aucune commande pour le moment"
+  },
+  "profile.orders.copyOrderId": {
+    "en": "Copy order ID",
+    "fr": "Copier le n° de commande"
+  },
+  "profile.orders.openDispute": {
+    "en": "Open dispute",
+    "fr": "Ouvrir un litige"
+  },
+  "profile.orders.disputeMessage": {
+    "en": "Describe the issue with your order. Our team will review it.",
+    "fr": "Décrivez le problème avec votre commande. Notre équipe l'examinera."
+  },
+  "profile.orders.sellerCommission": {
+    "en": "Seller commission",
+    "fr": "Commission vendeur"
+  },
+  "profile.orders.sellerPayout": {
+    "en": "Seller payout",
+    "fr": "Versement vendeur"
+  },
+  "profile.orders.sendEmail": {
+    "en": "Send email",
+    "fr": "Envoyer un e-mail"
+  },
+  "profile.orders.senderAddressTitle": {
+    "en": "Sender address",
+    "fr": "Adresse de l'expéditeur"
+  },
+  "profile.orders.senderAddressSubtitle": {
+    "en": "Enter the address you will ship from.",
+    "fr": "Saisissez l'adresse depuis laquelle vous expédiez."
+  },
+  "profile.publicProfile.follow": {
+    "en": "Follow",
+    "fr": "Suivre"
+  },
+  "profile.publicProfile.following": {
+    "en": "Following",
+    "fr": "Abonné"
+  },
+  "profile.publicProfile.followingBtn": {
+    "en": "Following",
+    "fr": "Abonné"
+  },
+  "profile.publicProfile.reviewsCount": {
+    "en": "Reviews ({{count}})",
+    "fr": "Avis ({{count}})"
+  },
+  "profile.publicProfile.listingMenu": {
+    "en": "Listing menu",
+    "fr": "Menu de l'annonce"
+  },
+  "profile.publicProfile.blockTitle": {
+    "en": "Block user",
+    "fr": "Bloquer l'utilisateur"
+  },
+  "profile.publicProfile.couldNotBlock": {
+    "en": "Unable to block this user.",
+    "fr": "Impossible de bloquer cet utilisateur."
+  },
+  "profile.publicProfile.permissionRequired": {
+    "en": "Permission required",
+    "fr": "Autorisation requise"
+  },
+  "profile.publicProfile.safetyMenuMessage": {
+    "en": "Safety options",
+    "fr": "Options de sécurité"
+  },
+  "profile.publicProfile.unableCreateConversation": {
+    "en": "Unable to start a conversation.",
+    "fr": "Impossible de démarrer une conversation."
+  },
+  "profile.publicProfile.unableFollow": {
+    "en": "Unable to follow this user.",
+    "fr": "Impossible de suivre cet utilisateur."
+  },
+  "profile.publicProfile.unableLoadProfile": {
+    "en": "Unable to load profile.",
+    "fr": "Impossible de charger le profil."
+  },
+  "profile.publicProfile.unableUpdateCover": {
+    "en": "Unable to update cover photo.",
+    "fr": "Impossible de mettre à jour la photo de couverture."
+  },
+  "profile.sendFeedback": {
+    "en": "Send feedback",
+    "fr": "Envoyer un commentaire"
+  },
+  "profile.walletScreenTitle": {
+    "en": "Wallet",
+    "fr": "Portefeuille"
+  },
+  "profile.wallet.signInHint": {
+    "en": "Sign in to view your wallet.",
+    "fr": "Connectez-vous pour voir votre portefeuille."
+  },
+  "profile.wallet.activateHintTitle": {
+    "en": "Activate seller account",
+    "fr": "Activer le compte vendeur"
+  },
+  "profile.wallet.activateHintBody": {
+    "en": "Activate your seller account to receive payouts.",
+    "fr": "Activez votre compte vendeur pour recevoir vos paiements."
+  },
+  "profile.wallet.confirmPayoutMessage": {
+    "en": "Transfer {{amount}} CHF to your bank account?",
+    "fr": "Transférer {{amount}} CHF sur votre compte bancaire ?"
+  },
+  "profile.wallet.missingStripeUrl": {
+    "en": "Stripe dashboard URL is missing.",
+    "fr": "L'URL du tableau de bord Stripe est manquante."
+  },
+  "profile.wallet.payoutInitiated": {
+    "en": "Payout initiated.",
+    "fr": "Versement initié."
+  },
+  "profile.wallet.unableCreatePayout": {
+    "en": "Unable to create payout.",
+    "fr": "Impossible de créer le versement."
+  },
+  "profile.wallet.unableLoadBalance": {
+    "en": "Unable to load balance.",
+    "fr": "Impossible de charger le solde."
+  },
+  "safety.blockAction": {
+    "en": "Block",
+    "fr": "Bloquer"
+  },
+  "safety.blockConfirmMessage": {
+    "en": "Block this user? They will not be able to contact you.",
+    "fr": "Bloquer cet utilisateur ? Il ne pourra plus vous contacter."
+  },
+  "safety.blocking": {
+    "en": "Blocking…",
+    "fr": "Blocage…"
+  },
+  "safety.reportReasonsHint": {
+    "en": "Select one or more reasons",
+    "fr": "Sélectionnez une ou plusieurs raisons"
+  },
+  "sell.brand": {
+    "en": "Brand",
+    "fr": "Marque"
+  },
+  "sell.condition": {
+    "en": "Condition",
+    "fr": "État"
+  },
+  "sell.description": {
+    "en": "Description",
+    "fr": "Description"
+  },
+  "sell.city": {
+    "en": "City",
+    "fr": "Ville"
+  },
+  "sell.priceChf": {
+    "en": "Price (CHF)",
+    "fr": "Prix (CHF)"
+  },
+  "sell.invalidPrice": {
+    "en": "Please enter a valid price.",
+    "fr": "Veuillez saisir un prix valide."
+  },
+  "sell.unablePublish": {
+    "en": "Unable to publish listing.",
+    "fr": "Impossible de publier l'annonce."
+  },
+  "sell.characterLeft": {
+    "en": "{{count}} characters left",
+    "fr": "{{count}} caractères restants"
+  },
+  "sell.chooseNaturalLight": {
+    "en": "Choose natural light",
+    "fr": "Choisissez la lumière naturelle"
+  },
+  "sell.chooseOption": {
+    "en": "Choose an option",
+    "fr": "Choisissez une option"
+  },
+  "sell.payToFeatureItem": {
+    "en": "Pay to feature this item",
+    "fr": "Payer pour mettre cet article en avant"
+  },
+  "sell.payToFeatureCloset": {
+    "en": "Pay to feature your closet",
+    "fr": "Payer pour mettre en avant votre dressing"
+  },
+  "sell.photoTipsBody": {
+    "en": "Use natural light and a neutral background. Show any flaws clearly.",
+    "fr": "Utilisez la lumière naturelle et un fond neutre. Montrez clairement les défauts éventuels."
+  },
+  "sell.productGoingLive": {
+    "en": "Your product is going live!",
+    "fr": "Votre article est en ligne !"
+  },
+  "sell.publishListing": {
+    "en": "Publish listing",
+    "fr": "Publier l'annonce"
+  }
+}

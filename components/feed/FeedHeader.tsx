@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import CartIcon from '../../assets/icons/cart2.svg';
 import NotificationIcon from '../../assets/icons/bell2.svg';
@@ -12,6 +13,7 @@ import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTarg
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { useAuthStore } from '../../stores/authStore';
 import { openGuestAuthPrompt } from '../../lib/guestAuthPrompt';
+import { openProfileShortcutFromFeed } from '../../lib/navigation/feedShortcutNav';
 import { useTranslation } from 'react-i18next';
 
 type FeedHeaderProps = {
@@ -29,6 +31,7 @@ export function FeedHeader({
 }: FeedHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const session = useAuthStore((s) => s.session);
 
   const requireAccount = (go: () => void) => {
@@ -45,7 +48,7 @@ export function FeedHeader({
   };
 
   return (
-    <View style={styles.stickyHeader}>
+    <View style={[styles.stickyHeader, { paddingTop: insets.top + 8 }]}>
       <View style={styles.topHeaderRow}>
         <Image
           source={require('../../assets/brand/logo-bloomi-black.png')}
@@ -56,7 +59,7 @@ export function FeedHeader({
           <TouchableOpacity
             onPress={() =>
               requireAccount(() => {
-                router.push('/tabs/profile/favorites');
+                openProfileShortcutFromFeed(router, '/tabs/profile/favorites');
               })
             }
             activeOpacity={0.7}
@@ -65,12 +68,12 @@ export function FeedHeader({
             accessibilityRole="button"
             accessibilityLabel={t('feed.header.favorites')}
           >
-            <IconBox Svg={CoeurIcon} boxSize={topIconBoxSize.heart} />
+            <IconBox Svg={CoeurIcon} boxSize={topIconBoxSize.heart} color="#000000" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() =>
               requireAccount(() => {
-                router.push('/tabs/profile/orders');
+                openProfileShortcutFromFeed(router, '/tabs/profile/orders');
               })
             }
             activeOpacity={0.7}
@@ -79,15 +82,12 @@ export function FeedHeader({
             accessibilityRole="button"
             accessibilityLabel={t('feed.header.orders')}
           >
-            <IconBox Svg={CartIcon} boxSize={topIconBoxSize.cart} />
+            <IconBox Svg={CartIcon} boxSize={topIconBoxSize.cart} color="#000000" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() =>
               requireAccount(() => {
-                router.push({
-                  pathname: '/tabs/profile/notifications' as any,
-                  params: { from: 'feed' }
-                });
+                openProfileShortcutFromFeed(router, '/tabs/profile/notifications');
               })
             }
             activeOpacity={0.7}
@@ -97,7 +97,7 @@ export function FeedHeader({
             accessibilityLabel={t('feed.header.notifications')}
           >
             <View style={styles.bellWrap}>
-              <IconBox Svg={NotificationIcon} boxSize={topIconBoxSize.notification} />
+              <IconBox Svg={NotificationIcon} boxSize={topIconBoxSize.notification} color="#000000" />
               {unreadNotificationsCount > 0 ? (
                 <View style={styles.badge} />
               ) : null}
@@ -108,7 +108,7 @@ export function FeedHeader({
       <View style={styles.searchBar}>
         <View style={styles.searchInputWrap}>
           <View style={styles.searchIconSlot}>
-            <IconBox Svg={SearchIcon} boxSize={16} />
+            <IconBox Svg={SearchIcon} boxSize={16} color="#000000" />
           </View>
           <TextInput
             placeholder={t('feed.header.searchPlaceholder')}
@@ -131,7 +131,7 @@ export function FeedHeader({
                 // Filtres au niveau onglets (pas la pile Search) : évite un modal
                 // slide_from_bottom qui reste sur l’onglet Search et se referme au tap Search.
                 router.push({
-                  pathname: '/tabs/filters/index' as any,
+                  pathname: '/tabs/filters' as any,
                   params: {
                     returnTo: 'search',
                     scope: 'search',
@@ -156,9 +156,10 @@ const styles = StyleSheet.create({
   stickyHeader: {
     paddingLeft: 16,
     paddingRight: 16,
-    paddingTop: 8,
     paddingBottom: 8,
-    backgroundColor: theme.colors.background
+    backgroundColor: theme.colors.background,
+    zIndex: 10,
+    elevation: 4
   },
   topHeaderRow: {
     minHeight: 44,

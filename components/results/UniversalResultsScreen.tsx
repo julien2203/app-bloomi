@@ -3,18 +3,20 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
-  Dimensions,
   FlatList,
   Keyboard,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   Image,
-  View
+  View,
+  useWindowDimensions
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../ui/Screen';
@@ -28,24 +30,36 @@ import {
   cloneFeedListings,
   excludeBlockedSellers,
   getBlockedSellerIdsForCurrentUser,
-  type FeedListing
+  searchMemberProfiles,
+  type FeedListing,
+  type MemberSearchRow
 } from '../../lib/api';
 import { type FeedFilters, useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { useSearchFiltersStore } from '../../lib/store/searchFilters';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../ui/HeaderBackButton';
 import { getFixedTabBarHeight } from '../../components/navigation/FloatingTabBar';
+import { navigateInTabs } from '../../lib/navigation/navigateInTabs';
 import {
   FILTERS_PATH_SEARCH_STACK,
   FILTERS_PATH_TABS_ROOT,
   filtersScreenPath,
   type FiltersStackBase
 } from '../../lib/navigation/filterRoutes';
+import { navigateToBrandFilter } from '../../lib/navigation/brandFilterNav';
 import { subscribeBlockedUsersRevision } from '../../lib/store/blockedUsersSync';
 import { useTranslation } from 'react-i18next';
 import { translateCategoryLabel } from '../../lib/categoryI18n';
+import { expandConditionFilterValues } from '../../lib/conditionI18n';
+import { publicProfileHref } from '../../lib/navigation/listingDetailNav';
+import { openListingDetail } from '../../lib/navigation/openListingDetail';
+import { InfluencerBadge } from '../InfluencerBadge';
+import { fetchTrendingListings, filterTrendingListings } from '../../lib/trendingListings';
+import { GRID_GAP_COMPACT, GRID_PADDING_X, gridCardWidth } from '../../lib/cardLayout';
 
 export type ResultsSection = 'sponsored' | 'trending' | 'influencer' | 'all' | 'search';
+
+type SearchResultTab = 'listings' | 'members';
 
 type ResultsListing = FeedListing & {
   likes_count?: number | null;
@@ -61,6 +75,7 @@ type SellerShowcase = {
   avatar_url: string | null;
   is_influencer: boolean | null;
   company_name: string | null;
+  seller_type: 'individual' | 'pro' | 'sole_proprietorship' | null;
   active_count: number;
   thumbs: Array<{ id: string; cover_photo_url: string | null }>;
 };
@@ -69,7 +84,46 @@ type MixedItem =
   | { type: 'listing'; data: ResultsListing }
   | { type: 'showcase'; data: SellerShowcase; id: string };
 
+/** Snapshot de la liste « tous les articles » avant une recherche (onglet Search). */
+type BrowseSnapshot = {
+  results: ResultsListing[];
+  page: number;
+  hasMore: boolean;
+  resultCount: number | null;
+  scrollOffset: number;
+  filtersKey: string;
+};
+
 const PAGE_SIZE = 20;
+
+function filtersAreActive(f: FeedFilters): boolean {
+  return (
+    Boolean(f.categoryIds?.length) ||
+    Boolean(f.conditionIds?.length) ||
+    f.priceMin != null ||
+    f.priceMax != null ||
+    Boolean(f.brandIds?.length) ||
+    Boolean(f.sizeIds?.length) ||
+    Boolean(f.colorIds?.length) ||
+    f.nearbyKm != null
+  );
+}
+
+function buildListingSearchOrFilter(rawQuery: string): string | null {
+  const trimmed = rawQuery.trim();
+  if (!trimmed) return null;
+  const escaped = trimmed.replace(/"/g, '""');
+  const pattern = `"*${escaped}*"`;
+  return `title.ilike.${pattern},description.ilike.${pattern},brand.ilike.${pattern}`;
+}
+
+function buildListingSearchOrFilterTitleDesc(rawQuery: string): string | null {
+  const trimmed = rawQuery.trim();
+  if (!trimmed) return null;
+  const escaped = trimmed.replace(/"/g, '""');
+  const pattern = `"*${escaped}*"`;
+  return `title.ilike.${pattern},description.ilike.${pattern}`;
+}
 
 /** Tri sur la section Search une fois les filtres appliqués (`applyBaseSection` pour Search ne pose pas l’ordre). */
 function applySearchListingOrder(qb: any, sortBy: string | undefined) {
@@ -115,11 +169,6 @@ type ResultsFilterPill =
   | 'Color'
   | 'Price';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRID_PADDING_X = 16;
-const GRID_GAP = 8;
-const GRID_CARD_WIDTH = (SCREEN_WIDTH - GRID_PADDING_X * 2 - GRID_GAP) / 2;
-
 export function UniversalResultsScreen(props: {
   title?: string;
   section: ResultsSection;
@@ -131,6 +180,8 @@ export function UniversalResultsScreen(props: {
   standaloneSearch?: boolean;
   /** Incrémenté par le tab Search à chaque focus : force un reload aligné sur le store Zustand */
   searchFocusReloadNonce?: number;
+  /** Onglet Search : restaurer Articles / Membres au retour depuis un profil */
+  initialSearchTab?: SearchResultTab;
 }) {
   const { t } = useTranslation();
   const {
@@ -140,16 +191,23 @@ export function UniversalResultsScreen(props: {
     showBack = true,
     reloadOnFocus = false,
     standaloneSearch = false,
-    searchFocusReloadNonce = 0
+    searchFocusReloadNonce = 0,
+    initialSearchTab
   } = props;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const resultsGridCardWidth = useMemo(
+    () => gridCardWidth(screenWidth, GRID_PADDING_X, GRID_GAP_COMPACT),
+    [screenWidth]
+  );
   const feedStore = useFeedFiltersStore();
   const searchStore = useSearchFiltersStore();
   const { filters, setFilter, resetFilters } = standaloneSearch ? searchStore : feedStore;
   const fixedTabBarReserveSpace = getFixedTabBarHeight(insets.bottom);
   const isSearchTabScreen = standaloneSearch && section === 'search';
-  const listingDetailPathBase = isSearchTabScreen ? '/tabs/search' : '/tabs/feed';
+  const listingDetailPathBase: '/tabs/feed' | '/tabs/search' | '/tabs/results' =
+    isSearchTabScreen ? '/tabs/search' : '/tabs/results';
 
   /** Même rangée de pills que l’onglet Search (Clear + genre + taille, etc.) pour les écrans Results « View all » (sponsored, trending, …). */
   const searchStyleFilters = useMemo(
@@ -170,9 +228,31 @@ export function UniversalResultsScreen(props: {
   const [showcases, setShowcases] = useState<SellerShowcase[]>([]);
   const [loadingShowcases, setLoadingShowcases] = useState(false);
 
+  const [searchResultTab, setSearchResultTab] = useState<SearchResultTab>(
+    initialSearchTab === 'members' ? 'members' : 'listings'
+  );
+  const [memberResults, setMemberResults] = useState<MemberSearchRow[]>([]);
+  const [memberLoading, setMemberLoading] = useState(false);
+  const [memberLoadingMore, setMemberLoadingMore] = useState(false);
+  const [memberHasMore, setMemberHasMore] = useState(true);
+  const memberPageRef = useRef(0);
+
   const pageRef = useRef(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadRequestRef = useRef(0);
+  const memberLoadRequestRef = useRef(0);
+  const reloadScheduleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevQueryForDebounceRef = useRef(query);
   const showcaseReqRef = useRef(0);
+  const resultsListRef = useRef<FlatList<MixedItem> | null>(null);
+  const browseSnapshotRef = useRef<BrowseSnapshot | null>(null);
+  const browseScrollOffsetRef = useRef(0);
+  const pendingBrowseScrollRef = useRef<number | null>(null);
+  const resultsRef = useRef(results);
+  resultsRef.current = results;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const resultCountRef = useRef(resultCount);
+  resultCountRef.current = resultCount;
 
   const [nearbyModalOpen, setNearbyModalOpen] = useState(false);
   const [nearbyDraftKm, setNearbyDraftKm] = useState<number | null>(filters.nearbyKm ?? null);
@@ -204,6 +284,11 @@ export function UniversalResultsScreen(props: {
   }, [section, t, title]);
 
   const effectiveFilters = filters;
+
+  const isAnyFilterActive = useMemo(
+    () => filtersAreActive(effectiveFilters),
+    [effectiveFilters]
+  );
 
   // Resolve ID-based filters (sizeIds/brandIds/colorIds) into text labels stored on listings.
   // In this codebase, listings store brand/size/color as TEXT, and filter tables map ids -> labels/names.
@@ -355,6 +440,26 @@ export function UniversalResultsScreen(props: {
     };
   }, [filters.categoryIds, t]);
 
+  const browseFiltersKey = useMemo(
+    () =>
+      JSON.stringify({
+        f: effectiveFilters,
+        brands: resolvedBrandNames,
+        sizes: resolvedSizeLabels,
+        colors: resolvedColorNames,
+        categories: resolvedCategoryLabels,
+        section
+      }),
+    [
+      effectiveFilters,
+      resolvedBrandNames,
+      resolvedColorNames,
+      resolvedCategoryLabels,
+      resolvedSizeLabels,
+      section
+    ]
+  );
+
   const loadInfluencerIds = useCallback(async () => {
     if (section !== 'influencer') return;
     if (influencerIds !== null) return;
@@ -441,7 +546,8 @@ export function UniversalResultsScreen(props: {
         );
       }
       if (f.conditionIds && f.conditionIds.length > 0) {
-        queryBuilder = queryBuilder.in('condition', f.conditionIds);
+        const conditions = expandConditionFilterValues(f.conditionIds);
+        if (conditions.length > 0) queryBuilder = queryBuilder.in('condition', conditions);
       }
       if (f.priceMin != null) {
         queryBuilder = queryBuilder.gte('price', f.priceMin);
@@ -476,59 +582,65 @@ export function UniversalResultsScreen(props: {
     ]
   );
 
-  const applySearchQuery = useCallback(
-    (qb: any) => {
-      const trimmed = query.trim();
-      if (!trimmed) return qb;
-      // PostgREST ilike wildcard: use *...* (more robust than %...% in filter strings).
-      const pattern = `*${trimmed}*`;
-      const orFilter = `title.ilike.${pattern},description.ilike.${pattern},brand.ilike.${pattern}`;
-      // eslint-disable-next-line no-console
-      console.log('[Results] applySearchQuery', { section, query: trimmed, orFilter });
-      return qb.or(orFilter);
-    },
-    [query, section]
-  );
+  const applySearchQuery = useCallback((qb: any, searchText?: string) => {
+    const orFilter = buildListingSearchOrFilter(searchText ?? query);
+    if (!orFilter) return qb;
+    return qb.or(orFilter);
+  }, [query]);
 
   const loadPage = useCallback(
     async (page: number, replace: boolean) => {
+      const reqId = ++loadRequestRef.current;
+      const capturedQuery = query.trim();
+      const isCurrent = () => reqId === loadRequestRef.current;
+
       if (page === 0) setLoading(true);
       else setLoadingMore(true);
 
+      const liveFiltersEarly = standaloneSearch
+        ? useSearchFiltersStore.getState().filters
+        : useFeedFiltersStore.getState().filters;
+
       try {
         const blockedIds = await getBlockedSellerIdsForCurrentUser();
+        if (!isCurrent()) return;
+
         const stripBlocked = (items: ResultsListing[]) =>
           cloneFeedListings(excludeBlockedSellers(items, blockedIds)) as ResultsListing[];
 
         const from = page * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        const liveFilters = standaloneSearch
-          ? useSearchFiltersStore.getState().filters
-          : useFeedFiltersStore.getState().filters;
+        const liveFilters = liveFiltersEarly;
 
-        // eslint-disable-next-line no-console
-        console.log('[Results] active filters', {
-          section,
-          query: query.trim(),
-          categoryIds: liveFilters.categoryIds ?? [],
-          conditionIds: liveFilters.conditionIds ?? [],
-          priceMin: liveFilters.priceMin ?? null,
-          priceMax: liveFilters.priceMax ?? null,
-          brandIds: liveFilters.brandIds ?? [],
-          resolvedBrandNames,
-          sizeIds: liveFilters.sizeIds ?? [],
-          resolvedSizeLabels,
-          colorIds: liveFilters.colorIds ?? [],
-          resolvedColorNames
-        });
         const sort = (liveFilters.sortBy as any) ?? 'recent';
         const hasNearby =
           liveFilters.nearbyKm != null &&
           Number(liveFilters.nearbyKm) > 0;
 
+        if (section === 'trending' && !hasNearby) {
+          const allTrending = await fetchTrendingListings();
+          if (!isCurrent()) return;
+          const filtered = filterTrendingListings(allTrending, {
+            filters: liveFilters,
+            brandNames: resolvedBrandNames,
+            sizeLabels: resolvedSizeLabels,
+            colorNames: resolvedColorNames,
+            query: capturedQuery
+          });
+          const pageItems = filtered.slice(from, from + PAGE_SIZE);
+          const newItems = stripBlocked(pageItems as ResultsListing[]);
+          if (!isCurrent()) return;
+          setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
+          pageRef.current = page;
+          setHasMore(from + PAGE_SIZE < filtered.length);
+          setResultCount(filtered.length);
+          return;
+        }
+
         if (hasNearby) {
           const perm = await Location.requestForegroundPermissionsAsync();
+          if (!isCurrent()) return;
           if (!perm.granted) {
             if (replace) {
               setResults([]);
@@ -538,6 +650,7 @@ export function UniversalResultsScreen(props: {
             return;
           }
           const pos = await Location.getCurrentPositionAsync({});
+          if (!isCurrent()) return;
           const { data, error } = await supabase.rpc('nearby_feed_listings', {
             p_lat: Number(pos.coords.latitude),
             p_lon: Number(pos.coords.longitude),
@@ -545,13 +658,15 @@ export function UniversalResultsScreen(props: {
             p_limit: PAGE_SIZE,
             p_offset: from,
             p_section: section,
-            p_query: query.trim() ? query.trim() : null,
+            p_query: capturedQuery ? capturedQuery : null,
             p_category_id:
               liveFilters.categoryIds && liveFilters.categoryIds.length === 1
                 ? Number(liveFilters.categoryIds[0])
                 : null,
             p_category: resolvedCategoryLabels[0] ?? null,
-            p_conditions: (liveFilters.conditionIds.length ? liveFilters.conditionIds : null) as any,
+            p_conditions: (liveFilters.conditionIds.length
+              ? expandConditionFilterValues(liveFilters.conditionIds)
+              : null) as any,
             p_price_min: liveFilters.priceMin ?? null,
             p_price_max: liveFilters.priceMax ?? null,
             p_brands: (resolvedBrandNames.length ? resolvedBrandNames : null) as any,
@@ -562,6 +677,7 @@ export function UniversalResultsScreen(props: {
 
           if (error) {
             console.warn('Results error:', error.message);
+            if (!isCurrent()) return;
             if (replace) {
               setResults([]);
               setHasMore(false);
@@ -577,15 +693,8 @@ export function UniversalResultsScreen(props: {
               allowedCategoryIds.has(Number((row as any).category_id))
             );
           }
-          // eslint-disable-next-line no-console
-          console.log('[Results] loadPage nearby ok', {
-            section,
-            km: liveFilters.nearbyKm,
-            page,
-            replace,
-            returned: newItems.length
-          });
           newItems = stripBlocked(newItems);
+          if (!isCurrent()) return;
           setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
           pageRef.current = page;
           setHasMore(newItems.length === PAGE_SIZE);
@@ -600,13 +709,13 @@ export function UniversalResultsScreen(props: {
           const {
             data: { user }
           } = await supabase.auth.getUser();
+          if (!isCurrent()) return;
 
           if (!user?.id) {
-            // fallback = newest
             let qb: any = supabase.from('v_feed_listings').select('*', { count: 'exact' });
             qb = applySectionConstraints(qb);
             qb = applyFilters(qb);
-            qb = applySearchQuery(qb);
+            qb = applySearchQuery(qb, capturedQuery);
             if (section === 'search') {
               qb = applySearchListingOrder(qb, sort);
             } else {
@@ -616,6 +725,7 @@ export function UniversalResultsScreen(props: {
             const { data, error, count } = await qb;
             if (error) {
               console.warn('Results error:', error.message);
+              if (!isCurrent()) return;
               if (replace) {
                 setResults([]);
                 setHasMore(false);
@@ -625,7 +735,7 @@ export function UniversalResultsScreen(props: {
             }
             let newItems = (data || []) as ResultsListing[];
             newItems = stripBlocked(newItems);
-            console.log('[Results] loadPage ok', { section, query: query.trim(), page, replace, returned: newItems.length, count });
+            if (!isCurrent()) return;
             setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
             pageRef.current = page;
             setHasMore(newItems.length === PAGE_SIZE);
@@ -639,6 +749,7 @@ export function UniversalResultsScreen(props: {
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(500);
+          if (!isCurrent()) return;
 
           const likedIds = (likesRows || []).map((r: any) => String(r.listing_id)).filter(Boolean);
 
@@ -646,7 +757,7 @@ export function UniversalResultsScreen(props: {
             let qb: any = supabase.from('v_feed_listings').select('*', { count: 'exact' });
             qb = applySectionConstraints(qb);
             qb = applyFilters(qb);
-            qb = applySearchQuery(qb);
+            qb = applySearchQuery(qb, capturedQuery);
             if (section === 'search') {
               qb = applySearchListingOrder(qb, sort);
             } else {
@@ -656,6 +767,7 @@ export function UniversalResultsScreen(props: {
             const { data, error, count } = await qb;
             if (error) {
               console.warn('Results error:', error.message);
+              if (!isCurrent()) return;
               if (replace) {
                 setResults([]);
                 setHasMore(false);
@@ -665,7 +777,7 @@ export function UniversalResultsScreen(props: {
             }
             let newItems = (data || []) as ResultsListing[];
             newItems = stripBlocked(newItems);
-            console.log('[Results] loadPage ok', { section, query: query.trim(), page, replace, returned: newItems.length, count });
+            if (!isCurrent()) return;
             setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
             pageRef.current = page;
             setHasMore(newItems.length === PAGE_SIZE);
@@ -673,12 +785,13 @@ export function UniversalResultsScreen(props: {
             return;
           }
 
-          // liked matching current constraints/filters/search
           let likedQ: any = supabase.from('v_feed_listings').select('*').in('id', likedIds);
           likedQ = applySectionConstraints(likedQ);
           likedQ = applyFilters(likedQ);
-          likedQ = applySearchQuery(likedQ);
+          likedQ = applySearchQuery(likedQ, capturedQuery);
           const { data: likedData } = await likedQ;
+          if (!isCurrent()) return;
+
           const likedById = new Map<string, ResultsListing>();
           (likedData || []).forEach((row: any) => likedById.set(String(row.id), row as ResultsListing));
           const likedOrdered = likedIds.map((id) => likedById.get(id)).filter(Boolean) as ResultsListing[];
@@ -694,7 +807,7 @@ export function UniversalResultsScreen(props: {
             let restQ: any = supabase.from('v_feed_listings').select('*');
             restQ = applySectionConstraints(restQ);
             restQ = applyFilters(restQ);
-            restQ = applySearchQuery(restQ);
+            restQ = applySearchQuery(restQ, capturedQuery);
             if (section === 'search') {
               restQ = applySearchListingOrder(restQ, sort);
             } else {
@@ -703,20 +816,13 @@ export function UniversalResultsScreen(props: {
             const quoted = likedIds.map((x) => `"${x}"`).join(',');
             restQ = restQ.not('id', 'in', `(${quoted})`).range(restOffset, restOffset + remaining - 1);
             const { data: restData } = await restQ;
+            if (!isCurrent()) return;
             restItems = (restData || []) as ResultsListing[];
           }
 
           let newItems = [...likedSlice, ...restItems];
           newItems = stripBlocked(newItems);
-          console.log('[Results] loadPage ok', {
-            section,
-            query: query.trim(),
-            page,
-            replace,
-            returned: newItems.length,
-            likedReturned: likedSlice.length,
-            restReturned: restItems.length
-          });
+          if (!isCurrent()) return;
           setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
           pageRef.current = page;
           setHasMore(newItems.length === PAGE_SIZE);
@@ -728,38 +834,35 @@ export function UniversalResultsScreen(props: {
         let qb: any = baseQb;
         qb = applyBaseSection(qb);
         qb = applyFilters(qb);
-        qb = applySearchQuery(qb);
+        qb = applySearchQuery(qb, capturedQuery);
         if (section === 'search') {
           qb = applySearchListingOrder(qb, sort);
         }
 
         let { data, error, count } = await qb;
+        if (!isCurrent()) return;
+
         if (error) {
-          // Fallback for older v_feed_listings views missing `brand`
           const msg = String((error as any)?.message ?? '').toLowerCase();
           const brandMissing =
             msg.includes('column') && msg.includes('v_feed_listings.brand') && msg.includes('does not exist');
-          if (brandMissing && section === 'search' && query.trim().length > 0) {
-            const trimmed = query.trim();
-            const pattern = `*${trimmed}*`;
-            const orFilter = `title.ilike.${pattern},description.ilike.${pattern}`;
-            // eslint-disable-next-line no-console
-            console.log('[Results] fallback without brand', { orFilter });
-
+          const fallbackOr = buildListingSearchOrFilterTitleDesc(capturedQuery);
+          if (brandMissing && section === 'search' && fallbackOr) {
             let qb2: any = baseQb;
             qb2 = applyBaseSection(qb2);
             qb2 = applyFilters(qb2);
-            qb2 = qb2.or(orFilter);
+            qb2 = qb2.or(fallbackOr);
             if (section === 'search') {
               qb2 = applySearchListingOrder(qb2, sort);
             }
             ({ data, error, count } = await qb2);
+            if (!isCurrent()) return;
           }
         }
 
         if (error) {
-          // eslint-disable-next-line no-console
           console.warn('Results error:', error.message);
+          if (!isCurrent()) return;
           if (replace) {
             setResults([]);
             setHasMore(false);
@@ -770,22 +873,16 @@ export function UniversalResultsScreen(props: {
 
         let newItems = (data || []) as ResultsListing[];
         newItems = stripBlocked(newItems);
-        // eslint-disable-next-line no-console
-        console.log('[Results] loadPage ok', {
-          section,
-          query: query.trim(),
-          page,
-          replace,
-          returned: newItems.length,
-          count
-        });
+        if (!isCurrent()) return;
         setResults((prev) => (replace ? newItems : [...prev, ...newItems]));
         pageRef.current = page;
         setHasMore(newItems.length === PAGE_SIZE);
         setResultCount(typeof count === 'number' ? count : newItems.length);
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (reqId === loadRequestRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [
@@ -796,6 +893,7 @@ export function UniversalResultsScreen(props: {
       query,
       section,
       standaloneSearch,
+      isSearchTabScreen,
       resolvedCategoryLabels,
       influencerIds,
       resolvedBrandNames,
@@ -806,26 +904,89 @@ export function UniversalResultsScreen(props: {
 
   const triggerReload = useCallback(() => {
     pageRef.current = 0;
+    setResultCount(null);
+    setHasMore(true);
+    setShowcases([]);
     void loadPage(0, true);
   }, [loadPage]);
 
-  useEffect(() => {
-    return subscribeBlockedUsersRevision(() => {
-      triggerReload();
-    });
-  }, [triggerReload]);
+  const restoreBrowseFromSnapshot = useCallback(() => {
+    const snap = browseSnapshotRef.current;
+    if (!snap || snap.filtersKey !== browseFiltersKey) return false;
 
-  const skipFirstSearchFocusReload = useRef(true);
-  useFocusEffect(
-    useCallback(() => {
-      if (!reloadOnFocus || section !== 'search') return;
-      if (skipFirstSearchFocusReload.current) {
-        skipFirstSearchFocusReload.current = false;
+    loadRequestRef.current += 1;
+    pageRef.current = snap.page;
+    setResults(snap.results);
+    setHasMore(snap.hasMore);
+    setResultCount(snap.resultCount);
+    setLoading(false);
+    setLoadingMore(false);
+    pendingBrowseScrollRef.current = snap.scrollOffset;
+    return true;
+  }, [browseFiltersKey]);
+
+  const loadMembers = useCallback(
+    async (page: number, replace: boolean) => {
+      if (!isSearchTabScreen) return;
+      const trimmed = query.trim();
+      const reqId = ++memberLoadRequestRef.current;
+      const isCurrent = () => reqId === memberLoadRequestRef.current;
+
+      if (!trimmed) {
+        if (!isCurrent()) return;
+        setMemberResults([]);
+        setMemberHasMore(false);
+        setMemberLoading(false);
+        setMemberLoadingMore(false);
         return;
       }
-      triggerReload();
-    }, [reloadOnFocus, section, triggerReload, effectiveFilters])
+
+      if (replace) {
+        setMemberLoading(true);
+      } else {
+        setMemberLoadingMore(true);
+      }
+
+      try {
+        const limit = 20;
+        const offset = page * limit;
+        const { data, error } = await searchMemberProfiles({
+          query: trimmed,
+          limit,
+          offset
+        });
+        if (!isCurrent()) return;
+        if (error) throw new Error(error);
+        const rows = data ?? [];
+        setMemberResults((prev) => (replace ? rows : [...prev, ...rows]));
+        setMemberHasMore(rows.length >= limit);
+        memberPageRef.current = page;
+      } catch {
+        if (!isCurrent()) return;
+        if (replace) setMemberResults([]);
+        setMemberHasMore(false);
+      } finally {
+        if (reqId === memberLoadRequestRef.current) {
+          setMemberLoading(false);
+          setMemberLoadingMore(false);
+        }
+      }
+    },
+    [isSearchTabScreen, query]
   );
+
+  const triggerMemberReload = useCallback(() => {
+    memberPageRef.current = 0;
+    void loadMembers(0, true);
+  }, [loadMembers]);
+
+  useEffect(() => {
+    return subscribeBlockedUsersRevision(() => {
+      browseSnapshotRef.current = null;
+      triggerReload();
+      triggerMemberReload();
+    });
+  }, [triggerReload, triggerMemberReload]);
 
   useEffect(() => {
     void loadInfluencerIds();
@@ -839,57 +1000,135 @@ export function UniversalResultsScreen(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, section]);
 
-  // Initial load
   useEffect(() => {
-    triggerReload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, influencerIds]);
+    if (initialSearchTab === 'members' || initialSearchTab === 'listings') {
+      setSearchResultTab(initialSearchTab);
+    }
+  }, [initialSearchTab]);
 
-  // Debounce recherche
+  // Un seul reload orchestré : debounce 300 ms sur la saisie Search, immédiat sur filtres / focus.
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
+    const prevQuery = prevQueryForDebounceRef.current;
+    const queryChanged = prevQuery !== query;
+    prevQueryForDebounceRef.current = query;
+
+    if (
+      isSearchTabScreen &&
+      !prevQuery.trim() &&
+      query.trim() &&
+      resultsRef.current.length > 0
+    ) {
+      browseSnapshotRef.current = {
+        results: cloneFeedListings(resultsRef.current) as ResultsListing[],
+        page: pageRef.current,
+        hasMore: hasMoreRef.current,
+        resultCount: resultCountRef.current,
+        scrollOffset: browseScrollOffsetRef.current,
+        filtersKey: browseFiltersKey
+      };
+    }
+
+    const delay = queryChanged && isSearchTabScreen ? 300 : 0;
+
+    if (reloadScheduleRef.current) clearTimeout(reloadScheduleRef.current);
+    reloadScheduleRef.current = setTimeout(() => {
+      const canRestoreBrowse =
+        isSearchTabScreen &&
+        !query.trim() &&
+        browseSnapshotRef.current != null &&
+        browseSnapshotRef.current.filtersKey === browseFiltersKey;
+
+      if (canRestoreBrowse && restoreBrowseFromSnapshot()) {
+        if (isSearchTabScreen) triggerMemberReload();
+        return;
+      }
+
+      browseSnapshotRef.current = null;
       triggerReload();
-    }, 300);
+      if (isSearchTabScreen) triggerMemberReload();
+    }, delay);
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (reloadScheduleRef.current) clearTimeout(reloadScheduleRef.current);
     };
-  }, [query, triggerReload]);
-
-  // Refresh quand filtres changent ou quand les libellés résolus sont prêts (évite la course async ID → texte)
-  useEffect(() => {
-    triggerReload();
   }, [
+    query,
     effectiveFilters,
     resolvedBrandNames,
     resolvedSizeLabels,
     resolvedColorNames,
     resolvedCategoryLabels,
-    triggerReload
+    searchFocusReloadNonce,
+    section,
+    influencerIds,
+    isSearchTabScreen,
+    browseFiltersKey,
+    triggerReload,
+    triggerMemberReload,
+    restoreBrowseFromSnapshot
   ]);
 
   useEffect(() => {
-    if (!standaloneSearch || section !== 'search') return;
-    if (!searchFocusReloadNonce) return;
-    triggerReload();
-  }, [searchFocusReloadNonce, standaloneSearch, section, triggerReload]);
+    if (!query.trim()) {
+      setSearchResultTab('listings');
+      setMemberResults([]);
+    }
+  }, [query]);
 
   const handleLoadMore = () => {
     if (loadingMore || loading || !hasMore) return;
     void loadPage(pageRef.current + 1, false);
   };
 
+  const handleLoadMoreMembers = () => {
+    if (memberLoadingMore || memberLoading || !memberHasMore) return;
+    void loadMembers(memberPageRef.current + 1, false);
+  };
+
   const handleClearQuery = () => setQuery('');
 
+  const handleResultsScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!isSearchTabScreen || query.trim()) return;
+      browseScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+    },
+    [isSearchTabScreen, query]
+  );
+
+  const handleResultsContentSizeChange = useCallback(() => {
+    const offset = pendingBrowseScrollRef.current;
+    if (offset == null) return;
+    pendingBrowseScrollRef.current = null;
+    resultsListRef.current?.scrollToOffset({ offset, animated: false });
+  }, []);
+
+  const showSearchTypeTabs = isSearchTabScreen && query.trim().length > 0;
+
   const resultLabel = useMemo(() => {
+    if (showSearchTypeTabs && searchResultTab === 'members') {
+      if (memberLoading && memberResults.length === 0) return '';
+      const count = memberResults.length;
+      if (count === 0) return '';
+      if (count === 1) return t('filters.oneMemberResult');
+      return t('filters.membersCount', { count });
+    }
     if (resultCount == null) return '';
     if (resultCount >= 500) return t('filters.results500Plus');
     if (resultCount === 1) return t('filters.oneResult');
     return t('filters.resultsCount', { count: resultCount });
-  }, [resultCount, t]);
+  }, [
+    memberLoading,
+    memberResults.length,
+    resultCount,
+    searchResultTab,
+    showSearchTypeTabs,
+    t
+  ]);
 
-  const showSkeletonOverlay = loading && results.length === 0;
+  const showSkeletonOverlay =
+    showSearchTypeTabs && searchResultTab === 'members'
+      ? memberLoading && memberResults.length === 0
+      : loading && results.length === 0;
 
   useEffect(() => {
     Animated.parallel([
@@ -961,11 +1200,7 @@ export function UniversalResultsScreen(props: {
         break;
       case 'Filter':
         router.push({
-          pathname: (
-            filtersRouteBase === FILTERS_PATH_TABS_ROOT
-              ? `${FILTERS_PATH_TABS_ROOT}/index`
-              : filtersRouteBase
-          ) as any,
+          pathname: filtersRouteBase as any,
           params: resultsParams
         });
         break;
@@ -980,10 +1215,13 @@ export function UniversalResultsScreen(props: {
         });
         break;
       case 'Brand':
-        router.push({
-          pathname: filtersScreenPath(filtersRouteBase, 'brand-gender') as any,
-          params: resultsParams
-        });
+        void navigateToBrandFilter(
+          router,
+          filtersRouteBase,
+          effectiveFilters.categoryIds ?? [],
+          resultsParams,
+          t('filters.brand')
+        );
         break;
       case 'Condition':
         router.push({
@@ -1007,16 +1245,6 @@ export function UniversalResultsScreen(props: {
         break;
     }
   };
-
-  const isAnyFilterActive =
-    Boolean(effectiveFilters.categoryIds && effectiveFilters.categoryIds.length) ||
-    Boolean(effectiveFilters.conditionIds && effectiveFilters.conditionIds.length) ||
-    Boolean(effectiveFilters.priceMin != null) ||
-    Boolean(effectiveFilters.priceMax != null) ||
-    Boolean(effectiveFilters.brandIds && effectiveFilters.brandIds.length) ||
-    Boolean(effectiveFilters.sizeIds && effectiveFilters.sizeIds.length) ||
-    Boolean(effectiveFilters.colorIds && effectiveFilters.colorIds.length) ||
-    Boolean(effectiveFilters.nearbyKm != null);
 
   const pillActive = (name: string) => {
     switch (name) {
@@ -1157,7 +1385,7 @@ export function UniversalResultsScreen(props: {
       const [profilesRes, thumbsRes, activeRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, display_name, avatar_url, is_influencer, company_name')
+          .select('id, display_name, avatar_url, is_influencer, company_name, seller_type')
           .in('id', sellerIds)
           .limit(40),
         supabase
@@ -1211,6 +1439,7 @@ export function UniversalResultsScreen(props: {
           avatar_url: (p.avatar_url as string | null) ?? null,
           is_influencer: (p.is_influencer as boolean | null) ?? null,
           company_name: (p.company_name as string | null) ?? null,
+          seller_type: (p.seller_type as SellerShowcase['seller_type']) ?? null,
           active_count: activeCountBySeller.get(sid) ?? 0,
           thumbs: thumbsBySeller.get(sid) ?? []
         });
@@ -1260,10 +1489,12 @@ export function UniversalResultsScreen(props: {
           <SellerShowcaseCard
             showcase={item.data}
             onPress={() =>
-              router.push({
-                pathname: '/tabs/public-profile' as any,
-                params: { user_id: item.data.id }
-              })
+              router.push(
+                publicProfileHref(item.data.id, {
+                  return_to: section === 'search' ? 'search' : undefined,
+                  return_query: section === 'search' ? query.trim() || undefined : undefined
+                })
+              )
             }
           />
         </View>
@@ -1284,8 +1515,16 @@ export function UniversalResultsScreen(props: {
           size={(item.data as any).size ?? undefined}
           condition={item.data.condition ?? undefined}
           imageUrl={item.data.cover_photo_url}
-          onPress={() => router.push(`/tabs/feed/${item.data.id}`)}
-          cardWidth={GRID_CARD_WIDTH}
+          onPress={() =>
+            openListingDetail(router, item.data.id, {
+              return_to: section === 'search' ? 'search' : 'results',
+              detailPathBase: listingDetailPathBase,
+              cover_photo: item.data.cover_photo_url,
+              imageWidthDp: resultsGridCardWidth,
+              imageHeightDp: Math.round(resultsGridCardWidth * 1.3)
+            })
+          }
+          cardWidth={resultsGridCardWidth}
           imageRatio={1.3}
           imagePriority={getCardImagePriority(index)}
         />
@@ -1298,10 +1537,61 @@ export function UniversalResultsScreen(props: {
     return item.id;
   };
 
+  const renderMemberItem = useCallback(
+    ({ item }: { item: MemberSearchRow }) => {
+      const displayName = (item.display_name ?? '').trim() || t('common.bloomiUser');
+      const company = (item.company_name ?? '').trim();
+      const subtitle =
+        company && company.toLowerCase() !== displayName.toLowerCase() ? company : null;
+
+      return (
+        <Pressable
+          style={styles.memberRow}
+          onPress={() =>
+            router.push(
+              publicProfileHref(item.id, {
+                return_to: 'search',
+                return_query: query.trim() || undefined,
+                return_search_tab: 'members'
+              })
+            )
+          }
+        >
+          {item.avatar_url ? (
+            <Image source={{ uri: item.avatar_url }} style={styles.memberAvatar} />
+          ) : (
+            <View style={styles.memberAvatarPlaceholder} />
+          )}
+          <View style={styles.memberTextCol}>
+            <View style={styles.memberNameRow}>
+              <Text style={styles.memberName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {item.is_influencer ? <InfluencerBadge size={16} /> : null}
+            </View>
+            {subtitle ? (
+              <Text style={styles.memberSubtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          <AppIcon name="altArrowRightOutline" size={18} color={theme.colors.textSecondary} />
+        </Pressable>
+      );
+    },
+    [query, router, t]
+  );
+
   const handleBack = () => {
-    const canGoBack = typeof (router as any).canGoBack === 'function' ? (router as any).canGoBack() : true;
-    if (!canGoBack) return;
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (section === 'search') {
+      navigateInTabs('/tabs/search');
+      return;
+    }
+    navigateInTabs('/tabs/feed');
   };
 
   return (
@@ -1347,7 +1637,7 @@ export function UniversalResultsScreen(props: {
           </View>
         </View>
 
-        {/* Filters */}
+        {(!showSearchTypeTabs || searchResultTab === 'listings') ? (
         <View style={styles.filtersRow}>
           <FlatList
             data={[...filterPills]}
@@ -1391,6 +1681,7 @@ export function UniversalResultsScreen(props: {
             }}
           />
         </View>
+        ) : null}
 
         {!searchStyleFilters ? (
         <Modal
@@ -1448,7 +1739,56 @@ export function UniversalResultsScreen(props: {
         ) : null}
 
         <View style={styles.resultCountSlot}>
-          {resultLabel && !loading ? (
+          {showSearchTypeTabs ? (
+            <View style={styles.searchTypeBar}>
+              <View style={styles.searchTypeTabs}>
+                <TouchableOpacity
+                  style={styles.searchTypeTabBtn}
+                  onPress={() => setSearchResultTab('listings')}
+                  activeOpacity={0.7}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: searchResultTab === 'listings' }}
+                >
+                  <Text
+                    style={[
+                      styles.searchTypeLabel,
+                      searchResultTab === 'listings' && styles.searchTypeLabelActive
+                    ]}
+                  >
+                    {t('filters.searchTabListings')}
+                  </Text>
+                  {searchResultTab === 'listings' ? (
+                    <View style={styles.searchTypeUnderline} />
+                  ) : null}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.searchTypeTabBtn}
+                  onPress={() => setSearchResultTab('members')}
+                  activeOpacity={0.7}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: searchResultTab === 'members' }}
+                >
+                  <Text
+                    style={[
+                      styles.searchTypeLabel,
+                      searchResultTab === 'members' && styles.searchTypeLabelActive
+                    ]}
+                  >
+                    {t('filters.searchTabMembers')}
+                  </Text>
+                  {searchResultTab === 'members' ? (
+                    <View style={styles.searchTypeUnderline} />
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+              {resultLabel &&
+              !(searchResultTab === 'members' ? memberLoading : loading) ? (
+                <Text variant="captionSm" color="textSecondary" style={styles.searchTypeCount}>
+                  {resultLabel}
+                </Text>
+              ) : null}
+            </View>
+          ) : resultLabel && !loading ? (
             <Text variant="body" style={styles.resultCountText}>
               {resultLabel}
             </Text>
@@ -1457,7 +1797,38 @@ export function UniversalResultsScreen(props: {
 
         <View style={styles.resultsStage}>
           <Animated.View style={[styles.resultsLayer, { opacity: contentOpacity }]}>
-            {results.length === 0 ? (
+            {showSearchTypeTabs && searchResultTab === 'members' ? (
+              memberResults.length === 0 && !memberLoading ? (
+                <View style={styles.emptyContainer}>
+                  <AppIcon name="searchOutline" size={48} color="#AAAAAA" />
+                  <Text style={[styles.emptyTitle, styles.emptyTitleStandalone]}>
+                    {t('filters.noMembersResults')}
+                  </Text>
+                  <Text style={styles.emptySubtitle}>{t('filters.noMembersHint')}</Text>
+                </View>
+              ) : (
+                <FlatList
+                  key="member-search-list"
+                  data={memberResults}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderMemberItem}
+                  contentContainerStyle={[
+                    styles.memberListContent,
+                    { paddingBottom: fixedTabBarReserveSpace + 8 }
+                  ]}
+                  onEndReached={handleLoadMoreMembers}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={
+                    memberLoadingMore ? (
+                      <View style={styles.footerLoading}>
+                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                      </View>
+                    ) : null
+                  }
+                  showsVerticalScrollIndicator={false}
+                />
+              )
+            ) : results.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <AppIcon name="searchOutline" size={48} color="#AAAAAA" />
                 <Text style={[styles.emptyTitle, searchStyleFilters && styles.emptyTitleStandalone]}>
@@ -1469,6 +1840,7 @@ export function UniversalResultsScreen(props: {
               </View>
             ) : (
               <FlatList
+                ref={resultsListRef}
                 key="results-grid-2"
                 data={mixedData}
                 keyExtractor={keyExtractor}
@@ -1481,6 +1853,9 @@ export function UniversalResultsScreen(props: {
                   isSearchTabScreen ? { paddingBottom: fixedTabBarReserveSpace + 8 } : null
                 ]}
                 columnWrapperStyle={styles.listRow}
+                onScroll={handleResultsScroll}
+                scrollEventThrottle={16}
+                onContentSizeChange={handleResultsContentSizeChange}
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={
@@ -1522,9 +1897,12 @@ function SellerShowcaseCard({
   const { t } = useTranslation();
   const badge = showcase.is_influencer
     ? t('feed.tabs.influencers')
-    : showcase.company_name && showcase.company_name.trim().length > 0
-      ? t('auth.sellerType.professional')
-      : t('auth.sellerType.individual');
+    : showcase.seller_type === 'sole_proprietorship'
+      ? t('auth.sellerType.soleProprietorship')
+      : showcase.seller_type === 'pro' ||
+          (showcase.company_name && showcase.company_name.trim().length > 0)
+        ? t('auth.sellerType.professional')
+        : t('auth.sellerType.individual');
 
   const title = (showcase.display_name ?? '').trim() || t('common.seller');
 
@@ -1634,6 +2012,88 @@ const styles = StyleSheet.create({
   filtersRow: {
     marginTop: 12
   },
+  searchTypeBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    columnGap: 12
+  },
+  searchTypeTabs: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    columnGap: 20
+  },
+  searchTypeTabBtn: {
+    paddingBottom: 6,
+    alignItems: 'center',
+    minWidth: 56
+  },
+  searchTypeLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fontFamily.medium
+  },
+  searchTypeLabelActive: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fontFamily.semiBold
+  },
+  searchTypeUnderline: {
+    marginTop: 6,
+    height: 2,
+    width: '100%',
+    borderRadius: 1,
+    backgroundColor: theme.colors.primary
+  },
+  searchTypeCount: {
+    paddingBottom: 6,
+    textAlign: 'right',
+    flexShrink: 0
+  },
+  memberListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 4
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.separator,
+    columnGap: 12
+  },
+  memberAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.colors.muted
+  },
+  memberAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.colors.muted
+  },
+  memberTextCol: {
+    flex: 1,
+    minWidth: 0
+  },
+  memberNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6
+  },
+  memberName: {
+    flexShrink: 1,
+    fontFamily: theme.fontFamily.semiBold,
+    fontSize: 15,
+    color: theme.colors.textPrimary
+  },
+  memberSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: theme.colors.textSecondary
+  },
   filtersContent: {
     paddingHorizontal: 16,
     columnGap: 8
@@ -1739,15 +2199,15 @@ const styles = StyleSheet.create({
     opacity: 0.6
   },
   resultCountText: {
-    paddingHorizontal: 16,
     fontSize: 14,
     color: theme.colors.textPrimary
   },
   resultCountSlot: {
-    minHeight: 32,
+    minHeight: 28,
     justifyContent: 'center',
-    paddingTop: 12,
-    paddingBottom: 8
+    paddingTop: 10,
+    paddingBottom: 4,
+    paddingHorizontal: 16
   },
   resultsStage: {
     flex: 1,

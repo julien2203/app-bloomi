@@ -7,21 +7,18 @@ import { Text } from '../../components/ui/Text';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 import { useTranslation } from 'react-i18next';
-
-type Segment = {
-  label: string;
-  gender: string;
-  type: string | null;
-};
+import { getBrandSegmentsForGender } from '../../lib/inferProductType';
 
 export default function BrandSegmentScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
+  const { navigateAfterFilterCommit } = useFilterExit();
 
   const params = useLocalSearchParams<{
     gender?: string;
@@ -32,91 +29,18 @@ export default function BrandSegmentScreen() {
   }>();
   const genderParam = typeof params.gender === 'string' ? params.gender : 'femme';
 
-  const segments = useMemo<Segment[]>(() => {
-    switch (genderParam) {
-      case 'femme':
-      default:
-        return [
-          {
-            label: t('filters.segment.womenClothing'),
-            gender: 'femme',
-            type: 'vetements'
-          },
-          {
-            label: t('filters.segment.womenShoes'),
-            gender: 'femme',
-            type: 'chaussures'
-          },
-          {
-            label: t('filters.segment.womenBags'),
-            gender: 'femme',
-            type: 'sacs'
-          },
-          {
-            label: t('filters.segment.womenAccessories'),
-            gender: 'femme',
-            type: 'accessoires'
-          }
-        ];
-      case 'homme':
-        return [
-          {
-            label: t('filters.segment.menClothing'),
-            gender: 'homme',
-            type: 'vetements'
-          },
-          {
-            label: t('filters.segment.menShoes'),
-            gender: 'homme',
-            type: 'chaussures'
-          },
-          {
-            label: t('filters.segment.menAccessories'),
-            gender: 'homme',
-            type: 'accessoires'
-          }
-        ];
-      case 'enfant':
-        return [
-          {
-            label: t('filters.segment.kidsClothing'),
-            gender: 'enfant',
-            type: 'vetements'
-          },
-          {
-            label: t('filters.segment.kidsShoes'),
-            gender: 'enfant',
-            type: 'chaussures'
-          },
-          {
-            label: t('filters.segment.kidsBags'),
-            gender: 'enfant',
-            type: 'sacs'
-          },
-          {
-            label: t('filters.segment.kidsAccessories'),
-            gender: 'enfant',
-            type: 'accessoires'
-          }
-        ];
-      case 'bebe':
-        return [
-          {
-            label: t('filters.segment.babyClothing'),
-            gender: 'bebe',
-            type: 'vetements'
-          }
-        ];
-    }
-  }, [genderParam, t]);
+  const segments = useMemo(
+    () => getBrandSegmentsForGender(genderParam),
+    [genderParam]
+  );
 
-  const openSegment = (segment: Segment) => {
+  const openSegment = (segment: (typeof segments)[number]) => {
     router.push({
       pathname: filtersScreenPath(stackBase, 'brand') as any,
       params: {
         gender: segment.gender,
-        type: segment.type ?? undefined,
-        title: segment.label,
+        type: segment.type,
+        title: t(segment.labelKey),
         ...(params.returnTo ? { returnTo: params.returnTo } : {}),
         ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
         ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
@@ -126,7 +50,7 @@ export default function BrandSegmentScreen() {
   };
 
   const handleShowResult = () => {
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   return (
@@ -143,13 +67,13 @@ export default function BrandSegmentScreen() {
         <View style={styles.content}>
           {segments.map((segment) => (
             <TouchableOpacity
-              key={`${segment.gender}-${segment.type ?? 'all'}`}
+              key={`${segment.gender}-${segment.type}`}
               style={styles.row}
               activeOpacity={0.7}
               onPress={() => openSegment(segment)}
             >
               <Text variant="body" style={styles.rowLabel}>
-                {segment.label}
+                {t(segment.labelKey)}
               </Text>
               <Text style={styles.chevron}>{'›'}</Text>
             </TouchableOpacity>
@@ -159,7 +83,7 @@ export default function BrandSegmentScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button
@@ -237,4 +161,3 @@ const styles = StyleSheet.create({
     color: theme.colors.appleBlack
   }
 });
-

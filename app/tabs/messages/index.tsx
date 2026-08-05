@@ -21,12 +21,22 @@ import {
 function cloneThreads(threads: ThreadListItem[]): ThreadListItem[] {
   return threads.map((thread) => ({ ...thread }));
 }
+
+function sortThreadsByRecency(threads: ThreadListItem[]): ThreadListItem[] {
+  return [...threads].sort((a, b) => {
+    const aTs = a.last_message_at ?? a.thread_created_at ?? '';
+    const bTs = b.last_message_at ?? b.thread_created_at ?? '';
+    return bTs.localeCompare(aTs);
+  });
+}
 import { refreshUnreadThreadsBadge } from '../../../lib/unreadMessagesBadge';
 import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
+import { translateChatSystemMessage } from '../../../lib/messagesSystemI18n';
+import { MessagesSafetyBanner } from '../../../components/messages/MessagesSafetyBanner';
 
 function formatRelativeDate(dateString: string | null, t: (key: string, opts?: any) => string): string {
   if (!dateString) return '';
@@ -71,12 +81,13 @@ export default function MessagesScreen() {
   const inboxRealtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSeqRef = useRef(0);
   const skipFirstFocusReload = useRef(true);
+  const hasLoadedThreadsRef = useRef(false);
 
   const mergeThreads = useCallback((current: ThreadListItem[], next: ThreadListItem[]) => {
     const byId = new Map<string, ThreadListItem>();
     for (const item of current) byId.set(item.thread_id, item);
     for (const item of next) byId.set(item.thread_id, item);
-    return Array.from(byId.values());
+    return sortThreadsByRecency(Array.from(byId.values()));
   }, []);
 
   const loadThreads = useCallback(async (opts?: { silent?: boolean; page?: number; append?: boolean }) => {
@@ -86,9 +97,9 @@ export default function MessagesScreen() {
     try {
       if (append) {
         setLoadingMore(true);
-      } else {
-        if (!opts?.silent) setLoading(true);
-        if (threads.length === 0 && previousThreads.length === 0) {
+      } else if (!opts?.silent) {
+        setLoading(true);
+        if (!hasLoadedThreadsRef.current) {
           setInitialLoading(true);
         }
       }
@@ -107,6 +118,7 @@ export default function MessagesScreen() {
       } else {
         setThreads(baseThreads);
         setPreviousThreads(baseThreads);
+        hasLoadedThreadsRef.current = baseThreads.length > 0;
       }
 
       setPage(requestedPage);
@@ -130,7 +142,7 @@ export default function MessagesScreen() {
       });
     } catch {
       setError(t('messages.loadError'));
-      if (threads.length === 0 && previousThreads.length === 0) {
+      if (!hasLoadedThreadsRef.current) {
         setThreads([]);
       }
     } finally {
@@ -140,7 +152,7 @@ export default function MessagesScreen() {
       }
       setLoadingMore(false);
     }
-  }, [user?.id, mergeThreads, previousThreads.length, t, threads.length]);
+  }, [user?.id, mergeThreads, t]);
 
   useEffect(() => {
     void loadThreads();
@@ -174,7 +186,7 @@ export default function MessagesScreen() {
       .channel(`messages:inbox-list:${user.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'messages' },
+        { event: 'INSERT', schema: 'public', table: 'messages' },
         scheduleReload
       )
       .subscribe();
@@ -196,6 +208,11 @@ export default function MessagesScreen() {
   const renderItem = useCallback(
     ({ item }: { item: ThreadListItem }) => {
       const lastBody = item.last_message_body ?? '';
+      const lastBodyDisplay = lastBody
+        ? translateChatSystemMessage(lastBody, t, {
+            isSeller: item.seller_id === user?.id
+          })
+        : '';
       const relativeDate = formatRelativeDate(item.last_message_created_at ?? item.thread_created_at, t);
 
       const isUnread = item.has_unread_from_other === true;
@@ -204,6 +221,16 @@ export default function MessagesScreen() {
       const avatarUrl = item.other_participant_avatar ?? null;
 
       const handlePress = () => {
+        setThreads((prev) =>
+          prev.map((row) =>
+            row.thread_id === item.thread_id ? { ...row, has_unread_from_other: false } : row
+          )
+        );
+        setPreviousThreads((prev) =>
+          prev.map((row) =>
+            row.thread_id === item.thread_id ? { ...row, has_unread_from_other: false } : row
+          )
+        );
         router.push({
           pathname: '/tabs/messages/[id]',
           params: { id: item.thread_id, from_inbox: '1' }
@@ -235,13 +262,14 @@ export default function MessagesScreen() {
             >
               {otherName || t('common.bloomiUser')}
             </Text>
-            {lastBody ? (
+            {lastBodyDisplay ? (
               <Text
-                variant="captionSm"
-                numberOfLines={1}
+                variant="body"
+                numberOfLines={2}
+                ellipsizeMode="tail"
                 style={[styles.lastMessage, isUnread && styles.lastMessageUnread]}
               >
-                {lastBody}
+                {lastBodyDisplay}
               </Text>
             ) : null}
           </View>
@@ -354,6 +382,7 @@ export default function MessagesScreen() {
         <View style={styles.headerSidePlaceholder} />
       </View>
       <View style={styles.headerSeparator} />
+      <MessagesSafetyBanner />
       {renderContent}
     </SafeAreaView>
   );
@@ -450,7 +479,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 12,
     minHeight: 72,
@@ -462,19 +491,23 @@ const styles = StyleSheet.create({
   avatar: {
     width: 52,
     height: 52,
-    borderRadius: 26
+    borderRadius: 26,
+    marginTop: 2
   },
   avatarPlaceholder: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    marginTop: 2,
     backgroundColor: theme.colors.muted,
     alignItems: 'center',
     justifyContent: 'center'
   },
   rowCenter: {
     flex: 1,
-    paddingHorizontal: 12
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingTop: 2
   },
   nameText: {
     fontSize: 16
@@ -488,8 +521,10 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary
   },
   rowRight: {
+    minWidth: 56,
     alignItems: 'flex-end',
-    justifyContent: 'center'
+    justifyContent: 'flex-start',
+    paddingTop: 2
   },
   dateText: {
     fontSize: 13,
@@ -502,6 +537,7 @@ const styles = StyleSheet.create({
   lastMessage: {
     marginTop: 4,
     fontSize: 14,
+    lineHeight: 20,
     color: '#888888',
     fontWeight: '400'
   },

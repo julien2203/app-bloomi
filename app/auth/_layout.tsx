@@ -27,6 +27,10 @@ export default function AuthLayout() {
         options={{ headerShown: false, gestureEnabled: true }}
       />
       <Stack.Screen
+        name="oauth-callback"
+        options={{ headerShown: false, gestureEnabled: false }}
+      />
+      <Stack.Screen
         name="callback"
         options={{ headerShown: false, gestureEnabled: true }}
       />
@@ -44,6 +48,10 @@ export default function AuthLayout() {
       />
       <Stack.Screen
         name="verify-phone-code"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="legal"
         options={{ headerShown: false, gestureEnabled: true }}
       />
       <Stack.Screen

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../../../lib/safeArea';
 import { Screen } from '../../../../components/ui/Screen';
 import { Text } from '../../../../components/ui/Text';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
@@ -31,6 +32,7 @@ export default function EditListingCategoryGenderScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const params = useLocalSearchParams<{ gender?: string }>();
   const genderParam = params.gender as GenderKey | undefined;
   const gender: GenderKey =
@@ -121,7 +123,7 @@ export default function EditListingCategoryGenderScreen() {
           )}
         </View>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.footer, { paddingBottom: safeBottom + 24 }]}>
           <Button
             title={t('common.confirm')}
             onPress={() => router.back()}

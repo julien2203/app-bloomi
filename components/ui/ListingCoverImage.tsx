@@ -1,38 +1,52 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { Image, type ImageContentFit, type ImagePriority } from 'expo-image';
-import { getListingCoverImageUrl } from '../../lib/listingCoverImageUrl';
+import { StyleSheet, type StyleProp } from 'react-native';
+import { Image, type ImageContentFit, type ImageStyle } from 'expo-image';
+import { toListingCardImageUrl, toListingFullImageUrl } from '../../lib/listingPhotoUtils';
 
 type ListingCoverImageProps = {
   uri: string | null | undefined;
   widthDp: number;
   heightDp: number;
   recyclingKey?: string;
-  priority?: ImagePriority;
+  priority?: 'low' | 'normal' | 'high' | number;
   contentFit?: ImageContentFit;
-  style?: StyleProp<ViewStyle>;
+  style?: StyleProp<ImageStyle>;
+  /** `card` (défaut) = variante légère feed ; `full` = original. */
+  variant?: 'card' | 'full';
 };
 
+/** Origins known to lack a `.card.jpg` sibling (avoids repeat 404s this session). */
+const missingCardOrigins = new Set<string>();
+
+/**
+ * Affiche une cover depuis Storage public.
+ * Préfère `*.card.jpg` (upload + backfill) pour le feed ; fallback full si absent.
+ */
 export function ListingCoverImage({
   uri,
-  widthDp,
-  heightDp,
+  widthDp: _widthDp,
+  heightDp: _heightDp,
   recyclingKey,
   priority = 'normal',
   contentFit = 'cover',
-  style
+  style,
+  variant = 'card'
 }: ListingCoverImageProps) {
-  const originalUri = uri?.trim() || null;
-  const optimizedUri = useMemo(
-    () => (originalUri ? getListingCoverImageUrl(originalUri, widthDp, heightDp) : null),
-    [originalUri, widthDp, heightDp]
-  );
+  const fullUri = useMemo(() => toListingFullImageUrl(uri), [uri]);
+  const cardUri = useMemo(() => toListingCardImageUrl(fullUri), [fullUri]);
 
-  const [activeUri, setActiveUri] = useState<string | null>(optimizedUri ?? originalUri);
+  const preferredUri = useMemo(() => {
+    if (!fullUri) return null;
+    if (variant === 'full') return fullUri;
+    if (missingCardOrigins.has(fullUri)) return fullUri;
+    return cardUri ?? fullUri;
+  }, [fullUri, cardUri, variant]);
+
+  const [activeUri, setActiveUri] = useState<string | null>(preferredUri);
 
   useEffect(() => {
-    setActiveUri(optimizedUri ?? originalUri);
-  }, [optimizedUri, originalUri]);
+    setActiveUri(preferredUri);
+  }, [preferredUri]);
 
   if (!activeUri) return null;
 
@@ -45,8 +59,15 @@ export function ListingCoverImage({
       recyclingKey={recyclingKey}
       priority={priority}
       onError={() => {
-        if (originalUri && activeUri !== originalUri) {
-          setActiveUri(originalUri);
+        if (
+          variant === 'card' &&
+          fullUri &&
+          activeUri !== fullUri &&
+          cardUri &&
+          activeUri === cardUri
+        ) {
+          missingCardOrigins.add(fullUri);
+          setActiveUri(fullUri);
         }
       }}
     />

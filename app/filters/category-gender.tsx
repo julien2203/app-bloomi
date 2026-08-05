@@ -7,7 +7,8 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { getDescendantCategoryIds, getRootCategoriesByGender } from '../../lib/api/filters';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
@@ -49,6 +50,7 @@ export default function CategoryGenderScreen() {
   const [allGenderCategoryIds, setAllGenderCategoryIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
 
   const dbGender = UI_TO_DB_GENDER[gender];
   const genderTitle = useMemo(() => {
@@ -69,34 +71,6 @@ export default function CategoryGenderScreen() {
           gender: row.gender as string | null
         }));
 
-        // Ordre spécifique pour Woman, comme dans le doc Word :
-        // Clothing, Shoes, Bags, Accessories, Sport, Other
-        if (dbGender === 'femme') {
-          const WOMAN_ORDER = ['Clothing', 'Shoes', 'Bags', 'Accessories', 'Sport'];
-          const normalizedOtherNames = new Set(['other', 'others']);
-
-          mapped.sort((a, b) => {
-            const aName = a.name.trim();
-            const bName = b.name.trim();
-            const aNorm = aName.toLowerCase();
-            const bNorm = bName.toLowerCase();
-            const aIsOther = normalizedOtherNames.has(aNorm);
-            const bIsOther = normalizedOtherNames.has(bNorm);
-
-            if (aIsOther && !bIsOther) return 1;
-            if (!aIsOther && bIsOther) return -1;
-
-            const ia = WOMAN_ORDER.indexOf(aName);
-            const ib = WOMAN_ORDER.indexOf(bName);
-
-            const aPos = ia === -1 ? WOMAN_ORDER.length + 1 : ia;
-            const bPos = ib === -1 ? WOMAN_ORDER.length + 1 : ib;
-
-            if (aPos !== bPos) return aPos - bPos;
-            return a.name.localeCompare(b.name);
-          });
-        }
-
         setCategories(mapped);
         const rootIds = mapped.map((row) => row.id);
         const descendants = await getDescendantCategoryIds(rootIds);
@@ -114,7 +88,6 @@ export default function CategoryGenderScreen() {
 
   const handleShowResult = () => {
     navigateAfterFilterCommit(
-      router,
       typeof params.returnTo === 'string' ? params.returnTo : undefined
     );
   };
@@ -138,7 +111,6 @@ export default function CategoryGenderScreen() {
   const handleSelectAllGenderItems = () => {
     setFilter('categoryIds', allGenderCategoryIds);
     navigateAfterFilterCommit(
-      router,
       typeof params.returnTo === 'string' ? params.returnTo : undefined
     );
   };
@@ -201,7 +173,7 @@ export default function CategoryGenderScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

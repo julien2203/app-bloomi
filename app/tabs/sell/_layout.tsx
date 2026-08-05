@@ -5,7 +5,8 @@ export default function SellStackLayout() {
   return (
     <Stack
       screenOptions={{
-        animation: 'slide_from_right'
+        animation: 'slide_from_right',
+        animationTypeForReplace: 'pop'
       }}
     >
       <Stack.Screen
@@ -50,6 +51,14 @@ export default function SellStackLayout() {
       />
       <Stack.Screen
         name="color"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="my-address"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="work-address"
         options={{ headerShown: false, gestureEnabled: true }}
       />
     </Stack>

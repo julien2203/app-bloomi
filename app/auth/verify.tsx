@@ -140,6 +140,10 @@ export default function VerifyScreen() {
                 onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="••••••"
                 keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+                importantForAutofill="yes"
+                maxLength={6}
                 autoFocus
                 style={{
                   borderWidth: 1,

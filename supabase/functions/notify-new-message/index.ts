@@ -2,7 +2,9 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   fetchRecipientLanguage,
+  interestedInListingPushText,
   newMessagePushText,
+  questionOnListingPushText,
 } from "../_shared/pushNotificationI18n.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
@@ -32,6 +34,10 @@ function clipMessage(v: string, max = 100): string {
   const s = v.trim().replace(/\s+/g, " ");
   if (s.length <= max) return s;
   return s.slice(0, max).trimEnd();
+}
+
+function isOfferMessageBody(body: string): boolean {
+  return body.trim().toLowerCase().startsWith("offer:");
 }
 
 async function sendNotification(params: {
@@ -89,9 +95,12 @@ Deno.serve(async (req) => {
   if (!sender_id) return jsonResponse({ error: "sender_id est requis" }, { status: 400 });
   if (!message_body) return jsonResponse({ error: "message_body est requis" }, { status: 400 });
 
+  if (isOfferMessageBody(message_body)) {
+    return jsonResponse({ success: true, skipped: "offer_message" });
+  }
+
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-  // Vérifier que le sender_id correspond bien au JWT (évite spoof + auto-notifs)
   const token = authHeader.slice("Bearer ".length);
   const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !authData?.user?.id) {
@@ -103,7 +112,7 @@ Deno.serve(async (req) => {
 
   const { data: thread, error: threadError } = await supabaseAdmin
     .from("threads")
-    .select("id, buyer_id, seller_id")
+    .select("id, buyer_id, seller_id, listing_id")
     .eq("id", thread_id)
     .maybeSingle();
 
@@ -119,6 +128,7 @@ Deno.serve(async (req) => {
 
   const buyerId = String((thread as any).buyer_id ?? "").trim();
   const sellerId = String((thread as any).seller_id ?? "").trim();
+  const listingId = String((thread as any).listing_id ?? "").trim();
   if (!buyerId || !sellerId) {
     return jsonResponse({ error: "Thread invalide (buyer_id/seller_id manquants)" }, { status: 500 });
   }
@@ -128,7 +138,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Destinataire introuvable" }, { status: 500 });
   }
 
-  // Ne jamais envoyer une notification à l'expéditeur lui-même
   if (recipientId === sender_id) {
     return jsonResponse({ success: true, skipped: "recipient_is_sender" });
   }
@@ -154,7 +163,35 @@ Deno.serve(async (req) => {
 
   const clipped = clipMessage(message_body, 100);
   const recipientLang = await fetchRecipientLanguage(supabaseAdmin, recipientId);
-  const { title, body } = newMessagePushText(recipientLang, displayName, clipped);
+
+  let title: string;
+  let body: string;
+
+  const isBuyerToSeller = sender_id === buyerId && recipientId === sellerId;
+  if (isBuyerToSeller) {
+    const { count: buyerMsgCount } = await supabaseAdmin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("thread_id", thread_id)
+      .eq("sender_id", buyerId)
+      .neq("type", "offer")
+      .eq("is_system", false);
+
+    const priorCount = typeof buyerMsgCount === "number" ? buyerMsgCount : 1;
+    if (priorCount <= 1) {
+      if (clipped.includes("?")) {
+        ({ title, body } = questionOnListingPushText(recipientLang, displayName, clipped));
+      } else {
+        ({ title, body } = interestedInListingPushText(recipientLang, displayName));
+      }
+    } else if (clipped.includes("?")) {
+      ({ title, body } = questionOnListingPushText(recipientLang, displayName, clipped));
+    } else {
+      ({ title, body } = newMessagePushText(recipientLang, displayName, clipped));
+    }
+  } else {
+    ({ title, body } = newMessagePushText(recipientLang, displayName, clipped));
+  }
 
   try {
     await sendNotification({
@@ -163,7 +200,11 @@ Deno.serve(async (req) => {
       user_id: recipientId,
       title,
       body,
-      data: { thread_id, notification_type: "new_message" },
+      data: {
+        thread_id,
+        ...(listingId ? { listing_id: listingId } : {}),
+        notification_type: "new_message",
+      },
     });
   } catch (e) {
     return jsonResponse(
@@ -174,4 +215,3 @@ Deno.serve(async (req) => {
 
   return jsonResponse({ success: true });
 });
-

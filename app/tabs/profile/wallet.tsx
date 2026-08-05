@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { Button } from '../../../components/ui/Button';
 import { Text } from '../../../components/ui/Text';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { supabase } from '../../../lib/supabase';
 import { SUPABASE_URL } from '../../../lib/env';
 import { theme } from '../../../lib/theme';
@@ -37,6 +39,7 @@ export default function WalletScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { user } = useAuthStore();
 
   const [loading, setLoading] = useState(false);
@@ -224,7 +227,18 @@ export default function WalletScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={[styles.content, { paddingBottom: insets.bottom + 80 }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={styles.header}>
+        <HeaderBackButton onPress={() => router.back()} />
+        <Text variant="body" style={styles.headerTitle}>
+          {t('profile.walletScreenTitle')}
+        </Text>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
+      <View style={styles.separator} />
+
+      <View style={[styles.content, { paddingBottom: safeBottom + 80 }]}>
         {!userId ? (
           <View style={styles.center}>
             <Text variant="body" color="textSecondary" style={styles.centerText}>
@@ -322,6 +336,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.backgroundWhite
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.settingsPaddingX,
+    paddingVertical: theme.spacing.settingsHeaderPaddingY
+  },
+  headerTitle: {
+    ...theme.typography.settingsHeaderTitle,
+    color: theme.colors.appleBlack,
+    textAlign: 'center',
+    flex: 1
+  },
+  headerRightPlaceholder: {
+    width: theme.spacing.settingsHeaderSideWidth
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.separator
   },
   content: {
     flex: 1,

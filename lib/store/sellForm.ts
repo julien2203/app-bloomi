@@ -4,6 +4,7 @@ export type SellCategory = {
   id: number;
   name: string;
   gender: string;
+  slug?: string | null;
 };
 
 export type SellBrand = {
@@ -21,9 +22,11 @@ export type SellColor = {
   name: string;
 };
 
-export type SellCategoryType = 'chaussures' | 'pantalons' | 'chemises' | 'vetements';
+import type { BrandProductType } from '../inferProductType';
 
-export type ParcelSizeValue = 'small' | 'large' | 'xlarge';
+export type SellCategoryType = BrandProductType;
+
+export type ParcelSizeValue = 'letter_aplus' | 'small' | 'large' | 'xlarge';
 
 export type SellFormFieldKey =
   | 'category'

@@ -1,4 +1,5 @@
 import type { Insets } from 'react-native';
+import { getSafeBottomInset } from './safeArea';
 
 /**
  * Marge tactile autour des petites cibles (flèches, icônes header).
@@ -21,3 +22,8 @@ export const HEADER_ICON_TOUCH_CONTAINER = {
 
 /** Espace de base au-dessus de la tab bar fixe pour ne pas masquer les boutons pied de page des écrans filtres */
 export const FLOATING_TAB_BAR_BOTTOM_RESERVE = 84;
+
+/** Padding bas du pied de page « Show result » sur les écrans filtres (tab bar flottante visible). */
+export function getFilterFooterPaddingBottom(insets: Insets): number {
+  return getSafeBottomInset(insets.bottom) + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE;
+}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,13 +19,13 @@ import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTranslation } from 'react-i18next';
 
-const PROFILE_COUNTRY_CH = 'CH';
-
 export default function MyAddressScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [street, setStreet] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [city, setCity] = useState('');
@@ -42,21 +42,40 @@ export default function MyAddressScreen() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('street, postal_code, city, country')
+        .select('street, postal_code, city, country, address_first_name, address_last_name, display_name')
         .eq('id', user.id)
         .maybeSingle();
       if (error) throw error;
       if (data) {
-        setStreet(String((data as any).street ?? ''));
-        setPostalCode(String((data as any).postal_code ?? ''));
-        setCity(String((data as any).city ?? ''));
+        const row = data as Record<string, unknown>;
+        setStreet(String(row.street ?? ''));
+        setPostalCode(String(row.postal_code ?? ''));
+        setCity(String(row.city ?? ''));
+        const fn = String(row.address_first_name ?? '').trim();
+        const ln = String(row.address_last_name ?? '').trim();
+        if (fn || ln) {
+          setFirstName(fn);
+          setLastName(ln);
+        } else {
+          // Préremplir depuis le display_name si possible (ex. "Jean Dupont")
+          const display = String(row.display_name ?? '').trim();
+          if (display) {
+            const parts = display.split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+              setFirstName(parts[0]!);
+              setLastName(parts.slice(1).join(' '));
+            } else {
+              setFirstName(display);
+            }
+          }
+        }
       }
     } catch (e) {
       Alert.alert(t('common.error'), e instanceof Error ? e.message : t('profile.unableLoad'));
     } finally {
       setLoadingProfile(false);
     }
-  }, [user?.id]);
+  }, [t, user?.id]);
 
   useEffect(() => {
     void loadProfile();
@@ -64,10 +83,12 @@ export default function MyAddressScreen() {
 
   const save = useCallback(async () => {
     if (!user?.id || saving) return;
+    const fn = firstName.trim();
+    const ln = lastName.trim();
     const st = street.trim();
     const pc = postalCode.trim();
     const ct = city.trim();
-    if (!st || !pc || !ct) {
+    if (!fn || !ln || !st || !pc || !ct) {
       Alert.alert(t('profile.myAddress.incomplete'), t('profile.myAddress.incompleteMessage'));
       return;
     }
@@ -76,10 +97,11 @@ export default function MyAddressScreen() {
       const { error } = await supabase
         .from('profiles')
         .update({
+          address_first_name: fn,
+          address_last_name: ln,
           street: st,
           postal_code: pc,
-          city: ct,
-          country: PROFILE_COUNTRY_CH
+          city: ct
         })
         .eq('id', user.id);
       if (error) throw error;
@@ -90,7 +112,7 @@ export default function MyAddressScreen() {
     } finally {
       setSaving(false);
     }
-  }, [city, postalCode, router, saving, street, t, user?.id]);
+  }, [city, firstName, lastName, postalCode, router, saving, street, t, user?.id]);
 
   return (
     <KeyboardAvoidingView
@@ -119,6 +141,38 @@ export default function MyAddressScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
+            <Text variant="captionSm" color="textSecondary" style={styles.intro}>
+              {t('profile.myAddress.nameHint')}
+            </Text>
+
+            <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
+              {t('profile.myAddress.firstName')}
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('profile.myAddress.firstNameExample')}
+              placeholderTextColor={theme.colors.textSecondary}
+              value={firstName}
+              onChangeText={setFirstName}
+              autoCapitalize="words"
+              autoComplete="given-name"
+              textContentType="givenName"
+            />
+
+            <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
+              {t('profile.myAddress.lastName')}
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('profile.myAddress.lastNameExample')}
+              placeholderTextColor={theme.colors.textSecondary}
+              value={lastName}
+              onChangeText={setLastName}
+              autoCapitalize="words"
+              autoComplete="family-name"
+              textContentType="familyName"
+            />
+
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
               {t('profile.myAddress.street')}
             </Text>
@@ -129,6 +183,8 @@ export default function MyAddressScreen() {
               value={street}
               onChangeText={setStreet}
               autoCapitalize="sentences"
+              autoComplete="street-address"
+              textContentType="streetAddressLine1"
             />
 
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
@@ -141,6 +197,8 @@ export default function MyAddressScreen() {
               value={postalCode}
               onChangeText={setPostalCode}
               keyboardType="numbers-and-punctuation"
+              autoComplete="postal-code"
+              textContentType="postalCode"
             />
 
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
@@ -153,6 +211,8 @@ export default function MyAddressScreen() {
               value={city}
               onChangeText={setCity}
               autoCapitalize="words"
+              autoComplete="postal-address"
+              textContentType="addressCity"
             />
 
             <Text variant="captionSm" color="textSecondary" style={styles.fieldLabel}>
@@ -160,9 +220,12 @@ export default function MyAddressScreen() {
             </Text>
             <View style={styles.countryReadonly}>
               <Text variant="body" color="textSecondary">
-                {t('profile.myAddress.countryInfo')}
+                {t('feed.checkout.countryCH')}
               </Text>
             </View>
+            <Text variant="captionSm" color="textSecondary" style={styles.countryHint}>
+              {t('profile.myAddress.countryInfo')}
+            </Text>
 
             <View style={styles.saveWrap}>
               <Button
@@ -175,7 +238,6 @@ export default function MyAddressScreen() {
             </View>
           </ScrollView>
         )}
-
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -222,6 +284,9 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.gapMd,
     paddingBottom: theme.spacing.gapLg
   },
+  intro: {
+    marginBottom: theme.spacing.gapSm
+  },
   fieldLabel: {
     marginBottom: theme.spacing.gapSm,
     marginTop: theme.spacing.gapSm
@@ -246,6 +311,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: theme.spacing.gapSm,
     backgroundColor: theme.colors.muted
+  },
+  countryHint: {
+    marginBottom: theme.spacing.gapSm
   },
   saveWrap: {
     marginTop: theme.spacing.gapLg

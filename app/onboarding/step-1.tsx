@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { theme } from '../../lib/theme';
+import { openPrivacyPolicy, openTermsOfUse } from '../../lib/legalLinks';
 import { useTranslation } from 'react-i18next';
 
 const GRID_GAP = 6;
@@ -27,16 +28,16 @@ const MIN_GRID_HEIGHT = 300;
 const GRID_HEIGHT_SCALE = 1;
 const CELL_BORDER_RADIUS = 15;
 
-const PHOTO_LEFT_BOTTOM = require('../../assets/photos/photo1.png');
+const PHOTO_LEFT_BOTTOM = require('../../assets/photos/image00007.png');
 
 const GRID_COLUMNS = [
   {
-    large: require('../../assets/photos/photo3.png'),
-    small: require('../../assets/photos/photo4.png')
+    large: require('../../assets/photos/image00004.png'),
+    small: require('../../assets/photos/image00003.png')
   },
   {
-    large: require('../../assets/photos/photo5.png'),
-    small: require('../../assets/photos/photo6.png')
+    large: require('../../assets/photos/image00005.png'),
+    small: require('../../assets/photos/image00006.png')
   }
 ] as const;
 
@@ -57,7 +58,7 @@ function useGridMetrics(gridHeight: number, screenWidth: number): GridMetrics {
   }, [gridHeight, screenWidth]);
 }
 
-/** Colonne gauche : chartreuse + logo en haut, photo1 en bas (grande). */
+/** Colonne gauche : chartreuse + logo en haut, start-1 en bas (grande). */
 function OnboardingLeftColumn({ metrics }: { metrics: GridMetrics }) {
   const { colWidth, gridHeight, photoSmallH, photoLargeH } = metrics;
   const cell = { borderRadius: CELL_BORDER_RADIUS, overflow: 'hidden' as const };
@@ -187,10 +188,6 @@ export default function OnboardingStep1() {
 
           <Text style={styles.title}>{t('onboarding.step1.title')}</Text>
 
-          <Text style={styles.subtitle}>
-            {t('onboarding.step1.subtitle')}
-          </Text>
-
           <TouchableOpacity
             style={styles.signUpButton}
             activeOpacity={0.85}
@@ -212,13 +209,17 @@ export default function OnboardingStep1() {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.verificationHint}>
+            {t('onboarding.step1.subtitle')}
+          </Text>
+
           <Text style={styles.legalText}>
             {`${t('onboarding.step1.legalPrefix')} `}
-            <Text style={styles.legalLink} onPress={() => {}}>
+            <Text style={styles.legalLink} onPress={() => openTermsOfUse(router)}>
               {t('common.termsOfService')}
             </Text>{' '}
             {`${t('onboarding.step1.legalAnd')} `}
-            <Text style={styles.legalLink} onPress={() => {}}>
+            <Text style={styles.legalLink} onPress={openPrivacyPolicy}>
               {t('common.privacyPolicy')}
             </Text>
           </Text>
@@ -280,15 +281,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.semiBold,
     color: '#1A1A1A'
   },
-  subtitle: {
-    marginTop: 12,
-    paddingHorizontal: 32,
-    textAlign: 'center',
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: theme.fontFamily.regular,
-    color: '#121212'
-  },
   signUpButton: {
     marginTop: 28,
     alignSelf: 'stretch',
@@ -316,6 +308,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontFamily: theme.fontFamily.semiBold,
     color: '#1A1A1A'
+  },
+  verificationHint: {
+    paddingHorizontal: 24,
+    textAlign: 'center',
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: theme.fontFamily.regular,
+    color: '#999999'
   },
   legalText: {
     paddingHorizontal: 24,

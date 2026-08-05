@@ -2,8 +2,13 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   findOrCreateThreadForOrderChat,
-  insertThreadSystemMessage,
+  insertThreadEventMessage,
 } from "../_shared/orderChatSystemMessage.ts";
+import {
+  fetchRecipientLanguage,
+  parcelDepositedBuyerPushText,
+  parcelDepositedSellerPushText,
+} from "../_shared/pushNotificationI18n.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -93,9 +98,6 @@ Deno.serve(async (req) => {
   }
 
   const tn = String(row.tracking_number ?? "").trim();
-  const messageBody = tn
-    ? `📦 Shipped! [${tn}] — Your parcel is on its way.`
-    : `📦 Shipped! — Your parcel is on its way.`;
 
   try {
     const threadId = await findOrCreateThreadForOrderChat(supabaseAdmin, {
@@ -104,7 +106,60 @@ Deno.serve(async (req) => {
       sellerId: row.seller_id,
     });
     if (threadId) {
-      await insertThreadSystemMessage(supabaseAdmin, threadId, messageBody);
+      await insertThreadEventMessage(supabaseAdmin, threadId, {
+        kind: "order_shipped",
+        order_id,
+        tracking_number: tn || undefined,
+        delivery_mode: "shipping",
+      });
+      await insertThreadEventMessage(supabaseAdmin, threadId, {
+        kind: "buyer_confirm_prompt",
+        order_id,
+        delivery_mode: "shipping",
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (supabaseUrl && serviceKey) {
+      try {
+        const buyerLang = await fetchRecipientLanguage(supabaseAdmin, row.buyer_id);
+        const buyerCopy = parcelDepositedBuyerPushText(buyerLang);
+        await fetch(`${supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: row.buyer_id,
+            title: buyerCopy.title,
+            body: buyerCopy.body,
+            data: { order_id, notification_type: "new_items" },
+          }),
+        });
+      } catch {
+        // silent
+      }
+      try {
+        const sellerLang = await fetchRecipientLanguage(supabaseAdmin, row.seller_id);
+        const sellerCopy = parcelDepositedSellerPushText(sellerLang);
+        await fetch(`${supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: row.seller_id,
+            title: sellerCopy.title,
+            body: sellerCopy.body,
+            data: { order_id, notification_type: "new_items" },
+          }),
+        });
+      } catch {
+        // silent
+      }
     }
   } catch (e) {
     console.warn("insert-order-shipped-chat-message thread/message:", e);

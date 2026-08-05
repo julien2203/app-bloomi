@@ -2,6 +2,8 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { SupportedCountryCode } from './phone';
 import { normalizePhoneToE164 } from './phone';
+import { DEFAULT_LANGUAGE, type AppLanguage } from './i18n';
+import { requestWelcomeEmail } from './transactionalEmail';
 
 export type Profile = {
   id: string;
@@ -23,6 +25,20 @@ function deriveCountryFromPhone(
   return normalized.country;
 }
 
+async function languageForNewProfile(userId: string): Promise<AppLanguage | undefined> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('language')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error || data?.language) {
+    return undefined;
+  }
+
+  return DEFAULT_LANGUAGE;
+}
+
 /**
  * Crée ou met à jour un profil applicatif pour l'utilisateur courant.
  *
@@ -40,6 +56,14 @@ export async function ensureProfileExists(
 
   const userId = session.user.id;
 
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const isNewProfile = !existingProfile?.id;
+
   const phone = opts?.phone ?? (session.user.phone as string | null | undefined) ?? null;
   const country =
     opts?.country ??
@@ -56,12 +80,14 @@ export async function ensureProfileExists(
     // on se contente de ne pas créer de profil complet.
     // Par contre, si on a déjà un profil existant, on peut juste mettre à jour le display_name.
     if (displayName) {
+      const initialLanguage = await languageForNewProfile(userId);
       const { data, error } = await supabase
         .from('profiles')
         .upsert(
           {
             id: userId,
-            display_name: displayName
+            display_name: displayName,
+            ...(initialLanguage ? { language: initialLanguage } : {})
           },
           { onConflict: 'id' }
         )
@@ -73,11 +99,17 @@ export async function ensureProfileExists(
         return null;
       }
 
+      if (isNewProfile) {
+        void requestWelcomeEmail();
+      }
+
       return data as Profile;
     }
 
     return null;
   }
+
+  const initialLanguage = await languageForNewProfile(userId);
 
   const { data, error } = await supabase
     .from('profiles')
@@ -86,7 +118,8 @@ export async function ensureProfileExists(
         id: userId,
         phone,
         country,
-        display_name: displayName
+        display_name: displayName,
+        ...(initialLanguage ? { language: initialLanguage } : {})
       },
       { onConflict: 'id' }
     )
@@ -97,6 +130,10 @@ export async function ensureProfileExists(
     // On log simplement côté client pour le debug, sans bloquer l'utilisateur.
     console.warn('ensureProfileExists error', error);
     return null;
+  }
+
+  if (isNewProfile) {
+    void requestWelcomeEmail();
   }
 
   return data as Profile;

@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { AppState, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, usePathname, useSegments } from 'expo-router';
+import { usePathname, useSegments } from 'expo-router';
 import { theme } from '../../lib/theme';
 import { IconBox } from '../ui/IconBox';
 import HomeIcon from '../../assets/icons/home2.svg';
@@ -11,16 +11,21 @@ import SellIcon from '../../assets/icons/sell2.svg';
 import InboxIcon from '../../assets/icons/inbox2.svg';
 import ProfileIcon from '../../assets/icons/profile2.svg';
 import { supabase } from '../../lib/supabase';
+import { refreshNotificationsBadge } from '../../lib/notificationsBadge';
 import { refreshUnreadThreadsBadge } from '../../lib/unreadMessagesBadge';
 import { useAuthStore } from '../../stores/authStore';
 import { openGuestAuthPrompt } from '../../lib/guestAuthPrompt';
-import { navigateInTabs } from '../../lib/navigation/navigateInTabs';
+import { switchMainTab } from '../../lib/navigation/navigateInTabs';
+import { navigateToProfileTabRoot } from '../../lib/navigation/feedShortcutNav';
+import { useNotificationsBadgeStore } from '../../stores/notificationsBadgeStore';
 import { useUnreadMessagesStore } from '../../stores/unreadMessagesStore';
 import { useTranslation } from 'react-i18next';
+import { authDebug } from '../../lib/authDebugLog';
+import { getSafeBottomInset } from '../../lib/safeArea';
 
 export const TAB_BAR_BASE_HEIGHT = 64;
 export function getFixedTabBarHeight(bottomInset: number) {
-  return TAB_BAR_BASE_HEIGHT + (bottomInset > 0 ? bottomInset : 8);
+  return TAB_BAR_BASE_HEIGHT + getSafeBottomInset(bottomInset);
 }
 /** Tailles de cadre (px) : ajuster par onglet pour compenser le blanc interne des SVG */
 const TAB_BOX = {
@@ -32,6 +37,27 @@ const TAB_BOX = {
 } as const;
 const TAB_ICON_ACTIVE = '#171918';
 const TAB_ICON_INACTIVE = '#8E8E93';
+const TAB_BAR_HORIZONTAL_PADDING = theme.spacing.gapSm;
+
+/** Même taille pour tous les onglets, réduite uniquement si le libellé le plus long ne tient pas. */
+function getUniformTabLabelStyle(
+  labels: string[],
+  tabSlotWidth: number
+): { fontSize: number; lineHeight: number } {
+  const baseFontSize = 11;
+  const charWidthFactor = 0.52;
+  const maxLabelLen = Math.max(1, ...labels.map((label) => label.length));
+  const requiredWidth = maxLabelLen * baseFontSize * charWidthFactor;
+  const availableWidth = Math.max(40, tabSlotWidth - 4);
+
+  if (requiredWidth <= availableWidth) {
+    return { fontSize: baseFontSize, lineHeight: baseFontSize + 2 };
+  }
+
+  const fontSize = Math.max(9, availableWidth / (maxLabelLen * charWidthFactor));
+  const rounded = Math.round(fontSize * 10) / 10;
+  return { fontSize: rounded, lineHeight: rounded + 2 };
+}
 
 const TAB_ROUTE_DEFS = [
   { href: '/tabs/feed', key: 'home' as const, labelKey: 'navigation.home' },
@@ -45,18 +71,23 @@ export function FloatingTabBar(_: BottomTabBarProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const safeBottomInset = insets.bottom > 0 ? insets.bottom : 8;
+  const safeBottomInset = getSafeBottomInset(insets.bottom);
   const user = useAuthStore((s) => s.user);
   const session = useAuthStore((s) => s.session);
   const isGuest = useAuthStore((s) => s.isGuest);
   const unreadThreadsCount = useUnreadMessagesStore((s) => s.unreadThreadsCount);
   const messagesBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationsBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Normaliser le pathname pour éviter les variations type "/tabs/feed/" vs "/tabs/feed"
   const rawPathname = usePathname();
   const pathname = rawPathname.replace(/\/+$/, '');
   const segments = useSegments();
   const inTabsGroup = segments[0] === 'tabs';
+
+  useEffect(() => {
+    authDebug('tabBar:route', { pathname, inTabsGroup, hasSession: Boolean(session?.user) });
+  }, [pathname, inTabsGroup, session?.user]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -79,7 +110,12 @@ export function FloatingTabBar(_: BottomTabBarProps) {
       .channel(`messages:unread-badge:${user.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'messages' },
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages' },
         scheduleRefresh
       )
       .subscribe();
@@ -92,6 +128,59 @@ export function FloatingTabBar(_: BottomTabBarProps) {
       }
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      useNotificationsBadgeStore.getState().setUnreadCount(0);
+      return;
+    }
+    void refreshNotificationsBadge(user.id);
+
+    const scheduleNotificationsRefresh = () => {
+      if (notificationsBadgeDebounceRef.current) {
+        clearTimeout(notificationsBadgeDebounceRef.current);
+      }
+      notificationsBadgeDebounceRef.current = setTimeout(() => {
+        notificationsBadgeDebounceRef.current = null;
+        void refreshNotificationsBadge(user.id);
+      }, 450);
+    };
+
+    const ch = supabase
+      .channel(`notifications:unread-badge:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        scheduleNotificationsRefresh
+      )
+      .subscribe();
+
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        void refreshNotificationsBadge(user.id);
+      }
+    });
+
+    return () => {
+      void supabase.removeChannel(ch);
+      appStateSub.remove();
+      if (notificationsBadgeDebounceRef.current) {
+        clearTimeout(notificationsBadgeDebounceRef.current);
+        notificationsBadgeDebounceRef.current = null;
+      }
+    };
+  }, [user?.id]);
+
+  const tabLabels = useMemo(
+    () => TAB_ROUTE_DEFS.map((tab) => t(tab.labelKey)),
+    [t]
+  );
+
+  const tabLabelStyle = useMemo(() => {
+    const tabSlotWidth =
+      (windowWidth - TAB_BAR_HORIZONTAL_PADDING * 2) / TAB_ROUTE_DEFS.length;
+    return getUniformTabLabelStyle(tabLabels, tabSlotWidth);
+  }, [tabLabels, windowWidth]);
 
   // On n'affiche la barre flottante UNIQUEMENT sur les écrans racine des tabs
   // (pas sur les pages de détail, ni sur le flow Sell, ni sur les sous-pages profile, etc.)
@@ -120,6 +209,9 @@ export function FloatingTabBar(_: BottomTabBarProps) {
     if (segments.length <= 2) return true;
     return segments.length === 3 && segments[2] === 'index';
   };
+
+  const isProfileTabRoot =
+    isRoot('/tabs/profile') || isTabStackRoot('profile');
 
   const showOnThisRoute =
     isRoot('/tabs/feed') ||
@@ -170,12 +262,17 @@ export function FloatingTabBar(_: BottomTabBarProps) {
               openGuestAuthPrompt();
               return;
             }
+            // Profil : re-tap sur l’icône = retour à la racine (comme Instagram / Vinted).
+            if (tab.key === 'profile' && pathname.startsWith('/tabs/profile') && !isProfileTabRoot) {
+              navigateToProfileTabRoot();
+              return;
+            }
+            if (tab.key === 'profile' && !isFocused) {
+              navigateToProfileTabRoot();
+              return;
+            }
             if (!isFocused) {
-              if (tab.key === 'search') {
-                navigateInTabs('/tabs/search');
-              } else {
-                router.push(tab.href);
-              }
+              switchMainTab(tab.href);
             }
           };
 
@@ -225,7 +322,15 @@ export function FloatingTabBar(_: BottomTabBarProps) {
                   />
                 )}
               </View>
-              <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive]}>
+              <Text
+                style={[
+                  styles.label,
+                  tabLabelStyle,
+                  isFocused ? styles.labelActive : styles.labelInactive
+                ]}
+                numberOfLines={1}
+                allowFontScaling={false}
+              >
                 {t(tab.labelKey)}
               </Text>
             </TouchableOpacity>
@@ -254,7 +359,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.gapLg,
+    paddingHorizontal: TAB_BAR_HORIZONTAL_PADDING,
     paddingTop: 8,
     overflow: 'visible'
   },
@@ -264,6 +369,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     minHeight: 56,
     paddingTop: 1,
+    paddingHorizontal: 2,
     overflow: 'visible'
   },
   iconSlot: {
@@ -288,16 +394,15 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#F8F8F9',
+    backgroundColor: theme.colors.primary,
     position: 'absolute',
     top: -2,
     right: -4
   },
   label: {
     width: '100%',
+    maxWidth: '100%',
     textAlign: 'center',
-    fontSize: 12,
-    lineHeight: 14,
     fontWeight: '500',
     includeFontPadding: false
   },

@@ -10,13 +10,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Linking,
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { openPrivacyPolicy, openTermsOfUse } from '../../lib/legalLinks';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Button } from '../../components/ui/Button';
@@ -26,6 +26,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { useTranslation } from 'react-i18next';
+import { authDebug, authDebugError } from '../../lib/authDebugLog';
 
 export default function SignUpScreen() {
   const { t } = useTranslation();
@@ -61,7 +62,7 @@ export default function SignUpScreen() {
         email,
         password,
         options: {
-          emailRedirectTo: `bloomi://auth/callback?email=${encodeURIComponent(email)}`,
+          emailRedirectTo: 'bloomi://auth/callback',
           data: {
             full_name: fullName,
             username,
@@ -84,7 +85,7 @@ export default function SignUpScreen() {
         params: { email }
       });
     } catch (e) {
-      setError('Something went wrong during sign-up. Please try again.');
+      setError(t('auth.signUp.somethingWrong'));
       setLoading(false);
     }
   };
@@ -228,38 +229,37 @@ export default function SignUpScreen() {
                   <Text style={styles.checkboxText}>{t('auth.signUp.marketingOptIn')}</Text>
                 </TouchableOpacity>
 
-                {/* Row 2 */}
-                <TouchableOpacity
-                  style={styles.checkboxRow}
-                  activeOpacity={0.8}
-                  onPress={() => setTermsChecked((prev) => !prev)}
-                >
-                  <View
-                    style={[
-                      styles.checkboxBox,
-                      termsChecked && styles.checkboxBoxChecked
-                    ]}
+                {/* Row 2 — case à cocher séparée des liens pour que les taps fonctionnent */}
+                <View style={styles.checkboxRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setTermsChecked((prev) => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    {termsChecked && <Text style={styles.checkboxCheck}>✓</Text>}
-                  </View>
+                    <View
+                      style={[
+                        styles.checkboxBox,
+                        termsChecked && styles.checkboxBoxChecked
+                      ]}
+                    >
+                      {termsChecked && <Text style={styles.checkboxCheck}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
                   <Text style={styles.checkboxText}>
                     {t('auth.signUp.termsPrefix')}{' '}
                     <Text
                       style={styles.checkboxLink}
-                      onPress={() => Linking.openURL('https://bloomi.app/terms')}
+                      onPress={() => openTermsOfUse(router)}
                     >
                       {t('auth.signUp.termsLink')}
                     </Text>{' '}
                     {t('auth.signUp.termsAnd')}{' '}
-                    <Text
-                      style={styles.checkboxLink}
-                      onPress={() => Linking.openURL('https://bloomi.app/privacy')}
-                    >
+                    <Text style={styles.checkboxLink} onPress={openPrivacyPolicy}>
                       {t('common.privacyPolicy')}
                     </Text>
                     .
                   </Text>
-                </TouchableOpacity>
+                </View>
               </View>
 
               {error ? (
@@ -299,8 +299,15 @@ export default function SignUpScreen() {
                 activeOpacity={0.7}
                 onPress={() => {
                   void (async () => {
-                    await enterGuestMode();
-                    router.replace('/tabs/feed');
+                    try {
+                      authDebug('guest:button:pressed', { from: 'sign-up' });
+                      await enterGuestMode();
+                      authDebug('guest:navigateFeed:before', { from: 'sign-up' });
+                      router.replace('/tabs/feed');
+                      authDebug('guest:navigateFeed:after', { from: 'sign-up' });
+                    } catch (e) {
+                      authDebugError('guest:exception', e, { from: 'sign-up' });
+                    }
                   })();
                 }}
                 style={styles.guestLink}

@@ -3,16 +3,22 @@ import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   findOrCreateThreadForOrderChat,
-  insertThreadSystemMessage,
+  insertThreadEventMessage,
 } from "../_shared/orderChatSystemMessage.ts";
 import {
   fetchRecipientLanguage,
-  shipReminderPushText,
+  itemSoldPushText,
+  orderPaidBuyerPushText,
+  pickupReminderPushText,
+  urgencyActNowPushText,
 } from "../_shared/pushNotificationI18n.ts";
+import { notifyUser } from "../_shared/notifyUser.ts";
 import {
+  computeBuyerFees,
   parsePaymentIntentFeeMetadata,
   paymentIntentFeesToOrderSnapshot,
 } from "../_shared/fees.ts";
+import { isCompleteShippingAddress } from "../_shared/shippingAddress.ts";
 
 type DeliveryMode = "pickup" | "shipping" | "both";
 
@@ -208,6 +214,12 @@ Deno.serve(async (req) => {
     const parsedFees = parsePaymentIntentFeeMetadata(
       pi.metadata as Record<string, string | undefined>,
     );
+    const itemAmountCentsFromMeta = Number((pi.metadata?.item_amount_cents ?? "").toString());
+    const itemPriceFromPi =
+      Number.isFinite(itemAmountCentsFromMeta) && itemAmountCentsFromMeta > 0
+        ? itemAmountCentsFromMeta / 100
+        : null;
+
     let sellerAmountChf: number | null = null;
     let feeSnapshot: ReturnType<typeof paymentIntentFeesToOrderSnapshot> | null = null;
 
@@ -234,11 +246,49 @@ Deno.serve(async (req) => {
     const metaShipCity = String(pi.metadata?.shipping_city ?? "").trim() || null;
     const metaShipPostal = String(pi.metadata?.shipping_postal_code ?? "").trim() || null;
     const metaShipCountry = String(pi.metadata?.shipping_country ?? "").trim().toUpperCase() || null;
+    const metaShipFirstName = String(pi.metadata?.shipping_first_name ?? "").trim() || null;
+    const metaShipLastName = String(pi.metadata?.shipping_last_name ?? "").trim() || null;
 
     const shippingFeeCents = parseInt((pi.metadata?.shipping_fee_cents ?? "0").toString(), 10);
     const isPromoShipping = pi.metadata?.is_promo_shipping === "true";
     const rawParcelSize = (pi.metadata?.parcel_size ?? "").toString().trim();
     const parcelSize = rawParcelSize || null;
+
+    const requiresShippingAddress =
+      dm === "shipping" || (Number.isFinite(shippingFeeCents) && shippingFeeCents > 0);
+    if (
+      requiresShippingAddress &&
+      !isCompleteShippingAddress({
+        street: metaShipAddr,
+        city: metaShipCity,
+        postalCode: metaShipPostal,
+        country: metaShipCountry ?? "CH",
+      })
+    ) {
+      return jsonResponse(
+        {
+          error: "Adresse de livraison manquante ou incomplète",
+          details: "Impossible de finaliser une commande en expédition sans adresse complète",
+        },
+        { status: 400 },
+      );
+    }
+
+    const resolvedItemPriceChf =
+      feeSnapshot?.itemPriceChf ?? itemPriceFromPi ?? listingPrice ?? null;
+    let buyerProtectionChf = feeSnapshot?.buyerProtectionChf ?? null;
+    let buyerBankingFeeChf = feeSnapshot?.buyerBankingFeeChf ?? null;
+    if (
+      (buyerProtectionChf == null || buyerBankingFeeChf == null) &&
+      resolvedItemPriceChf != null &&
+      resolvedItemPriceChf > 0
+    ) {
+      const buyerFees = computeBuyerFees(resolvedItemPriceChf);
+      if (buyerFees) {
+        buyerProtectionChf = buyerProtectionChf ?? buyerFees.protectionChf;
+        buyerBankingFeeChf = buyerBankingFeeChf ?? buyerFees.bankingChf;
+      }
+    }
 
     // Insère la commande (pending) avec l'ID Stripe.
     const { data: created, error: orderInsertError } = await supabase
@@ -251,18 +301,20 @@ Deno.serve(async (req) => {
         delivery_mode: dm,
         stripe_payment_intent_id: pi.id,
         listing_title: listingTitle || null,
-        listing_price: listingPrice ?? null,
+        listing_price: resolvedItemPriceChf,
         listing_cover_photo_url: coverPhotoUrl,
         seller_amount: sellerAmountChf,
         seller_commission_chf: feeSnapshot?.sellerCommissionChf ?? null,
         seller_fee_rate: feeSnapshot?.sellerFeeRate ?? null,
-        buyer_protection_chf: feeSnapshot?.buyerProtectionChf ?? null,
-        buyer_banking_fee_chf: feeSnapshot?.buyerBankingFeeChf ?? null,
+        buyer_protection_chf: buyerProtectionChf,
+        buyer_banking_fee_chf: buyerBankingFeeChf,
         seller_profile_type: feeSnapshot?.sellerProfileType ?? null,
         shipping_address: metaShipAddr,
         shipping_city: metaShipCity,
         shipping_postal_code: metaShipPostal,
         shipping_country: metaShipCountry,
+        shipping_first_name: metaShipFirstName,
+        shipping_last_name: metaShipLastName,
         shipping_fee_chf: (Number.isFinite(shippingFeeCents) ? shippingFeeCents : 0) / 100,
         is_promo_shipping: isPromoShipping,
         parcel_size: parcelSize,
@@ -319,22 +371,78 @@ Deno.serve(async (req) => {
     }
 
     // Best-effort: notify seller after order is created (payment authorized + listing reserved)
+    const isPickupOrder = dm === "pickup";
     try {
       const sellerLang = await fetchRecipientLanguage(supabaseAdmin, String(piSellerId));
-      const shipCopy = shipReminderPushText(sellerLang);
-      await sendNotificationSilent({
+      const soldCopy = itemSoldPushText(sellerLang, { pickup: isPickupOrder });
+      await notifyUser({
+        supabaseAdmin,
         supabaseUrl,
         supabaseServiceRoleKey,
-        user_id: String(piSellerId),
-        title: shipCopy.title,
-        body: shipCopy.body,
-        data: {
-          order_id: createdOrderId,
-          listing_id: String(piListingId),
-          buyer_id: String(piBuyerId),
-          notification_type: "new_items",
+        userId: String(piSellerId),
+        templateKey: "item_sold",
+        entityId: createdOrderId,
+        variables: {
+          listingTitle: listingTitle.trim(),
+          orderId: createdOrderId,
+          pickup: isPickupOrder,
+        },
+        push: {
+          title: soldCopy.title,
+          body: soldCopy.body,
+          data: {
+            order_id: createdOrderId,
+            listing_id: String(piListingId),
+            buyer_id: String(piBuyerId),
+            notification_type: "new_items",
+          },
         },
       });
+      if (isPickupOrder) {
+        const reminderCopy = pickupReminderPushText(sellerLang);
+        await sendNotificationSilent({
+          supabaseUrl,
+          supabaseServiceRoleKey,
+          user_id: String(piSellerId),
+          title: reminderCopy.title,
+          body: reminderCopy.body,
+          data: {
+            order_id: createdOrderId,
+            listing_id: String(piListingId),
+            buyer_id: String(piBuyerId),
+            notification_type: "new_items",
+          },
+        });
+      }
+    } catch {
+      // silent
+    }
+
+    // Urgence acheteurs : personnes ayant liké l'annonce (sauf l'acheteur)
+    try {
+      const { data: likerRows } = await supabaseAdmin
+        .from("likes")
+        .select("user_id")
+        .eq("listing_id", String(piListingId))
+        .neq("user_id", String(piBuyerId));
+      for (const row of likerRows ?? []) {
+        const likerId = String((row as { user_id?: string }).user_id ?? "").trim();
+        if (!likerId || likerId === String(piSellerId)) continue;
+        const likerLang = await fetchRecipientLanguage(supabaseAdmin, likerId);
+        const urgencyCopy = urgencyActNowPushText(likerLang);
+        await sendNotificationSilent({
+          supabaseUrl,
+          supabaseServiceRoleKey,
+          user_id: likerId,
+          title: urgencyCopy.title,
+          body: urgencyCopy.body,
+          data: {
+            order_id: createdOrderId,
+            listing_id: String(piListingId),
+            notification_type: "favorite_items",
+          },
+        });
+      }
     } catch {
       // silent
     }
@@ -346,11 +454,65 @@ Deno.serve(async (req) => {
         sellerId: String(piSellerId),
       });
       if (threadId) {
-        await insertThreadSystemMessage(
-          supabaseAdmin,
-          threadId,
-          "🛍️ Order placed — Payment is secure. The seller will prepare your parcel.",
-        );
+        const [{ data: buyerProfile }, { data: sellerProfile }] = await Promise.all([
+          supabaseAdmin
+            .from("profiles")
+            .select("display_name")
+            .eq("id", String(piBuyerId))
+            .maybeSingle(),
+          supabaseAdmin
+            .from("profiles")
+            .select("display_name")
+            .eq("id", String(piSellerId))
+            .maybeSingle(),
+        ]);
+        const buyerName = String(
+          (buyerProfile as { display_name?: string | null } | null)?.display_name ?? "",
+        ).trim();
+        const sellerName = String(
+          (sellerProfile as { display_name?: string | null } | null)?.display_name ?? "",
+        ).trim();
+
+        await insertThreadEventMessage(supabaseAdmin, threadId, {
+          kind: "order_confirmed",
+          order_id: createdOrderId,
+          delivery_mode: isPickupOrder ? "pickup" : "shipping",
+          buyer_name: buyerName || undefined,
+          seller_name: sellerName || undefined,
+        });
+
+        if (!isPickupOrder) {
+          await insertThreadEventMessage(supabaseAdmin, threadId, {
+            kind: "label_preparing",
+            order_id: createdOrderId,
+            seller_name: sellerName || undefined,
+          });
+        } else if (isPickupOrder) {
+          await insertThreadEventMessage(supabaseAdmin, threadId, {
+            kind: "buyer_confirm_prompt",
+            order_id: createdOrderId,
+            delivery_mode: "pickup",
+          });
+        }
+
+        try {
+          const buyerLang = await fetchRecipientLanguage(supabaseAdmin, String(piBuyerId));
+          const paidCopy = orderPaidBuyerPushText(buyerLang);
+          await sendNotificationSilent({
+            supabaseUrl,
+            supabaseServiceRoleKey,
+            user_id: String(piBuyerId),
+            title: paidCopy.title,
+            body: paidCopy.body,
+            data: {
+              order_id: createdOrderId,
+              listing_id: String(piListingId),
+              notification_type: "new_items",
+            },
+          });
+        } catch {
+          // silent
+        }
       }
     } catch {
       // silent — ne pas bloquer la finalisation

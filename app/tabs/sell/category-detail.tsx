@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
@@ -12,6 +13,7 @@ import { useSellFormStore } from '../../../lib/store/sellForm';
 import { supabase } from '../../../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { translateCategoryLabel } from '../../../lib/categoryI18n';
+import { inferTypeFromParentSlug } from '../../../lib/inferProductType';
 
 type CategoryRow = {
   id: number;
@@ -19,18 +21,11 @@ type CategoryRow = {
   slug?: string | null;
 };
 
-function inferTypeFromParentSlug(parentSlug?: string | null): 'chaussures' | 'pantalons' | 'chemises' | 'vetements' {
-  const s = (parentSlug ?? '').toLowerCase();
-  if (s.includes('chaussures')) return 'chaussures';
-  if (s.includes('pantalons')) return 'pantalons';
-  if (s.includes('chemises')) return 'chemises';
-  return 'vetements';
-}
-
 export default function SellCategoryDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const params = useLocalSearchParams<{
     parentId?: string;
     title?: string;
@@ -92,7 +87,8 @@ export default function SellCategoryDetailScreen() {
     setField('category', {
       id: cat.id,
       name: cat.name,
-      gender
+      gender,
+      slug: cat.slug ?? null
     });
 
     setField('categoryGender', gender);
@@ -149,7 +145,7 @@ export default function SellCategoryDetailScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: safeBottom + 24 }
           ]}
         >
           <Button

@@ -20,7 +20,7 @@ import { useAuthStore } from '../../../stores/authStore';
 export default function AccountSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const userId = user?.id ?? null;
 
   const [loading, setLoading] = useState(true);
@@ -189,6 +189,7 @@ export default function AccountSettingsScreen() {
       const { error } = await supabase.rpc('delete_user');
       if (error) throw error;
       setDeleteModalOpen(false);
+      await signOut();
       router.replace('/auth/login');
     } catch (e) {
       Alert.alert(
@@ -198,7 +199,7 @@ export default function AccountSettingsScreen() {
     } finally {
       setDeleting(false);
     }
-  }, [deleting, router]);
+  }, [deleting, router, signOut]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

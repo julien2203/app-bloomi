@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { Button } from '../../../components/ui/Button';
@@ -16,6 +17,7 @@ export default function SellCategoryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ return_to?: string; edit_id?: string }>();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
 
   const handleOpenGender = (gender: (typeof GENDERS)[number]) => {
     const labelToValue = { woman: 'Woman', men: 'Men', kids: 'Kids', baby: 'Baby' } as const;
@@ -63,7 +65,7 @@ export default function SellCategoryScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: safeBottom + 24 }
           ]}
         >
           <Button

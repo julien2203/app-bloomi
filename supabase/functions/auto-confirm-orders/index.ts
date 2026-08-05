@@ -4,6 +4,7 @@ import {
   captureAndTransferOrder,
   type ConfirmOrderRow,
 } from "../_shared/confirmOrderPayment.ts";
+import { orderAutoConfirmedSystemMessage, fetchRecipientLanguage } from "../_shared/pushNotificationI18n.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -15,9 +16,21 @@ function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   });
 }
 
+function extractBearerOrKey(raw: string | null): string {
+  if (!raw) return "";
+  return raw.replace(/^Bearer\s+/i, "").trim();
+}
+
 function isAuthorizedCronOrServiceRole(req: Request, serviceRoleKey: string): boolean {
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (authHeader === `Bearer ${serviceRoleKey}`) return true;
+  const expected = serviceRoleKey.trim();
+  if (!expected) return false;
+
+  // Authorization: Bearer <service_role>  OU  apikey: <service_role>
+  const candidates = [
+    extractBearerOrKey(req.headers.get("Authorization")),
+    extractBearerOrKey(req.headers.get("apikey")),
+  ];
+  if (candidates.some((token) => token === expected)) return true;
 
   const cronSecret = Deno.env.get("CRON_SECRET");
   const cronHeader = req.headers.get("x-cron-secret");
@@ -83,6 +96,7 @@ Deno.serve(async (req) => {
     }> = [];
 
     for (const row of rows) {
+      const buyerLang = await fetchRecipientLanguage(supabaseAdmin, row.buyer_id);
       const outcome = await captureAndTransferOrder({
         supabaseAdmin,
         stripeSecretKey,
@@ -90,8 +104,55 @@ Deno.serve(async (req) => {
         supabaseUrl,
         supabaseServiceRoleKey,
         sendNotifications: true,
-        systemMessage:
-          "✅ Order automatically confirmed after 7 days — The transaction is complete. Thanks for using Bloomi!",
+        systemMessage: orderAutoConfirmedSystemMessage(buyerLang, false),
+      });
+
+      if (outcome.success) {
+        results.push({
+          order_id: row.id,
+          success: true,
+          stripe_transfer_id: outcome.stripe_transfer_id || undefined,
+        });
+      } else {
+        results.push({
+          order_id: row.id,
+          success: false,
+          error: outcome.error,
+          details: outcome.details,
+        });
+      }
+    }
+
+    const pickupCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: pickupOrders, error: pickupErr } = await supabaseAdmin
+      .from("orders")
+      .select(
+        "id, listing_id, buyer_id, seller_id, stripe_payment_intent_id, seller_amount, seller_commission_chf, seller_fee_rate, seller_profile_type, listing_price, stripe_seller_account_id, status, payment_status, confirmed_at, delivery_mode, listing:listings(price)",
+      )
+      .eq("status", "pending")
+      .eq("delivery_mode", "pickup")
+      .eq("payment_status", "pending")
+      .lt("created_at", pickupCutoff)
+      .not("stripe_payment_intent_id", "is", null);
+
+    if (pickupErr) {
+      return jsonResponse(
+        { error: "Impossible de charger les remises en main propre à confirmer", details: pickupErr.message },
+        { status: 500 },
+      );
+    }
+
+    const pickupRows = (pickupOrders ?? []) as ConfirmOrderRow[];
+    for (const row of pickupRows) {
+      const buyerLang = await fetchRecipientLanguage(supabaseAdmin, row.buyer_id);
+      const outcome = await captureAndTransferOrder({
+        supabaseAdmin,
+        stripeSecretKey,
+        order: row,
+        supabaseUrl,
+        supabaseServiceRoleKey,
+        sendNotifications: true,
+        systemMessage: orderAutoConfirmedSystemMessage(buyerLang, true),
       });
 
       if (outcome.success) {

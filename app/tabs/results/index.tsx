@@ -17,6 +17,14 @@ export default function ResultsTabScreen() {
   const title = typeof params.title === 'string' ? params.title : undefined;
   const query = typeof params.query === 'string' ? params.query : undefined;
 
-  return <UniversalResultsScreen title={title} section={section} initialQuery={query} showBack />;
+  return (
+    <UniversalResultsScreen
+      key={section}
+      title={title}
+      section={section}
+      initialQuery={query}
+      showBack
+    />
+  );
 }
 

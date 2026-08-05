@@ -5,7 +5,7 @@
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
     <key>CFBundleDevelopmentRegion</key>
-    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <string>fr</string>
     <key>CFBundleDisplayName</key>
     <string>Bloomi</string>
     <key>CFBundleExecutable</key>
@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.2</string>
+    <string>1.1.11</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -33,7 +33,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>27</string>
+    <string>97</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -48,19 +48,19 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Bloomi needs access to your camera to take photos of items you want to sell. For example, photograph a jacket, dress, or pair of shoes to create a new listing.</string>
+    <string>Bloomi a besoin d'accéder à votre appareil photo pour photographier les articles que vous vendez. Par exemple, prenez en photo une veste, une robe ou des chaussures pour créer une annonce.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <string>Bloomi a besoin d'accéder à votre position pour afficher les annonces près de chez vous.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <string>Bloomi a besoin d'accéder à votre position pour afficher les annonces près de chez vous.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <string>Bloomi a besoin d'accéder à votre position pour afficher les annonces près de chez vous.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Bloomi a besoin d'accéder au microphone pour cette fonctionnalité.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Bloomi needs access to your photo library to let you select photos of items you want to sell. For example, choose existing photos of a jacket, dress, or shoes to add to your listing.</string>
+    <string>Bloomi a besoin d'accéder à vos photos pour sélectionner des images des articles que vous vendez. Par exemple, choisissez des photos d'une veste, d'une robe ou de chaussures pour votre annonce.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Bloomi saves photos to your library when you download listing images.</string>
+    <string>Bloomi enregistre les images dans votre photothèque lorsque vous téléchargez des photos d'annonces.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

@@ -43,7 +43,7 @@ export function BottomNav() {
         <NavIcon
           name="person"
           active={isActive('/tabs/profile')}
-          onPress={() => go('/tabs/profile/index')}
+          onPress={() => go('/tabs/profile')}
         />
       </View>
     </View>

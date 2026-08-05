@@ -7,11 +7,12 @@ import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
 import type { FeedSort } from '../../lib/store/feedFilters';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Ionicons } from '@expo/vector-icons';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 
 type SortOption = {
   label: string;
@@ -31,6 +32,7 @@ export default function SortFilterScreen() {
   const params = useLocalSearchParams<{ returnTo?: string }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
   const [selected, setSelected] = useState<FeedSort>(filters.sortBy ?? 'recent');
 
   const handleSelect = (value: FeedSort) => {
@@ -40,7 +42,6 @@ export default function SortFilterScreen() {
   const handleShowResult = () => {
     setFilter('sortBy', selected);
     navigateAfterFilterCommit(
-      router,
       typeof params.returnTo === 'string' ? params.returnTo : undefined
     );
   };
@@ -87,7 +88,7 @@ export default function SortFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

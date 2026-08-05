@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { Screen } from '../../../components/ui/Screen';
@@ -9,7 +10,7 @@ import { Text } from '../../../components/ui/Text';
 import { useSellFormStore, type SellColor } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { getColors } from '../../../lib/api/filters';
-import { translateColorName } from '../../../lib/colorI18n';
+import { sortColorsOtherLast, translateColorName } from '../../../lib/colorI18n';
 import { useTranslation } from 'react-i18next';
 
 type ColorRow = {
@@ -22,6 +23,7 @@ export default function SellColorScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { values, setField } = useSellFormStore();
   const [colors, setColors] = useState<ColorRow[]>([]);
   const [selected, setSelected] = useState<SellColor[]>([...(values.color ?? [])]);
@@ -37,7 +39,7 @@ export default function SellColorScreen() {
           name: row.name as string,
           hex: (row.hex as string | null) ?? null
         }));
-        setColors(mapped);
+        setColors(sortColorsOtherLast(mapped));
       } catch {
         setColors([]);
       } finally {
@@ -127,7 +129,7 @@ export default function SellColorScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: safeBottom + 24 }
           ]}
         >
           <Button

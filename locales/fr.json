@@ -1,19 +1,4 @@
 {
-  "errors": {
-    "pageNotFound": {
-      "title": "Page introuvable",
-      "message": "La page que vous recherchez n'existe pas ou a été déplacée."
-    }
-  },
-  "app": {
-    "termsModal": {
-      "title": "Conditions d'utilisation",
-      "body": "En créant un compte ou en utilisant Bloomi, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité. Vous vous engagez à traiter les autres utilisateurs avec respect, à ne pas publier de contenu illégal, trompeur ou inapproprié, et à respecter nos règles de sécurité et de modération. Les contenus signalés peuvent être examinés et supprimés.",
-      "readFullTerms": "Lire les Conditions d'utilisation complètes",
-      "readPrivacy": "Lire la Politique de confidentialité",
-      "accept": "J'accepte"
-    }
-  },
   "common": {
     "save": "Enregistrer",
     "cancel": "Annuler",
@@ -53,299 +38,11 @@
     "learnMore": "En savoir plus",
     "permissionRequired": "Autorisation requise"
   },
-  "catalog": {
-    "colors": {
-      "black": "Noir",
-      "white": "Blanc",
-      "grey": "Gris",
-      "beige": "Beige",
-      "brown": "Marron",
-      "blue": "Bleu",
-      "red": "Rouge",
-      "green": "Vert",
-      "yellow": "Jaune",
-      "orange": "Orange",
-      "pink": "Rose",
-      "purple": "Violet",
-      "multicolor": "Multicolore",
-      "gold": "Doré",
-      "silver": "Argent",
-      "cream": "Crème",
-      "khaki": "Kaki",
-      "khaki_green": "Vert kaki",
-      "navy": "Marine",
-      "navy_blue": "Bleu marine",
-      "burgundy": "Bordeaux",
-      "turquoise": "Turquoise",
-      "coral": "Corail",
-      "mustard": "Moutarde",
-      "olive": "Olive",
-      "tan": "Camel",
-      "ivory": "Ivoire",
-      "nude": "Nude",
-      "copper": "Cuivre",
-      "bronze": "Bronze",
-      "lavender": "Lavande",
-      "lilac": "Lilas",
-      "mint": "Menthe",
-      "charcoal": "Anthracite",
-      "dark_blue": "Bleu foncé",
-      "light_blue": "Bleu clair",
-      "dark_green": "Vert foncé",
-      "light_green": "Vert clair",
-      "dark_grey": "Gris foncé",
-      "light_grey": "Gris clair",
-      "dark_pink": "Rose foncé",
-      "light_pink": "Rose clair",
-      "dark_brown": "Marron foncé",
-      "light_brown": "Marron clair",
-      "dark_red": "Rouge foncé",
-      "leopard": "Léopard",
-      "floral": "Fleuri",
-      "striped": "Rayé",
-      "polka_dot": "À pois",
-      "animal_print": "Animalier",
-      "clear": "Transparent",
-      "other": "Autre"
-    },
-    "categories": {
-      "clothing": "Vêtements",
-      "shoes": "Chaussures",
-      "bags": "Sacs",
-      "accessories": "Accessoires",
-      "sport": "Sport",
-      "other": "Autre",
-      "other_items": "Autres articles",
-      "other_clothing": "Autres vêtements",
-      "other_accessories": "Autres accessoires",
-      "other_shoes": "Autres chaussures",
-      "other_bags": "Autres sacs",
-      "fancy_dress": "Déguisements",
-      "uncategorized": "Non classé",
-      "miscellaneous": "Divers",
-      "dresses": "Robes",
-      "tops": "Hauts",
-      "t_shirts": "T-shirts",
-      "shirts": "Chemises",
-      "sweaters_and_hoodies": "Pulls et sweats",
-      "sweaters": "Pulls",
-      "hoodies": "Sweats à capuche",
-      "blazers": "Blazers",
-      "coats": "Manteaux",
-      "jackets": "Vestes",
-      "jeans": "Jeans",
-      "trousers": "Pantalons",
-      "shorts": "Shorts",
-      "skirts": "Jupes",
-      "jumpsuits": "Combinaisons",
-      "bodysuits": "Bodies",
-      "lingerie": "Lingerie",
-      "swimwear": "Maillots de bain",
-      "nightwear": "Vêtements de nuit",
-      "maternity": "Maternité",
-      "costumes": "Déguisements",
-      "activewear": "Vêtements de sport",
-      "knitwear": "Maille",
-      "suits": "Costumes",
-      "blouses": "Blouses",
-      "tracksuits": "Survêtements",
-      "leggings": "Leggings",
-      "cardigans": "Cardigans",
-      "polo_shirts": "Polos",
-      "vests": "Gilets sans manches",
-      "gilets": "Gilets",
-      "trench_coats": "Trenchs",
-      "onesies": "Bodies grenouillère",
-      "overalls": "Salopettes",
-      "jumpers_and_sweaters": "Pulls et sweats",
-      "jumpers": "Pulls",
-      "jackets_and_coats": "Vestes et manteaux",
-      "suits_and_blazers": "Costumes et blazers",
-      "sportswear": "Vêtements de sport",
-      "underwear": "Sous-vêtements",
-      "underwear_and_nightwear": "Sous-vêtements et vêtements de nuit",
-      "socks": "Chaussettes",
-      "trainers": "Baskets running",
-      "sneakers": "Baskets",
-      "boots": "Bottes",
-      "ankle_boots": "Bottines",
-      "mid_calf_boots": "Bottes mi-mollet",
-      "knee_high_boots": "Bottes hautes",
-      "heels": "Talons",
-      "courts": "Escarpins",
-      "flats": "Chaussures plates",
-      "ballet_flats": "Ballerines",
-      "loafers": "Mocassins",
-      "sandals": "Sandales",
-      "espadrilles": "Espadrilles",
-      "mules": "Mules",
-      "slippers": "Chaussons",
-      "clogs": "Sabots",
-      "sports_shoes": "Chaussures de sport",
-      "handbags": "Sacs à main",
-      "crossbody_bags": "Sacs bandoulière",
-      "totes": "Cabas",
-      "travel_bags": "Sacs de voyage",
-      "shoulder_bags": "Sacs à épaule",
-      "bum_bags": "Sacs banane",
-      "belt_bags": "Sacs ceinture",
-      "backpacks": "Sacs à dos",
-      "clutches": "Pochettes",
-      "wallets": "Portefeuilles",
-      "sunglasses": "Lunettes de soleil",
-      "belts": "Ceintures",
-      "hats": "Chapeaux",
-      "scarves": "Écharpes et foulards",
-      "gloves": "Gants",
-      "jewellery": "Bijoux",
-      "watches": "Montres",
-      "hair_accessories": "Accessoires cheveux",
-      "tech_accessories": "Accessoires tech",
-      "baby_clothing": "Vêtements bébé",
-      "baby_shoes": "Chaussures bébé",
-      "baby_accessories": "Accessoires bébé",
-      "kids_clothing": "Vêtements enfant",
-      "girls_clothing": "Vêtements fille",
-      "boys_clothing": "Vêtements garçon",
-      "girls": "Fille",
-      "boys": "Garçon",
-      "unisex": "Mixte",
-      "school_uniforms": "Uniformes scolaires",
-      "schoolwear": "Tenues scolaires",
-      "outerwear": "Vêtements d'extérieur",
-      "tops_and_t_shirts": "Hauts et t-shirts",
-      "coats_and_jackets": "Manteaux et vestes",
-      "trousers_shorts_and_dungarees": "Pantalons, shorts et salopettes",
-      "jumpsuits_and_playsuits": "Combinaisons et barboteuses",
-      "playsuits": "Barboteuses",
-      "dungarees": "Salopettes",
-      "socks_and_tights": "Chaussettes et collants",
-      "tights": "Collants",
-      "nightwear_and_underwear": "Pyjamas et sous-vêtements",
-      "fancy_dress_and_costumes": "Déguisements",
-      "clothing_bundles": "Lots de vêtements",
-      "baby_grows": "Bodies bébé",
-      "sleepsuits": "Grenouillères",
-      "bundles": "Lots",
-      "first_shoes_and_booties": "Premiers pas et chaussons",
-      "first_shoes": "Premiers pas",
-      "booties": "Chaussons",
-      "girls_shoes": "Chaussures fille",
-      "boys_shoes": "Chaussures garçon",
-      "kids_shoes": "Chaussures enfant",
-      "girls_accessories": "Accessoires fille",
-      "boys_accessories": "Accessoires garçon",
-      "kids_accessories": "Accessoires enfant",
-      "hats_and_caps": "Chapeaux et casquettes",
-      "gloves_and_mittens": "Gants et moufles",
-      "scarves_and_shawls": "Écharpes et châles",
-      "kids_bags": "Sacs enfant",
-      "toys_and_games": "Jouets et jeux",
-      "prams_and_pushchairs": "Poussettes",
-      "toys": "Jouets",
-      "books_and_stationery": "Livres et papeterie",
-      "kids_furniture": "Mobilier enfant",
-      "school": "Scolaire",
-      "school_supplies": "Fournitures scolaires",
-      "school_bags": "Sacs scolaires",
-      "lunch_boxes_and_water_bottles": "Boîtes à lunch et gourdes",
-      "lunch_boxes": "Boîtes à lunch",
-      "water_bottles": "Gourdes",
-      "stationery": "Papeterie",
-      "other_school_supplies": "Autres fournitures scolaires",
-      "beds_and_mattresses": "Lits et matelas",
-      "chairs_and_seating": "Chaises et assises",
-      "tables_and_desks": "Tables et bureaux",
-      "storage_and_organisers": "Rangement et organisation",
-      "storage_and_organizers": "Rangement et organisation",
-      "other_furniture": "Autre mobilier",
-      "action_figures_and_dolls": "Figurines et poupées",
-      "building_blocks": "Jeux de construction",
-      "outdoor_toys": "Jeux d'extérieur",
-      "soft_toys": "Peluches",
-      "educational_toys": "Jeux éducatifs",
-      "games_and_puzzles": "Jeux et puzzles",
-      "other_toys": "Autres jouets",
-      "sleep_and_care": "Sommeil et soins",
-      "nursery_and_furniture": "Chambre et mobilier bébé",
-      "bodysuits_and_vests": "Bodies et sous-vêtements",
-      "sleepsuits_and_pyjamas": "Grenouillères et pyjamas",
-      "baby_tops": "Hauts bébé",
-      "baby_bottoms": "Bas bébé",
-      "baby_dresses": "Robes bébé",
-      "baby_outerwear": "Vêtements d'extérieur bébé",
-      "baby_swimwear": "Maillots bébé",
-      "baby_socks_and_tights": "Chaussettes et collants bébé",
-      "other_baby_clothing": "Autres vêtements bébé",
-      "crawling_shoes": "Chaussures d'éveil",
-      "other_baby_shoes": "Autres chaussures bébé",
-      "bibs": "Bavoirs",
-      "baby_hats": "Chapeaux bébé",
-      "baby_gloves_and_mittens": "Gants et moufles bébé",
-      "baby_socks": "Chaussettes bébé",
-      "other_baby_accessories": "Autres accessoires bébé",
-      "sleeping_bags": "Gigoteuses",
-      "blankets": "Couvertures",
-      "changing_mats_and_covers": "Matelas à langer et housses",
-      "towels_and_washcloths": "Serviettes et gants de toilette",
-      "bathing": "Bain",
-      "nappies_and_wipes": "Couches et lingettes",
-      "other_sleep_and_care": "Autres sommeil et soins",
-      "cots_and_cot_beds": "Lits et berceaux",
-      "changing_tables": "Tables à langer",
-      "high_chairs": "Chaises hautes",
-      "bouncers_and_swings": "Transats et balancelles",
-      "moses_baskets": "Couffins",
-      "car_seats": "Sièges auto",
-      "baby_carriers": "Porte-bébés",
-      "other_nursery": "Autre chambre bébé",
-      "changing_bags": "Sacs à langer",
-      "books": "Livres",
-      "games": "Jeux",
-      "puzzles": "Puzzles",
-      "dolls": "Poupées",
-      "pushchairs": "Poussettes",
-      "rompers": "Barboteuses",
-      "strollers": "Poussettes",
-      "musical_toys": "Jouets musicaux",
-      "electronic_toys": "Jouets électroniques",
-      "arts_and_crafts": "Loisirs créatifs",
-      "baby_boys": "Bébé garçon",
-      "baby_girls": "Bébé fille",
-      "unisex_baby_clothing": "Vêtements bébé mixte",
-      "all_in_ones_and_bodysuits": "Bodies et combinaisons",
-      "shirts_and_blouses": "Chemises et blouses",
-      "pants_and_shorts": "Pantalons et shorts",
-      "influencers_picks": "Sélection influenceurs",
-      "all_in_one": "Une pièce",
-      "two_piece": "Deux pièces",
-      "bikinis": "Bikinis",
-      "cover_ups": "Paréos et cover-ups",
-      "pyjamas": "Pyjamas",
-      "bras": "Soutiens-gorge",
-      "panties": "Culottes",
-      "chinos": "Chinos",
-      "cargo_shorts": "Shorts cargo",
-      "cargo_trousers": "Pantalons cargo"
-    }
-  },
-  "safety": {
-    "reportReasons": {
-      "inappropriate": "Contenu inapproprié",
-      "scam": "Arnaque",
-      "illegal": "Contenu illégal",
-      "other": "Autre"
-    },
-    "reportReasonsHint": "Choisissez la raison la plus proche. Notre équipe examine les signalements de manière confidentielle.",
-    "blockConfirmMessage": "Ils seront retirés de votre fil, de la recherche et de vos favoris. Contactez le support en cas d'erreur.",
-    "blocking": "Blocage…",
-    "blockAction": "Bloquer"
-  },
   "navigation": {
     "home": "Accueil",
     "search": "Rechercher",
     "sell": "Vendre",
-    "inbox": "Boîte de réception",
+    "inbox": "Messages",
     "profile": "Profil",
     "feed": "Fil",
     "results": "Résultats",
@@ -355,9 +52,6 @@
     "backToHome": "Retour à l'accueil"
   },
   "auth": {
-    "email": "Email",
-    "emailPlaceholder": "votre@email.com",
-    "password": "Mot de passe",
     "login": {
       "title": "Se connecter",
       "email": "Email",
@@ -371,10 +65,10 @@
       "continueFacebook": "Continuer avec Facebook",
       "noAccount": "Vous n'avez pas de compte ?",
       "signUpLink": "S'inscrire",
-      "continueGuest": "Continuer en tant qu'invité",
       "unableSignIn": "Connexion impossible. Veuillez réessayer.",
       "somethingWrong": "Une erreur s'est produite lors de la connexion.",
-      "facebookUnavailable": "La connexion Facebook n'est pas encore disponible."
+      "facebookUnavailable": "La connexion Facebook n'est pas encore disponible.",
+      "continueGuest": "Continuer en tant qu'invité"
     },
     "signUp": {
       "title": "S'inscrire",
@@ -393,26 +87,29 @@
       "alreadyAccount": "Vous avez déjà un compte ?",
       "logInLink": "Se connecter",
       "submit": "S'inscrire",
-      "browseWithoutAccount": "Parcourir sans compte",
-      "somethingWrong": "Une erreur s'est produite lors de l'inscription. Veuillez réessayer."
+      "somethingWrong": "Une erreur s'est produite lors de l'inscription. Veuillez réessayer.",
+      "browseWithoutAccount": "Parcourir sans compte"
     },
     "sellerType": {
       "title": "S'inscrire",
       "sellingAs": "Vous vendez en tant que",
       "individual": "Particulier",
       "professional": "Professionnel",
+      "soleProprietorship": "Raison individuelle",
       "companyName": "Nom de l'entreprise",
       "ideNumber": "Numéro IDE (CHE-XXX.XXX.XXX)",
-      "idePlaceholder": "CHE-123.456.789",
+      "ideNumberOptional": "Numéro IDE (facultatif, CHE-XXX.XXX.XXX)",
       "businessAddress": "Adresse professionnelle",
       "websiteOptional": "Site web ou Instagram (facultatif)",
-      "websitePlaceholder": "https:// ou @nomutilisateur",
-      "socialPlaceholder": "https:// ou @username",
+      "idePlaceholder": "CHE-123.456.789",
+      "socialPlaceholder": "https:// or @username",
       "influencerQuestion": "Êtes-vous influenceur ou créateur de contenu ?",
       "influencerYes": "Oui, je suis influenceur",
       "influencerNo": "Non",
-      "no": "Non",
       "influencerHint": "Votre demande sera examinée par notre équipe",
+      "influencerInstagram": "Pseudo / @ / nom d'utilisateur Instagram",
+      "influencerInstagramPlaceholder": "@votre_compte",
+      "influencerInstagramRequired": "Veuillez indiquer votre pseudo Instagram.",
       "fillRequired": "Veuillez remplir tous les champs obligatoires.",
       "ideFormat": "Le numéro UID doit être au format CHE-XXX.XXX.XXX."
     },
@@ -422,15 +119,12 @@
       "headline": "Vérifiez votre e-mail pour sécuriser votre compte",
       "subtitle": "La vérification de votre adresse e-mail vous permet de récupérer votre mot de passe en toute sécurité, de protéger votre compte et de recevoir nos messages sécurisés.",
       "openEmail": "Ouvrir mon application e-mail",
-      "openMailApp": "Ouvrir mon app e-mail",
       "emailMissing": "Adresse e-mail manquante.",
       "resent": "Un nouvel e-mail de confirmation a été envoyé.",
       "unableResend": "Impossible de renvoyer l'e-mail pour le moment.",
       "defaultEmail": "votre adresse e-mail",
-      "yourEmail": "votre adresse e-mail",
-      "keepSecure": "Vérifiez votre e-mail pour sécuriser votre compte",
-      "noEmail": "Vous n'avez pas reçu notre e-mail ?",
-      "resendLink": "Renvoyer le lien"
+      "noEmail": "Aucune adresse e-mail trouvée.",
+      "resendLink": "Renvoyer l'e-mail de vérification"
     },
     "verifyEmailIllustration": {
       "title": "Vérifiez votre e-mail",
@@ -443,80 +137,78 @@
       "title": "Mot de passe oublié ?",
       "email": "Email",
       "emailPlaceholder": "your@email.com",
-      "subtitle": "Entrez votre adresse e-mail et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
-      "sentMessage": "Nous avons envoyé un lien de réinitialisation à {{email}}",
       "sendLink": "Envoyer le lien de réinitialisation",
       "backToLogin": "Retour à la connexion",
-      "checkEmail": "Vérifiez votre e-mail"
+      "checkEmail": "Vérifiez votre e-mail",
+      "subtitle": "Saisissez votre e-mail pour recevoir un lien de réinitialisation.",
+      "sentMessage": "Nous avons envoyé un lien de réinitialisation à votre e-mail."
     },
     "resetPassword": {
-      "subtitle": "Entrez votre nouveau mot de passe pour terminer la réinitialisation de votre compte.",
       "newPassword": "Nouveau mot de passe",
       "confirmPassword": "Confirmer le mot de passe",
       "password": "Mot de passe",
       "update": "Mettre à jour le mot de passe",
-      "updatedTitle": "Mot de passe mis à jour",
-      "updatedMessage": "Votre mot de passe a été modifié.",
       "updated": "Mot de passe mis à jour",
       "changedMessage": "Votre mot de passe a été modifié.",
       "minLength": "Le mot de passe doit contenir au moins 8 caractères.",
-      "noMatch": "Les mots de passe ne correspondent pas.",
       "mismatch": "Les mots de passe ne correspondent pas.",
-      "unableUpdate": "Impossible de mettre à jour votre mot de passe. Veuillez réessayer."
+      "unableUpdate": "Impossible de mettre à jour votre mot de passe. Veuillez réessayer.",
+      "subtitle": "Choisissez un nouveau mot de passe pour votre compte.",
+      "noMatch": "Les mots de passe ne correspondent pas.",
+      "updatedTitle": "Mot de passe mis à jour",
+      "updatedMessage": "Votre mot de passe a été mis à jour."
     },
     "verifyPhone": {
       "backToSignIn": "Retour à la connexion",
       "sendCode": "Envoyer le code",
       "verify": "Vérifier",
       "titleStep1": "Vérifiez votre téléphone",
-      "subtitleStep1": "Saisissez votre numéro pour recevoir un code de vérification par SMS.",
-      "phoneLabel": "Téléphone",
-      "phonePlaceholder": "79 123 45 67",
-      "titleStep2": "Saisissez le code",
-      "subtitleStep2": "Nous avons envoyé un code à 6 chiffres par SMS. Saisissez-le ci-dessous pour confirmer votre numéro.",
+      "titleStep2": "Saisissez le code de vérification",
+      "subtitleStep1": "Nous vous enverrons un code de vérification par SMS.",
+      "subtitleStep2": "Saisissez le code à 6 chiffres que nous vous avons envoyé.",
+      "phoneLabel": "Numéro de téléphone",
+      "phonePlaceholder": "+41 79 000 00 00",
+      "phoneMissing": "Numéro de téléphone manquant.",
+      "regionOnly": "Seuls les numéros suisses (+41), français (+33), allemands (+49) et italiens (+39) sont acceptés.",
+      "validPhone": "Saisissez un numéro de téléphone valide.",
+      "sendCodeError": "Impossible d'envoyer le code.",
+      "verifyCodeError": "Impossible de vérifier le code.",
+      "codeIncorrect": "Code incorrect. Veuillez réessayer.",
+      "codeExpired": "Le code a expiré. Demandez-en un nouveau.",
+      "enterAllDigits": "Saisissez les 6 chiffres.",
       "resendCode": "Renvoyer le code",
-      "resendSeconds": " ({{seconds}}s)",
-      "sessionRestoreError": "Impossible de restaurer votre session. Veuillez vous reconnecter.",
-      "abandonTitle": "Quitter l'inscription ?",
-      "abandonMessage": "Si vous revenez en arrière, votre compte Bloomi et les informations déjà saisies ou confirmées seront supprimés. Vous devrez recommencer depuis le début (nouvelle inscription).",
-      "abandonConfirm": "Supprimer et quitter",
-      "regionOnly": "Bloomi n'est disponible qu'en Suisse, en France, en Allemagne et en Italie.",
-      "validPhone": "Veuillez saisir un numéro de téléphone valide.",
-      "sendCodeError": "Un problème est survenu lors de l'envoi du code. Veuillez réessayer.",
-      "phoneMissing": "Numéro de téléphone manquant. Revenez à l'étape précédente.",
-      "enterAllDigits": "Veuillez saisir les 6 chiffres du code.",
-      "codeExpired": "Le code a expiré. Veuillez en demander un nouveau.",
-      "codeIncorrect": "Le code est incorrect. Veuillez réessayer.",
-      "verifyCodeError": "Un problème est survenu lors de la vérification du code. Veuillez réessayer.",
-      "deleteAccountError": "Impossible de supprimer votre compte. Réessayez ou contactez le support."
+      "resendSeconds": "Renvoyer dans {{seconds}}s",
+      "abandonTitle": "Quitter la vérification ?",
+      "abandonMessage": "Vous serez déconnecté. Votre compte et vos annonces sont conservés. Vous pourrez vérifier votre numéro à la prochaine connexion.",
+      "abandonConfirm": "Se déconnecter",
+      "signOutError": "Impossible de se déconnecter.",
+      "deleteAccountError": "Impossible de supprimer le compte.",
+      "sessionRestoreError": "Impossible de restaurer la session."
     },
     "verifyPhoneInfo": {
       "phoneNumber": "Numéro de téléphone",
       "title": "Vérifier le numéro de téléphone",
-      "pleaseVerifyTitle": "Veuillez vérifier vos informations",
-      "subtitle": "Saisissez votre numéro de téléphone pour continuer",
-      "phonePlaceholder": "+41 79 123 45 67"
+      "pleaseVerifyTitle": "Veuillez vérifier votre numéro de téléphone pour continuer.",
+      "subtitle": "Nous vous enverrons un code de vérification par SMS.",
+      "phonePlaceholder": "+41 79 000 00 00"
     },
     "verifyPhoneCode": {
       "code": "Code de vérification",
       "verify": "Vérifier",
-      "screenTitle": "Vérifier le numéro de téléphone",
-      "screenSubtitle": "Nous avons envoyé un SMS à votre numéro. Saisissez le code de vérification ci-dessous."
+      "screenTitle": "Vérifiez votre numéro de téléphone",
+      "screenSubtitle": "Saisissez le code à 6 chiffres que nous vous avons envoyé."
     },
     "verify": {
       "code": "Code à 6 chiffres",
       "verify": "Vérifier",
-      "title": "Saisissez le code SMS",
-      "subtitle": "Nous avons envoyé un code de vérification au {{phone}}.",
+      "title": "Vérification",
+      "subtitle": "Saisissez le code envoyé sur votre téléphone.",
+      "smsFootnote": "Des frais SMS standards peuvent s'appliquer.",
       "yourNumber": "votre numéro",
-      "smsFootnote": "Nous envoyons un SMS de vérification. Assurez-vous que ce numéro peut recevoir des messages.",
-      "devModeTitle": "Mode développement activé",
-      "devModeHint": "Pour tester sans SMS, utilisez le code :",
-      "phoneNotFound": "Numéro de téléphone introuvable. Veuillez recommencer la connexion.",
-      "testAuthError": "Erreur d'authentification de test",
-      "verifyFailed": "Échec de la vérification. Veuillez réessayer.",
-      "signInFailed": "Impossible de finaliser la connexion. Veuillez réessayer.",
-      "verifyError": "Un problème est survenu lors de la vérification du code."
+      "phoneNotFound": "Téléphone introuvable.",
+      "signInFailed": "Échec de la connexion.",
+      "verifyError": "Impossible de vérifier.",
+      "testAuthError": "Erreur d'authentification test."
     },
     "guestPrompt": {
       "title": "Créez un compte pour continuer",
@@ -527,27 +219,17 @@
     "checkEmail": {
       "title": "Vérifiez votre e-mail",
       "gotIt": "Compris",
-      "messageWithEmail": "Nous avons envoyé un lien de vérification à {{email}}. Consultez votre boîte de réception et cliquez sur le lien pour vérifier votre compte.",
-      "messageGeneric": "Nous avons envoyé un lien de vérification à votre adresse e-mail. Consultez votre boîte de réception et cliquez sur le lien pour vérifier votre compte."
-    }
+      "messageGeneric": "Nous avons envoyé un lien de vérification à votre e-mail.",
+      "messageWithEmail": "Nous avons envoyé un lien de vérification à {{email}}."
+    },
+    "email": "Email",
+    "emailPlaceholder": "your@email.com",
+    "password": "Mot de passe"
   },
   "onboarding": {
-    "social": {
-      "apple": "Continuer avec Apple",
-      "google": "Continuer avec Google",
-      "facebook": "Continuer avec Facebook",
-      "facebookSoon": "La connexion Facebook arrive bientôt.",
-      "unableComplete": "Impossible de finaliser la connexion. Veuillez réessayer.",
-      "unableSocial": "Un problème est survenu pendant la connexion sociale."
-    },
-    "legal": {
-      "prefix": "En continuant, vous acceptez les",
-      "andRead": "et reconnaissez avoir lu notre"
-    },
     "step1": {
-      "title": "Vendez vos vêtements d'occasion entièrement gratuitement",
+      "title": "Simple, locale et sécurisée : la seconde main selon Bloomi.",
       "subtitle": "La vérification de votre adresse e-mail vous permet de récupérer votre mot de passe en toute sécurité et de protéger votre compte.",
-      "signUp": "S'inscrire à Bloomi",
       "signUpCta": "S'inscrire sur Bloomi",
       "alreadyAccount": "Vous avez déjà un compte ?",
       "logIn": "Se connecter",
@@ -567,9 +249,6 @@
       "unableSignIn": "Connexion impossible. Veuillez réessayer."
     },
     "step3": {
-      "headline": "Votre marketplace vous attend",
-      "subheadline": "Connectez-vous avec votre communauté",
-      "signUp": "S'inscrire à Bloomi",
       "title": "Votre marketplace vous attend",
       "signUpTitle": "Rejoindre Bloomi",
       "signIn": "Se connecter",
@@ -578,14 +257,27 @@
       "continueFacebook": "Continuer avec Facebook",
       "facebookSoon": "La connexion Facebook arrive bientôt.",
       "socialError": "Une erreur s'est produite lors de la connexion sociale.",
-      "unableSignIn": "Connexion impossible. Veuillez réessayer."
+      "unableSignIn": "Connexion impossible. Veuillez réessayer.",
+      "headline": "Votre marketplace vous attend",
+      "subheadline": "Rejoignez des milliers d'acheteurs et vendeurs",
+      "signUp": "S'inscrire sur Bloomi"
+    },
+    "legal": {
+      "prefix": "En continuant, vous acceptez nos",
+      "andRead": "et avoir lu notre"
+    },
+    "social": {
+      "apple": "Continuer avec Apple",
+      "google": "Continuer avec Google",
+      "facebook": "Continuer avec Facebook",
+      "facebookSoon": "La connexion Facebook n'est pas encore disponible.",
+      "unableSocial": "Une erreur s'est produite lors de la connexion sociale.",
+      "unableComplete": "Connexion impossible. Veuillez réessayer."
     }
   },
   "filters": {
     "category": "Catégorie",
     "size": "Taille",
-    "brand": "Marque",
-    "condition": "État",
     "color": "Couleur",
     "price": "Prix",
     "sortBy": "Trier par",
@@ -618,41 +310,45 @@
     "locationEnable": "Activez la localisation pour utiliser ce filtre",
     "km": "{{count}} km",
     "searchPlaceholder": "Rechercher des articles ou des membres",
+    "searchTabListings": "Articles",
+    "searchTabMembers": "Membres",
+    "noMembersResults": "Aucun membre trouvé",
+    "noMembersHint": "Essayez un autre nom ou une autre boutique",
+    "oneMemberResult": "1 membre",
+    "membersCount": "{{count}} membres",
     "clearSearch": "Effacer la recherche",
     "filter": "Filtrer",
     "oneResult": "1 résultat",
     "resultsCount": "{{count}} résultats",
     "results500Plus": "500+ résultats",
-    "categoriesCount": "Catégories ({{count}})",
+    "noResults": "Aucun résultat",
+    "noResultsFound": "Aucun résultat trouvé",
+    "noResultsHint": "Essayez d'autres mots-clés ou filtres",
+    "searchIdleTitle": "Rechercher sur Bloomi",
+    "searchIdleHint": "Tapez un mot-clé pour trouver des articles ou des membres",
+    "activeListings": "{{count}} annonces actives",
+    "brand": "Marque",
+    "condition": "État",
+    "other": "Autre",
     "fromChf": "À partir de {{value}} CHF",
     "upToChf": "Jusqu'à {{value}} CHF",
-    "conditionLoadError": "Impossible de charger les états. Veuillez réessayer.",
-    "priceLoadError": "Impossible de charger la fourchette de prix.",
-    "allBrands": "Toutes les marques",
-    "popularForGender": "Populaires pour {{gender}}",
-    "brandsLoadError": "Impossible de charger les marques. Veuillez réessayer.",
-    "colorsLoadError": "Impossible de charger les couleurs. Veuillez réessayer.",
-    "sizesLoadError": "Impossible de charger les tailles. Veuillez réessayer.",
-    "noColorsFound": "Aucune couleur trouvée",
+    "categoriesCount": "{{count}} catégories",
     "allItems": "Tous les articles",
-    "allFor": "Tous {{value}}",
+    "allFor": "Tous les {{value}}",
+    "popularForGender": "Populaires pour {{gender}}",
+    "allBrands": "Toutes les marques",
+    "noBrandsFound": "Aucune marque trouvée",
+    "noColorsFound": "Aucune couleur trouvée",
+    "brandsLoadError": "Impossible de charger les marques.",
+    "sizesLoadError": "Impossible de charger les tailles.",
+    "colorsLoadError": "Impossible de charger les couleurs.",
+    "conditionLoadError": "Impossible de charger les états.",
+    "priceLoadError": "Impossible de charger la fourchette de prix.",
     "allGenderItems": {
       "woman": "Tous les articles femme",
       "men": "Tous les articles homme",
       "kids": "Tous les articles enfant",
       "baby": "Tous les articles bébé"
-    },
-    "sizeSections": {
-      "womanItems": "Articles femme",
-      "womanShoes": "Chaussures femme",
-      "menClothing": "Vêtements homme",
-      "menPants": "Pantalons et jeans homme",
-      "menShirts": "Chemises homme (col)",
-      "menShoes": "Chaussures homme",
-      "kids": "Enfant",
-      "kidsShoes": "Chaussures enfant",
-      "baby": "Bébé",
-      "babyShoes": "Chaussures bébé"
     },
     "segment": {
       "womenClothing": "Vêtements femme",
@@ -661,17 +357,33 @@
       "womenAccessories": "Accessoires femme",
       "menClothing": "Vêtements homme",
       "menShoes": "Chaussures homme",
+      "menBags": "Sacs homme",
       "menAccessories": "Accessoires homme",
       "kidsClothing": "Vêtements enfant",
       "kidsShoes": "Chaussures enfant",
       "kidsBags": "Sacs enfant",
       "kidsAccessories": "Accessoires enfant",
-      "babyClothing": "Vêtements bébé"
+      "kidsToys": "Jouets enfant",
+      "kidsFurniture": "Mobilier enfant",
+      "kidsSchool": "Scolaire enfant",
+      "babyClothing": "Vêtements bébé",
+      "babyShoes": "Chaussures bébé",
+      "babyAccessories": "Accessoires bébé",
+      "babyCare": "Puériculture bébé",
+      "babyToys": "Jouets bébé"
     },
-    "noResults": "Aucun résultat",
-    "noResultsFound": "Aucun résultat trouvé",
-    "noResultsHint": "Essayez d'autres mots-clés ou filtres",
-    "activeListings": "{{count}} annonces actives"
+    "sizeSections": {
+      "womanItems": "Vêtements femme",
+      "womanShoes": "Chaussures femme",
+      "menClothing": "Vêtements homme",
+      "menPants": "Pantalons homme",
+      "menShirts": "Chemises homme",
+      "menShoes": "Chaussures homme",
+      "kids": "Vêtements enfant",
+      "kidsShoes": "Chaussures enfant",
+      "baby": "Vêtements bébé",
+      "babyShoes": "Chaussures bébé"
+    }
   },
   "feed": {
     "tabs": {
@@ -680,8 +392,17 @@
       "influencers": "Influenceurs",
       "sponsored": "Sponsorisé"
     },
+    "influencersSpotlight": {
+      "title": "Influenceurs du moment",
+      "viewProfile": "Voir son profil",
+      "articles": "{{count}} articles"
+    },
+    "emptyListings": "Aucun article pour le moment.",
+    "loadingFeed": "Chargement du fil…",
+    "loadError": "Erreur de chargement",
+    "allItemsMoreAvailable": "D'autres articles sont disponibles",
     "header": {
-      "searchPlaceholder": "Rechercher un article, une marque...",
+      "searchPlaceholder": "Rechercher des articles ou des membres",
       "favorites": "Favoris",
       "notifications": "Notifications",
       "orders": "Commandes",
@@ -692,15 +413,6 @@
       "headline2": "Premier choix",
       "cta": "Vendre maintenant"
     },
-    "pricing": {
-      "priceIncl": "incl.",
-      "breakdownTitle": "Détail du prix",
-      "itemPrice": "Prix article",
-      "buyerProtection": "Protection acheteur ({{percent}} %)",
-      "bankingFee": "Frais de service ({{percent}} %)",
-      "finalPrice": "Prix final",
-      "serviceGuarantee": "Ce prix inclut un service client disponible par e-mail à contact@bloomi.ch et une livraison garantie : livré ou remboursé."
-    },
     "listingDetail": {
       "title": "Détail du produit",
       "loading": "Chargement...",
@@ -708,9 +420,6 @@
       "listingMenu": "Menu de l'annonce",
       "reportListing": "Signaler cette annonce",
       "includesBuyerProtection": "{{price}} inclut la Protection acheteur",
-      "shipping": "Livraison : {{price}} CHF",
-      "pickup": "Remise en main propre",
-      "shippingPromo": "Offre de lancement 🎉",
       "buyerProtection": "Protection acheteur",
       "buyerProtectionInfo": "La Protection acheteur est ajoutée moyennant des frais à chaque achat effectué avec le bouton « Acheter maintenant ». Elle inclut notre politique de remboursement.",
       "messageSeller": "Contacter le vendeur",
@@ -731,8 +440,12 @@
       "makeOffer": "Faire une offre",
       "buyNow": "Acheter maintenant",
       "reserved": "Réservé",
+      "sellerOnVacation": "Mode vacances",
+      "sellerVacationTitle": "Vendeur en mode vacances",
+      "sellerVacationMessage": "Ce vendeur est en mode vacances. Ses annonces restent visibles mais ne peuvent pas être achetées pour le moment.",
       "editListing": "Modifier l'annonce",
       "linkCopied": "Lien copié !",
+      "shareHeadline": "Découvre cet article sur Bloomi",
       "oneItem": "1 article",
       "itemsCount": "{{count}} articles",
       "justNow": "À l'instant",
@@ -762,8 +475,16 @@
       "reportThanksMessage": "Nous avons reçu votre signalement et l'examinerons sous peu.",
       "reportErrorTitle": "Une erreur s'est produite",
       "reportErrorMessage": "Impossible d'envoyer le signalement.",
-      "viewsMilestoneTitle": "👀 Votre annonce attire l'attention",
-      "viewsMilestoneBody": "Votre annonce a été vue {{count}} fois !"
+      "viewsMilestoneTitle": "👀 Ça regarde beaucoup par ici…",
+      "viewsMilestoneBody": "Votre annonce a été vue {{count}} fois !",
+      "pickup": "Remise en main propre",
+      "shipping": "+ {{price}} CHF de livraison",
+      "shippingPromo": "Tarif promo",
+      "hoursAgo": "il y a {{count}} h",
+      "daysAgo": "il y a {{count}} j",
+      "weeksAgo": "il y a {{count}} sem.",
+      "monthsAgo": "il y a {{count}} mois",
+      "yearsAgo": "il y a {{count}} an(s)"
     },
     "makeOffer": {
       "nameYourPrice": "PROPOSEZ VOTRE PRIX",
@@ -771,35 +492,33 @@
       "other": "Autre",
       "otherUpper": "AUTRE",
       "off10": "-10 %",
-      "off20": "-20 %",
+      "off15": "-15 %",
+      "offAmount": "−{{amount}} CHF",
+      "offerItemPrice": "Article · {{price}} CHF",
+      "itemPriceHint": "Prix proposé pour l'article (hors livraison)",
+      "buyerTotal": "Total · {{total}}",
       "sendOffer": "Envoyer l'offre",
       "offerSent": "Offre envoyée",
-      "offerSentMessage": "Votre offre a été envoyée au vendeur. Vous serez redirigé vers la conversation.",
+      "offerSentMessage": "Votre offre a été envoyée au vendeur. Ouvrez la conversation pour suivre la réponse.",
       "viewConversation": "Voir la conversation",
       "unableLoad": "Impossible de charger l'annonce.",
-      "unableSend": "Impossible d'envoyer l'offre pour le moment."
+      "unableSend": "Impossible d'envoyer l'offre pour le moment.",
+      "blockedTitle": "Offre déjà en cours",
+      "pendingBlocked": "Vous avez déjà une offre en attente sur cet article. Attendez la réponse du vendeur ou ouvrez la conversation.",
+      "acceptedBlocked": "Votre offre a été acceptée. Finalisez l'achat depuis la conversation."
     },
     "checkout": {
       "title": "Paiement",
       "price": "Prix",
-      "itemPrice": "Prix article",
-      "buyerProtection": "Protection acheteur ({{percent}} %)",
-      "bankingFee": "Frais de service ({{percent}} %)",
-      "shippingFee": "Frais de livraison",
-      "shippingPromo": "Offre de lancement 🎉",
       "total": "Total",
       "deliveryMethod": "Mode de livraison",
       "localPickup": "Remise en main propre",
       "shipping": "Expédition",
       "fromProfile": "Depuis votre profil Bloomi",
       "savedAddress": "Adresse enregistrée",
-      "differentAddress": "Adresse différente",
-      "enterManually": "Saisir manuellement",
-      "noSavedAddressHint": "Aucune adresse complète sur votre profil. Saisissez l'adresse de livraison ci-dessous, ou ajoutez-en une dans Profil -> Paramètres -> Mon adresse.",
       "street": "Rue",
       "city": "Ville",
       "postalCode": "Code postal",
-      "country": "Pays",
       "countryCH": "Suisse (CH)",
       "countryFR": "France (FR)",
       "countryDE": "Allemagne (DE)",
@@ -812,8 +531,25 @@
       "incompleteAddressMessage": "Veuillez renseigner la rue, la ville, le code postal et le pays",
       "sessionExpired": "Session expirée. Veuillez vous reconnecter",
       "stripeNotConfigured": "Stripe non configuré",
-      "stripeNotConfiguredMessage": "The app is missing EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (pk_live_…). Add it to .env.local for local dev, or to EAS Secrets for store builds, then rebuild the app.",
-      "paymentFailed": "Paiement échoué"
+      "stripeNotConfiguredMessage": "La clé publique Stripe (EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY) est absente. Ajoutez-la dans .env.local en dev ou dans les secrets EAS pour les builds store, puis reconstruisez l'app.",
+      "paymentFailed": "Paiement échoué",
+      "bankingFee": "Frais bancaires ({{percent}} %)",
+      "buyerProtection": "Protection acheteur ({{percent}} %)",
+      "country": "Pays",
+      "differentAddress": "Utiliser une autre adresse",
+      "enterManually": "Saisir l'adresse manuellement",
+      "itemPrice": "Prix de l'article",
+      "noSavedAddressHint": "Ajoutez votre adresse postale dans le profil pour finaliser une commande en expédition.",
+      "addAddressInProfile": "Renseigner mon adresse dans le profil",
+      "shippingFee": "Frais d'expédition",
+      "shippingPromo": "Livraison offerte (promo)",
+      "pickupOnlyHint": "Ce vendeur propose uniquement la remise en main propre.",
+      "shippingOnlyHint": "Ce vendeur propose uniquement l'expédition.",
+      "deliveryNotAllowed": "Ce mode de livraison n'est pas proposé pour cette annonce.",
+      "twintAvailable": "Disponible jusqu'à 100 CHF",
+      "twintUnavailable": "Indisponible au-delà de 100 CHF",
+      "twintMaxError": "TWINT est disponible uniquement pour un total jusqu'à 100 CHF.",
+      "twintDisclaimer": "Les paiements effectués en dehors du système de paiement sécurisé Bloomi (notamment via Twint, virement bancaire ou tout autre moyen de paiement direct entre utilisateurs) sont réalisés sous l'entière responsabilité de l'acheteur et du vendeur."
     },
     "orderConfirmation": {
       "title": "Confirmation de commande",
@@ -823,8 +559,10 @@
       "loadError": "Impossible de charger votre commande.",
       "yourItem": "Votre article",
       "itemPrice": "Prix de l'article",
-      "buyerProtection": "Protection acheteur ({{percent}} %)",
-      "bankingFee": "Frais de service ({{percent}} %)",
+      "acceptedOfferPrice": "Prix accepté",
+      "bloomiFees": "Frais Bloomi",
+      "priceSummary": "Récapitulatif",
+      "buyerProtection": "Protection acheteur (10 %)",
       "totalPaid": "Total payé",
       "tip": "Conseil",
       "statusBase": "Paiement sécurisé — fonds bloqués",
@@ -835,17 +573,31 @@
       "addressSaved": "Adresse enregistrée dans votre commande.",
       "checkBeforeConfirm": "Vérifiez l'article avant de confirmer la réception.",
       "viewOrders": "Voir mes commandes",
-      "backToFeed": "Retour au fil"
+      "backToFeed": "Retour au fil",
+      "backToConversation": "Retour à la conversation",
+      "bankingFee": "Frais bancaires"
+    },
+    "pricing": {
+      "bankingFee": "Frais bancaires",
+      "breakdownTitle": "Détail du prix",
+      "buyerProtection": "Protection acheteur",
+      "finalPrice": "Prix final",
+      "checkoutTotal": "Total à la caisse",
+      "itemPrice": "Prix de l'article",
+      "priceIncl": "Prix incl. frais",
+      "infoTitle": "Prix final hors livraison",
+      "excludingDelivery": "hors livraison",
+      "infoDescription": "Ce prix inclut le prix de l'article, les frais de protection acheteur et les frais de service. Les frais de livraison sont ajoutés au moment du paiement",
+      "infoA11y": "Information sur le prix",
+      "serviceGuarantee": "Garantie de service"
     }
   },
   "messages": {
     "title": "Messages",
-    "noConversationsYet": "Aucune conversation pour le moment",
     "emptyHint": "Vos conversations avec les vendeurs apparaîtront ici.",
+    "safetyBanner": "🔒 Pour votre sécurité, gardez toutes vos transactions sur Bloomi. Ne partagez jamais vos informations personnelles et n'ouvrez pas de liens externes ou de QR codes",
     "conversation": "Conversation",
-    "loadingConversation": "Chargement de la conversation...",
     "placeholder": "Écrire un message ici...",
-    "includesBuyerProtection": "{{amount}}CHF inclut la Protection acheteur 🛡️",
     "loadError": "Impossible de charger cette conversation.",
     "notFound": "Conversation introuvable.",
     "offer": "Offre",
@@ -857,16 +609,120 @@
     "orderCancelled": "Commande annulée",
     "purchased": "Acheté",
     "orderInProgress": "Commande en cours",
-    "payNow": "💳 Payer {{amount}} CHF maintenant",
-    "payNowA11y": "Payer {{amount}} CHF maintenant",
-    "offerAcceptedTitle": "✅ Offre acceptée — c'est parti !",
+    "payNow": "Payer {{amount}} CHF",
+    "payNowA11y": "Payer {{amount}} CHF",
+    "offerCardLabel": "Proposition d'achat",
+    "offerAcceptedBuyerHint": "Finalisez votre achat avec le bouton ci-dessous.",
+    "offerAcceptedSellerHint": "En attente du paiement de l'acheteur.",
+    "acceptedOfferBannerTitle": "Offre acceptée",
+    "acceptedOfferBannerSubtitle": "Prix convenu · {{amount}} CHF",
+    "acceptedOfferBannerTotal": "Total avec protection · {{total}} CHF",
+    "offerAcceptedFinalPriceFootnote": "* Prix final avec les frais",
+    "offerAcceptedAgreedPrice": "Prix convenu (offre)",
+    "offerAcceptedPayTotal": "À payer (frais inclus)",
+    "offerAcceptedTitle": "✅ Offre acceptée, let's gooo !",
     "offerAcceptedBody": "Le vendeur a accepté votre offre de {{amount}} CHF. Finalisez votre achat !",
-    "offerAcceptedSystem": "✅ Offre acceptée ! L'acheteur peut maintenant finaliser son achat.",
-    "offerDeclinedTitle": "❌ Offre refusée",
+    "offerDeclinedTitle": "❌ Offre refusée… next !",
     "offerDeclinedBody": "Le vendeur n'a pas accepté votre offre. Vous pouvez faire une nouvelle offre ou acheter au prix affiché.",
-    "offerDeclinedSystem": "Offre refusée."
+    "offerDeclinedSystem": "Offre refusée.",
+    "includesBuyerProtection": "Inclut la Protection acheteur",
+    "loadingConversation": "Chargement de la conversation…",
+    "noConversationsYet": "Aucune conversation pour le moment",
+    "offerAcceptedSystem": "Offre acceptée.",
+    "generateShippingLabel": "🔗 Générer mon étiquette",
+    "generateLabelA11y": "Générer mon étiquette d'expédition",
+    "viewMyOrder": "📦 Voir ma commande",
+    "viewMyOrderA11y": "Voir ma commande",
+    "sellerShipBannerTitle": "🎉 Votre article est vendu !",
+    "sellerShipBannerShipping": "Générez votre étiquette La Poste pour expédier le colis.",
+    "sellerShipBannerLetterAplus": "Générez votre étiquette La Poste pour expédier ce colis en Lettre A+.",
+    "sellerShipBannerPickup": "Organisez la remise en main propre avec votre acheteur.",
+    "system": {
+      "orderPlacedParcel": "🛍️ Commande passée — Le paiement est sécurisé. Le vendeur prépare votre colis.",
+      "orderPlacedPickup": "🛍️ Commande passée — Le paiement est sécurisé. Organisez la remise en main propre via la messagerie.",
+      "orderPlacedParcelSeller": "🎉 Article vendu ! Générez votre étiquette La Poste pour expédier le colis.",
+      "orderPlacedPickupSeller": "🎉 Article vendu ! Organisez la remise en main propre avec votre acheteur.",
+      "orderAutoConfirmed": "✅ Commande confirmée automatiquement après 7 jours — La transaction est terminée. Merci d'utiliser Bloomi !",
+      "orderReceiptConfirmed": "✅ Réception confirmée — La transaction est terminée. Merci d'utiliser Bloomi !",
+      "orderShipped": "📦 Expédié ! — Votre colis est en route.",
+      "orderShippedTracking": "📦 Expédié ! [{{tracking}}] — Votre colis est en route."
+    },
+    "deleteConversationTitle": "Supprimer la conversation ?",
+    "deleteConversationConfirm": "La conversation sera supprimée uniquement pour vous. L'autre personne la conservera. Elle réapparaîtra si un nouveau message est envoyé.",
+    "deleteConversationError": "Impossible de supprimer la conversation.",
+    "offerUpdateError": "Impossible de mettre à jour l'offre. Réessayez.",
+    "awaitingPayment": "En attente de paiement",
+    "offerReceivedFrom": "{{name}} a fait une offre",
+    "viewOffer": "Voir l'offre",
+    "events": {
+      "offerAcceptedBuyerTitle": "Offre acceptée !",
+      "offerAcceptedBuyerBody": "Votre offre de {{amount}} CHF a été acceptée. Finalisez votre achat.",
+      "offerAcceptedSellerTitle": "Offre acceptée",
+      "offerAcceptedGenericTitle": "Offre acceptée",
+      "offerAcceptedPaidBody": "L'acheteur a finalisé le paiement.",
+      "awaitingPaymentBody": "En attente du paiement de l'acheteur.",
+      "offerDeclinedTitle": "Offre refusée",
+      "offerDeclinedBody": "Cette offre n'a pas été acceptée.",
+      "payNow": "Payer maintenant",
+      "fallbackBuyer": "L'acheteur",
+      "fallbackSeller": "Le vendeur",
+      "orderConfirmedSellerTitle": "Commande confirmée !",
+      "orderConfirmedSellerShippingBody": "{{name}} a payé. Préparez votre colis.",
+      "orderConfirmedSellerLetterAplusBody": "{{name}} a payé. Générez l'étiquette La Poste pour envoyer le colis en Lettre A+.",
+      "orderConfirmedSellerPickupBody": "{{name}} a payé. Organisez la remise en main propre.",
+      "orderConfirmedBuyerTitle": "Commande confirmée !",
+      "orderConfirmedBuyerShippingBody": "Le paiement a été effectué. Le vendeur prépare votre colis.",
+      "orderConfirmedBuyerPickupBody": "Le paiement a été effectué. Organisez la remise en main propre avec {{name}}.",
+      "labelPreparingTitle": "Étiquette en cours",
+      "labelPreparingBody": "{{name}} prépare votre étiquette d'expédition.",
+      "labelPreparingSellerTitle": "Préparez l'étiquette",
+      "labelPreparingSellerBody": "Générez l'étiquette d'expédition pour cette commande.",
+      "labelPreparingSellerLetterAplusBody": "Générez l'étiquette La Poste pour cette commande en Lettre A+.",
+      "labelReadySellerTitle": "Étiquette prête !",
+      "labelReadySellerBody": "Votre étiquette d'expédition est disponible.",
+      "labelReadyBuyerTitle": "Étiquette générée",
+      "labelReadyBuyerBody": "L'étiquette d'expédition a été générée.",
+      "downloadLabel": "Télécharger",
+      "viewOrder": "Voir la commande",
+      "generateLabel": "Générer l'étiquette",
+      "listingKicker": "Article",
+      "orderShippedSellerTitle": "Colis déposé",
+      "orderShippedSellerBody": "Merci ! L'acheteur a été informé.",
+      "orderShippedBuyerTitle": "Colis en route",
+      "orderShippedBuyerBody": "Le vendeur a déposé votre colis à La Poste.",
+      "trackParcel": "Suivre mon colis",
+      "buyerConfirmPromptTitle": "Tout s'est bien passé ?",
+      "buyerConfirmPromptBody": "Vérifiez votre article puis confirmez la réception.",
+      "buyerConfirmPromptSellerTitle": "En attente de confirmation",
+      "buyerConfirmPromptSellerBody": "L'acheteur doit confirmer la réception pour libérer le paiement.",
+      "allGood": "Tout est OK",
+      "reportProblem": "Signaler un problème",
+      "paymentReleasedBuyerTitle": "Merci !",
+      "paymentReleasedBuyerBody": "Votre confirmation a été enregistrée. Le paiement a été débloqué et versé au vendeur.",
+      "paymentReleasedSellerTitle": "Paiement débloqué",
+      "paymentReleasedSellerBody": "L'acheteur a confirmé la réception. Le paiement a été versé.",
+      "transactionCompleteTitle": "Transaction terminée",
+      "transactionCompleteBody": "Merci d'avoir utilisé Bloomi !",
+      "transactionCompleteSellerTitle": "Paiement débloqué",
+      "transactionCompleteSellerBody": "Le paiement a été transféré sur Ton compte.",
+      "viewWallet": "Voir mon solde",
+      "previewGeneric": "Mise à jour de la commande",
+      "previewOfferAccepted": "Offre acceptée",
+      "previewOfferDeclined": "Offre refusée",
+      "previewOrderConfirmed": "Commande confirmée",
+      "previewLabelPreparing": "Étiquette en préparation",
+      "previewLabelPreparingSeller": "Étiquette à générer",
+      "previewLabelReady": "Étiquette prête",
+      "previewOrderShipped": "Colis expédié",
+      "previewBuyerConfirm": "Confirmer la réception",
+      "previewBuyerConfirmSeller": "En attente de confirmation",
+      "previewPaymentReleased": "Paiement débloqué",
+      "previewPaymentReleasedSeller": "Paiement reçu",
+      "previewTransactionComplete": "Transaction terminée"
+    }
   },
   "sell": {
+    "sellingHeader": "Vendre un article",
     "category": "Catégorie",
     "size": "Taille",
     "color": "Couleur",
@@ -881,11 +737,13 @@
     "descriptionPlaceholder": "ex. Porté seulement quelques fois, taille conforme",
     "cityPlaceholder": "ex. Genève",
     "boostCloset": "Boostez votre dressing",
-    "boostDuration": "Choisissez la durée de mise en avant.",
-    "boostListing3d": "Article — 3 jours",
-    "boostListing7d": "Article — 7 jours",
+    "boostListing3d": "Annonce à la une — 3 jours",
+    "boostListing7d": "Annonce à la une — 7 jours",
     "boostDressing3d": "Dressing — 3 jours",
     "boostDressing7d": "Dressing — 7 jours",
+    "boostDuration": "Les boosts durent 3 ou 7 jours selon l'option choisie.",
+    "boostPrice1": "5.99CHF",
+    "boostPrice2": "12.99CHF",
     "activateAccount": "Activer mon compte",
     "activateSeller": "Activez votre compte vendeur",
     "activateBeforePublish": "Avant de publier une annonce, activez votre compte vendeur pour recevoir vos paiements.",
@@ -904,39 +762,82 @@
     "conditionGood": "Bien",
     "conditionFair": "Passable",
     "conditionPoor": "Mauvais",
-    "sellingHeader": "Vendre un article",
-    "publishListing": "Publier l'annonce",
-    "characterLeft": "{{count}} caractère restant",
-    "invalidPrice": "Veuillez saisir un prix valide.",
-    "productGoingLive": "Produit en ligne",
-    "boostThisListing": "Booster cette annonce",
-    "payToFeatureItem": "Payer pour mettre en avant cet article lors de sa mise en ligne.",
-    "payToFeatureCloset": "Payer pour mettre en avant toutes les annonces de votre dressing.",
-    "chooseOption": "Choisissez une option",
-    "chooseNaturalLight": "Choisissez la lumière naturelle",
-    "photoTipsBody": "Prenez vos photos dans un endroit bien éclairé. La lumière du jour est idéale.",
-    "conditionDescNew": "Jamais porté, avec les étiquettes d'origine.",
-    "conditionDescLikeNew": "Jamais ou très peu porté, sans signes visibles d'usure.",
-    "conditionDescGood": "Légèrement porté, signes d'utilisation mineurs, sans défauts.",
-    "conditionDescFair": "Signes d'usure visibles, petits défauts possibles.",
-    "conditionDescPoor": "Fortement porté, défauts ou taches possibles.",
+    "conditionDescNew": "Article neuf avec étiquettes encore attachées.",
+    "conditionDescLikeNew": "Jamais porté, sans étiquettes ou avec étiquettes retirées.",
+    "conditionDescGood": "Légèrement porté, sans défauts majeurs.",
+    "conditionDescFair": "Porté avec des signes d'usure visibles mais entièrement fonctionnel.",
+    "conditionDescPoor": "Bien porté, avec une usure marquée ou de légers défauts.",
     "parcelSize": {
       "title": "Taille du colis",
-      "small": "Petit colis — jusqu'à 2kg — 9.00 CHF",
-      "large": "Grand colis — jusqu'à 10kg — 12.00 CHF",
-      "xlarge": "Très grand colis — jusqu'à 30kg — 21.00 CHF",
-      "required": "Veuillez sélectionner une taille de colis pour l'envoi."
-    }
+      "letterAplus": "Lettre A+ (500 g max, 2 cm d'épaisseur)",
+      "small": "Petit colis (jusqu'à 2 kg)",
+      "large": "Grand colis (jusqu'à 9 kg)",
+      "xlarge": "Très grand colis (jusqu'à 30 kg)",
+      "required": "Veuillez sélectionner une taille de colis.",
+      "shippingSuffix": "· Livraison {{price}}",
+      "letterAplusLabelNote": "Bloomi génère une étiquette La Poste pour ce format. Vérifiez simplement que votre envoi respecte bien les limites Lettre A+."
+    },
+    "deliveryMode": {
+      "title": "Mode de livraison",
+      "both": "Les deux options",
+      "bothHint": "L'acheteur choisit entre expédition ou remise en main propre.",
+      "shipping": "Expédition La Poste",
+      "shippingHint": "Vous expédiez le colis avec une étiquette Bloomi.",
+      "pickup": "Remise en main propre uniquement",
+      "pickupHint": "L'acheteur récupère l'article chez vous."
+    },
+    "pickupAddresses": {
+      "title": "Vos adresses de remise en main propre",
+      "subtitle": "Indiquez jusqu'à 2 lieux où l'acheteur peut venir récupérer l'article",
+      "primaryLabel": "Adresse principale",
+      "primaryBadge": "Obligatoire",
+      "workLabel": "Adresse du travail",
+      "workBadge": "Optionnel",
+      "addPrimary": "Ajouter votre adresse",
+      "addWork": "Ajouter une adresse (optionnel)",
+      "primaryRequired": "Veuillez renseigner votre adresse principale pour la remise en main propre.",
+      "privacyNote": "Votre adresse complète ne sera visible qu'une fois la transaction finalisée."
+    },
+    "brand": "Marque",
+    "customBrandLabel": "Nom de la marque",
+    "customBrandPlaceholder": "Ex. Marque artisanale",
+    "customBrandHint": "Cette marque s’applique uniquement à cette annonce. Elle pourra être ajoutée au catalogue plus tard.",
+    "customBrandEmptyHint": "Tapez le nom d’une marque dans la recherche pour l’utiliser.",
+    "useCustomBrand": "Utiliser « {{name}} »",
+    "blockedBrand": "Cette marque n’est pas autorisée sur Bloomi (ex. Temu, Shein).",
+    "condition": "État",
+    "description": "Description",
+    "city": "Ville",
+    "priceChf": "Prix (CHF)",
+    "invalidPrice": "Veuillez saisir un prix valide.",
+    "unablePublish": "Impossible de publier l'annonce.",
+    "photosUploadAllFailed": "Aucune photo n'a pu être enregistrée. L'annonce n'a pas été publiée — réessayez.",
+    "photosPartialUploadTitle": "Photos partiellement enregistrées",
+    "photosPartialUploadBody": "{{uploaded}} photo(s) sur {{total}} ont été enregistrées. Vous pourrez ajouter les autres depuis « Modifier l'annonce ».",
+    "characterLeft": "{{count}} caractères restants",
+    "chooseNaturalLight": "Choisissez la lumière naturelle",
+    "chooseOption": "Choisissez une option",
+    "payToFeatureItem": "Payer pour mettre cet article en avant",
+    "payToFeatureCloset": "Payer pour mettre en avant votre dressing",
+    "photoTipsBody": "Utilisez la lumière naturelle et un fond neutre. Montrez clairement les défauts éventuels.",
+    "productGoingLive": "Votre article est en ligne !",
+    "publishListing": "Publier l'annonce"
   },
   "profile": {
     "title": "Profil",
+    "addressRequired": {
+      "sellerTitle": "Adresse d'expédition requise",
+      "sellerMessage": "Renseignez votre prénom, nom et adresse dans le profil avant de générer une étiquette La Poste.",
+      "buyerTitle": "Adresse de livraison requise",
+      "buyerMessage": "Renseignez votre prénom, nom et adresse postale dans le profil pour recevoir votre commande par expédition.",
+      "cta": "Renseigner mon adresse"
+    },
     "editProfile": "Modifier le profil",
     "loadingProfile": "Chargement du profil...",
     "unableLoad": "Impossible de charger le profil.",
     "unableVacation": "Impossible de mettre à jour le mode vacances.",
     "favoriteItems": "Articles favoris",
-    "viewCloset": "Voir mon dressing",
-    "walletScreenTitle": "Portefeuille",
+    "viewCloset": "Mon dressing",
     "wallet": {
       "available": "Disponible",
       "pendingFunds": "Fonds en attente",
@@ -944,41 +845,45 @@
       "transfer": "Transférer",
       "transferToBank": "Transférer sur mon compte bancaire",
       "confirmPayout": "Confirmer le versement",
-      "confirmPayoutMessage": "Voulez-vous transférer {{amount}} sur votre compte bancaire ?",
-      "openStripe": "Ouvrir le tableau de bord Stripe",
+      "openStripe": "Informations de paiement",
       "unableStripe": "Impossible d'ouvrir le tableau de bord Stripe.",
-      "unableLoadBalance": "Impossible de charger le solde du portefeuille.",
-      "unableCreatePayout": "Impossible de créer le virement.",
-      "missingStripeUrl": "URL Stripe manquante.",
-      "payoutInitiated": "Virement lancé — vous recevrez les fonds sous 1 à 3 jours ouvrés.",
       "stripe": "Stripe",
       "signIn": "Se connecter",
-      "signInHint": "Veuillez vous connecter pour accéder à votre portefeuille.",
-      "activateHintTitle": "Activez votre compte vendeur pour accéder à votre portefeuille",
-      "activateHintBody": "Vous devez activer Stripe Connect pour recevoir vos versements."
+      "signInHint": "Connectez-vous pour voir votre portefeuille.",
+      "activateHintTitle": "Activer le compte vendeur",
+      "activateHintBody": "Configurez vos informations de paiement de manière fiable et sécurisée pour recevoir vos ventes sur votre compte bancaire.",
+      "confirmPayoutMessage": "Transférer {{amount}} CHF sur votre compte bancaire ?",
+      "missingStripeUrl": "L'URL du tableau de bord Stripe est manquante.",
+      "payoutInitiated": "Versement initié.",
+      "unableCreatePayout": "Impossible de créer le versement.",
+      "unableLoadBalance": "Impossible de charger le solde."
     },
     "myOrders": "Mes commandes",
     "notifications": "Notifications",
     "activateSeller": {
-      "screenTitle": "Activer le compte vendeur",
       "checking": "Vérification du statut de votre compte vendeur…",
       "notActivated": "Votre compte vendeur n'est pas encore activé.",
+      "incompleteOnboarding": "Stripe a besoin d'informations supplémentaires. Relancez la connexion bancaire pour terminer.",
+      "pendingReview": "Votre dossier a bien été transmis à Stripe.",
+      "pendingReviewSubtitle": "Stripe vérifie encore votre compte. Vous pouvez déjà vendre sur Bloomi ; les virements seront activés dès validation.",
+      "retryCheck": "Vérifier à nouveau",
       "connectBank": "Connecter mon compte bancaire",
-      "connectDescription": "Connectez votre compte Stripe Connect pour recevoir les paiements de vos ventes.",
       "openingStripe": "Ouverture de l'onboarding Stripe Connect…",
       "activated": "Compte vendeur activé avec succès. Merci !",
-      "activatedTitle": "Compte vendeur activé",
-      "activatedSubtitle": "Vous pouvez vendre sur Bloomi et recevoir des versements",
       "openWallet": "Ouvrir mon portefeuille",
       "backToProfile": "Retour au profil",
       "checkError": "Une erreur s'est produite lors de la vérification de votre statut.",
-      "unableStartOnboarding": "Impossible de démarrer l'onboarding Stripe. Veuillez réessayer."
+      "screenTitle": "Activer le compte vendeur",
+      "activatedTitle": "Votre compte vendeur est prêt",
+      "activatedSubtitle": "Vous pouvez maintenant recevoir des paiements sur Bloomi.",
+      "connectDescription": "Configurez vos informations de paiement de manière fiable et sécurisée pour recevoir vos ventes sur votre compte bancaire.",
+      "unableStartOnboarding": "Impossible de démarrer l'onboarding Stripe."
     },
     "settings": "Paramètres",
     "legalInfo": "Informations légales",
     "helpCenter": "Centre d'aide",
-    "sendFeedback": "Envoyer vos commentaires",
     "vacationMode": "Mode vacances",
+    "vacationModeInfo": "Ce mode permet de suspendre temporairement vos annonces, elles resteront visibles mais les acheteurs ne pourront pas les acheter.",
     "signOut": "Se déconnecter",
     "signOutConfirm": "Voulez-vous vraiment vous déconnecter ?",
     "settingsScreen": {
@@ -1001,26 +906,22 @@
     },
     "editProfileScreen": {
       "title": "Modifier le profil",
-      "username": "Nom d'utilisateur",
-      "myLocation": "Ma localisation",
-      "selectLocation": "Sélectionnez votre localisation",
-      "locationHelp": "Permet aux autres utilisateurs de voir votre position sur la carte et de vous contacter plus facilement.",
-      "chooseCanton": "Choisir un canton",
       "aboutMe": "À propos de moi",
       "profileUpdated": "Profil mis à jour.",
       "permissionPhotos": "Nous avons besoin d'accéder à vos photos pour changer votre avatar.",
       "locationDenied": "Autorisation de localisation refusée.",
       "unableLocation": "Impossible d'obtenir votre position.",
       "unableLocationOff": "Impossible de désactiver la localisation.",
-      "countriesOnly": "Bloomi est disponible uniquement en Suisse, en France, en Allemagne et en Italie.",
-      "areaUnavailable": "Zone non disponible"
+      "countriesOnly": "Bloomi est disponible uniquement en Suisse.",
+      "areaUnavailable": "Zone non disponible",
+      "username": "Nom d'utilisateur",
+      "myLocation": "Ma localisation",
+      "selectLocation": "Sélectionner la localisation",
+      "chooseCanton": "Choisir le canton",
+      "locationHelp": "Votre localisation aide les acheteurs à trouver des articles près de chez eux."
     },
     "accountSettings": {
       "title": "Paramètres du compte",
-      "change": "Modifier",
-      "saving": "Enregistrement…",
-      "changeEmailTitle": "Modifier l'e-mail",
-      "phoneChangeDisclaimer": "Si vous changez de numéro de téléphone, vous devrez confirmer un code envoyé par SMS.",
       "email": "Email",
       "password": "Mot de passe",
       "dateOfBirth": "Date de naissance",
@@ -1037,21 +938,38 @@
       "unableReset": "Impossible d'envoyer l'e-mail de réinitialisation.",
       "unableDelete": "Impossible de supprimer le compte. Veuillez contacter le support.",
       "deleteAccount": "Supprimer le compte",
-      "deleteConfirmMessage": "Voulez-vous vraiment supprimer votre compte ? Cette action est définitive et irréversible."
+      "change": "Modifier",
+      "changeEmailTitle": "Modifier l'e-mail",
+      "deleteConfirmMessage": "Voulez-vous vraiment supprimer votre compte ? Cette action est irréversible.",
+      "phoneChangeDisclaimer": "La modification de votre numéro nécessite une vérification.",
+      "saving": "Enregistrement…"
     },
     "myAddress": {
       "title": "Mon adresse",
+      "nameHint": "Prénom et nom apparaîtront sur les étiquettes d'expédition La Poste.",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "firstNameExample": "ex. Marie",
+      "lastNameExample": "ex. Dupont",
       "street": "Rue",
       "city": "Ville",
       "postalCode": "Code postal",
       "postalExample": "Ex. 1200",
       "streetExample": "ex. Rue du Rhône 10",
       "cityExample": "ex. Genève",
-      "countryInfo": "Suisse — les adresses enregistrées ici sont limitées à la Suisse.",
       "saved": "Enregistré",
       "updated": "Votre adresse a été mise à jour.",
       "incomplete": "Adresse incomplète",
-      "incompleteMessage": "Veuillez renseigner la rue, le code postal et la ville."
+      "incompleteMessage": "Veuillez renseigner le prénom, le nom, la rue, le code postal et la ville.",
+      "countryInfo": "Les livraisons sont disponibles en Suisse uniquement."
+    },
+    "workAddress": {
+      "title": "Adresse du travail",
+      "intro": "Lieu optionnel où l'acheteur peut récupérer l'article (bureau, lieu de travail, etc.).",
+      "saved": "Enregistré",
+      "updated": "Votre adresse du travail a été mise à jour.",
+      "incomplete": "Adresse incomplète",
+      "incompleteMessage": "Veuillez renseigner la rue, le code postal et la ville, ou laissez tous les champs vides."
     },
     "favorites": {
       "title": "Articles favoris",
@@ -1071,17 +989,24 @@
     },
     "notificationsScreen": {
       "markAllRead": "Tout marquer comme lu",
+      "clearAll": "Vider la liste",
+      "clearAllTitle": "Vider les notifications ?",
+      "clearAllMessage": "Toutes vos notifications seront supprimées définitivement.",
+      "clearAllConfirm": "Vider",
+      "unableClearAll": "Impossible de vider les notifications",
+      "clearAllPartial": "Les notifications n'ont pas pu être supprimées. {{details}}",
       "unableMarkRead": "Impossible de marquer comme lu",
-      "markReadPartial": "Certaines notifications n'ont pas pu être mises à jour. {{details}}",
-      "empty": "Aucune notification pour le moment"
+      "empty": "Aucune notification pour le moment",
+      "markReadPartial": "Certaines notifications n'ont pas pu être marquées comme lues."
     },
     "orders": {
       "title": "Commandes",
       "myPurchases": "Mes achats",
       "mySales": "Mes ventes",
-      "sellerCommission": "Commission Bloomi : {{amount}}",
-      "sellerPayout": "Versement net : {{amount}}",
       "awaitingShipment": "En attente d'expédition",
+      "awaitingPickup": "En attente de remise",
+      "awaitingPickupSale": "En attente de remise à l'acheteur",
+      "trackingNumber": "Suivi : {{number}}",
       "packageOnWay": "Colis en route 📦",
       "orderCompleted": "Commande terminée ✅",
       "orderCancelled": "Commande annulée",
@@ -1093,18 +1018,13 @@
       "cancelOrder": "Annuler la commande",
       "cancelling": "Annulation…",
       "trackParcel": "Suivre mon colis",
-      "openDispute": "Ouvrir un litige",
-      "disputeMessage": "Si vous avez un problème avec votre commande, contactez-nous à contact@bloomi.ch en indiquant l'identifiant de commande.",
-      "copyOrderId": "Copier l'ID de commande",
-      "sendEmail": "Envoyer un e-mail",
       "leaveReview": "Laisser un avis",
       "markShipped": "Marquer comme expédié",
       "updating": "Mise à jour…",
       "generateLabel": "Générer l'étiquette",
+      "generateSwissPostLabel": "Générer l'étiquette La Poste",
       "generating": "Génération…",
-      "noOrdersYet": "Aucune commande pour le moment ({{tab}})",
-      "senderAddressTitle": "Adresse expéditeur",
-      "senderAddressSubtitle": "Saisissez votre adresse pour générer l'étiquette.",
+      "letterAplusShipNote": "Générez l'étiquette La Poste pour ce colis en Lettre A+, puis marquez-le comme expédié.",
       "saveAddress": "Enregistrer cette adresse dans mon profil",
       "streetNumber": "Rue et numéro",
       "countryExample": "Pays (ex. CH)",
@@ -1112,59 +1032,119 @@
       "cancelOrderMessage": "Cela déclenchera un remboursement si nécessaire. Voulez-vous continuer ?",
       "unableLoad": "Impossible de charger vos commandes.",
       "unableConfirm": "Impossible de confirmer la réception.",
+      "unableConfirmWithDetails": "Impossible de confirmer la réception : {{message}}",
       "unableCancel": "Impossible d'annuler la commande.",
+      "unableCancelWithDetails": "Impossible d'annuler la commande : {{message}}",
+      "shippingAddressIncompleteForOrder": "L'adresse de livraison de cette commande est incomplète.",
+      "cacheUnavailable": "Stockage local indisponible.",
+      "disputeEmailSubject": "Litige commande",
+      "disputeEmailBody": "N° de commande : {{orderId}}",
       "unableShipped": "Impossible de marquer la commande comme expédiée.",
+      "unableShippedWithDetails": "Impossible de marquer la commande comme expédiée : {{message}}",
       "unableLabel": "Impossible de générer l'étiquette.",
-      "labelNoDoc": "L'étiquette a été générée, mais aucun document n'a été retourné.",
+      "labelGenerateFailed": "Impossible de générer l'étiquette : {{message}}",
+      "labelNoDoc": "L'étiquette n'a pas pu être récupérée. Réessayez ou contactez le support.",
+      "labelTrackingOnly": "Numéro de suivi enregistré. L'étiquette PDF n'a pas pu être ouverte sur cet appareil — vérifiez votre e-mail.",
+      "labelEmailSent": "L'étiquette a été envoyée à {{email}}.",
       "incompleteAddress": "Adresse incomplète",
       "incompleteAddressMessage": "Veuillez renseigner la rue, la ville, le code postal et le pays.",
       "shippingLabelShare": "Étiquette d'expédition La Poste",
-      "ratePurchase": "⭐ Notez votre achat",
-      "parcelShipped": "📦 En route ! Votre colis a été expédié",
+      "ratePurchase": "📍 Livré ! On veut tout savoir",
+      "parcelShipped": "📦 C'est parti ! Ton colis est en route",
       "reviewPrompt": "Comment s'est passée votre commande ? Laissez un avis au vendeur !",
-      "sellerShipped": "Votre vendeur a expédié votre commande."
+      "sellerShipped": "🚚 Ton colis est en route.",
+      "noOrdersYet": "Aucune commande pour le moment",
+      "copyOrderId": "Copier le n° de commande",
+      "openDispute": "Ouvrir un litige",
+      "disputeMessage": "Décrivez le problème avec votre commande. Notre équipe l'examinera.",
+      "sellerCommission": "Commission vendeur",
+      "sellerPayout": "Versement vendeur",
+      "shippingFeeLine": "dont {{amount}} de livraison",
+      "shippingFeeLinePromo": "dont {{amount}} de livraison (tarif promo)",
+      "promoShipping": "Livraison offerte",
+      "sendEmail": "Envoyer un e-mail",
+      "senderAddressTitle": "Adresse de l'expéditeur",
+      "senderAddressSubtitle": "Saisissez l'adresse depuis laquelle vous expédiez.",
+      "detail": {
+        "title": "Détail de la commande",
+        "viewDetail": "Voir le détail",
+        "viewListing": "Voir l'article",
+        "orderedOn": "Commandé le {{date}}",
+        "missingOrder": "Commande introuvable.",
+        "notFound": "Cette commande n'existe pas ou n'est plus accessible.",
+        "loadError": "Impossible de charger le détail de la commande.",
+        "openOrderA11y": "Voir le détail de la commande {{title}}",
+        "contactSeller": "Contacter le vendeur",
+        "contactBuyer": "Contacter l'acheteur",
+        "contactError": "Impossible d'ouvrir la conversation.",
+        "contactUnavailable": "Aucune conversation trouvée pour cette commande.",
+        "progressTitle": "Suivi de la commande"
+      },
+      "stepper": {
+        "labelGenerated": "Étiquette générée",
+        "parcelDeposited": "Colis déposé",
+        "parcelDepositedSeller": "Colis déposé",
+        "parcelInTransit": "Colis en route",
+        "parcelReceived": "Colis reçu",
+        "awaitingReceipt": "En attente de réception",
+        "buyerConfirm": "Acheteur confirme",
+        "transactionComplete": "Transaction terminée",
+        "paymentReleased": "Paiement débloqué",
+        "pickupPaidBuyer": "Commande confirmée",
+        "pickupPaidSeller": "Commande confirmée",
+        "pickupHandoff": "Remise en main propre",
+        "inProgress": "En cours",
+        "pending": "En attente"
+      }
     },
     "blockedUsers": {
       "title": "Utilisateurs bloqués",
-      "intro": "Les vendeurs que vous bloquez sont masqués de votre fil et de la recherche. Vous pouvez les débloquer à tout moment.",
       "empty": "Aucun utilisateur bloqué",
-      "emptyHint": "Lorsque vous bloquez quelqu'un depuis son profil, il apparaîtra ici.",
       "unblock": "Débloquer",
       "unblocking": "Déblocage…",
       "unblockTitle": "Débloquer {{name}} ?",
       "unblockMessage": "Leurs annonces réapparaîtront dans votre fil et vos recherches.",
       "couldNotUnblock": "Déblocage impossible",
       "viewProfileA11y": "Voir le profil de {{name}}",
-      "unblockA11y": "Débloquer {{name}}"
+      "unblockA11y": "Débloquer {{name}}",
+      "intro": "Les utilisateurs bloqués ne peuvent pas vous contacter ni voir vos annonces.",
+      "emptyHint": "Les utilisateurs que vous bloquez apparaîtront ici."
     },
     "leaveReview": {
       "title": "Laisser un avis",
-      "youAreRating": "Vous évaluez",
       "commentOptional": "Commentaire (facultatif)",
       "commentPlaceholder": "Écrire un commentaire...",
-      "submitReview": "Envoyer l'avis",
       "skip": "Passer",
-      "alreadyReviewed": "Vous avez déjà laissé un avis pour cette commande.",
-      "submitError": "Impossible d'envoyer l'avis.",
       "ratingRequired": "Note requise",
       "ratingHint": "Choisissez une note entre 1 et 5 étoiles.",
       "missingOrder": "Informations de commande manquantes.",
       "mustSignIn": "Vous devez être connecté.",
       "someoneReviewed": "⭐ Quelqu'un vous a laissé un avis !",
-      "reviewReceivedBody": "Découvrez ce qu'ils ont dit de vous sur Bloomi."
+      "reviewReceivedBody": "Découvrez ce qu'il ou elle a dit.",
+      "youAreRating": "Vous évaluez",
+      "submitReview": "Envoyer l'avis",
+      "alreadyReviewed": "Vous avez déjà évalué cette commande.",
+      "submitError": "Impossible d'envoyer l'avis."
     },
     "editListing": {
-      "title": "Modifier l'annonce",
+      "title": "Titre",
+      "screenTitle": "Modifier l'annonce",
+      "notOwner": "Vous ne pouvez pas modifier cette annonce.",
+      "maxPhotos": "Vous pouvez ajouter jusqu'à 5 photos maximum.",
+      "titleRequired": "Veuillez saisir un titre.",
+      "photosRequired": "Ajoutez au moins une photo.",
       "priceChf": "Prix (CHF)",
-      "loading": "Chargement de l'annonce...",
-      "uploadPhotos": "Ajouter des photos",
-      "addUpToPhotos": "Ajoutez jusqu'à 5 photos.",
-      "saveChanges": "Enregistrer les modifications",
-      "updatedSuccess": "Annonce mise à jour avec succès.",
       "listingUpdated": "Annonce mise à jour avec succès.",
       "unableUpdate": "Impossible de mettre à jour l'annonce.",
       "validPrice": "Veuillez saisir un prix valide.",
-      "permissionPhotos": "Nous avons besoin d'accéder à vos photos pour modifier une annonce."
+      "permissionPhotos": "Nous avons besoin d'accéder à vos photos pour modifier une annonce.",
+      "uploadPhotos": "Télécharger des photos",
+      "addUpToPhotos": "Ajoutez jusqu'à 5 photos.",
+      "loading": "Chargement de l'annonce…",
+      "saveChanges": "Enregistrer les modifications",
+      "updatedSuccess": "Annonce mise à jour avec succès.",
+      "reboostTitle": "Booster à nouveau votre annonce ?",
+      "updatedAndBoostedSuccess": "Annonce mise à jour et mise en avant avec succès."
     },
     "publicProfile": {
       "closet": "Dressing",
@@ -1176,30 +1156,44 @@
       "options": "Options",
       "userActions": "Actions utilisateur",
       "addCover": "Ajouter une photo de couverture",
+      "viewProfilePhoto": "Voir la photo de profil",
+      "viewCoverPhoto": "Voir la photo de couverture",
+      "boostButton": "Booster",
+      "sponsorDressing": "Sponsoriser mon dressing",
+      "boostListingTitle": "Booster cette annonce",
+      "boostDressingTitle": "Sponsoriser mon dressing",
+      "boostSuccess": "Mise en avant activée pour {{count}} annonce(s).",
+      "noPublishedForDressingBoost": "Publiez au moins une annonce avant de sponsoriser votre dressing.",
       "coverPermission": "Veuillez autoriser l'accès à la photothèque pour changer votre photo de couverture.",
       "noReviews": "Pas encore d'avis",
-      "followers": "abonnés,",
+      "viewReview": "Voir l'avis en entier",
+      "reviewDetailTitle": "Avis",
+      "reviewNoComment": "Aucun commentaire écrit.",
+      "readMoreReview": "Voir plus",
+      "followers": "abonnés",
+      "followingCount": "suivis",
       "reportSeller": "Signaler le vendeur",
       "sellerBlocked": "Vendeur bloqué",
       "sellerBlockedMessage": "Vous ne verrez plus leurs annonces sur Bloomi.",
       "nothingToReport": "Rien à signaler",
       "noListingChat": "Ce vendeur n'a aucune annonce active pour démarrer une conversation.",
       "noListingReport": "Ce vendeur n'a aucune annonce active que vous puissiez signaler depuis son profil pour le moment.",
-      "unableLoadProfile": "Impossible de charger ce profil.",
-      "unableFollow": "Impossible de mettre à jour le suivi.",
-      "unableCreateConversation": "Impossible de créer la conversation.",
-      "unableUpdateCover": "Impossible de mettre à jour la photo de couverture.",
-      "unablePublicUrl": "Impossible de générer l'URL publique.",
-      "permissionRequired": "Autorisation requise",
-      "following": "abonnements",
-      "couldNotBlock": "Impossible de bloquer",
-      "blockTitle": "Bloquer {{name}} ?",
-      "defaultProfileName": "Profil",
-      "listingMenu": "Menu de l'annonce",
       "follow": "Suivre",
+      "following": "Abonné",
       "followingBtn": "Abonné",
-      "reviewsCount": "({{count}} Avis)",
-      "safetyMenuMessage": "Signalez un problème ou bloquez ce vendeur. Les comptes bloqués sont masqués de votre fil et de la recherche."
+      "reviewsCount": "Avis ({{count}})",
+      "listingMenu": "Menu de l'annonce",
+      "blockTitle": "Bloquer l'utilisateur",
+      "couldNotBlock": "Impossible de bloquer cet utilisateur.",
+      "permissionRequired": "Autorisation requise",
+      "safetyMenuMessage": "Options de sécurité",
+      "unableCreateConversation": "Impossible de démarrer une conversation.",
+      "unableFollow": "Impossible de suivre cet utilisateur.",
+      "unableLoadProfile": "Impossible de charger le profil.",
+      "unableUpdateCover": "Impossible de mettre à jour la photo de couverture.",
+      "shareCloset": "Partager le dressing",
+      "shareClosetHeadline": "Découvre mon dressing sur Bloomi",
+      "shareClosetHeadlineOther": "Découvre le dressing de {{name}} sur Bloomi"
     },
     "feedback": {
       "stub": "À implémenter"
@@ -1213,7 +1207,9 @@
       "deactivate": "Désactiver l'annonce",
       "deactivateHint": "Masquer du fil. Vous pourrez réactiver plus tard.",
       "deleteConfirmMessage": "Cette action est irréversible."
-    }
+    },
+    "sendFeedback": "Envoyer un commentaire",
+    "walletScreenTitle": "Portefeuille"
   },
   "legal": {
     "terms": {
@@ -1253,157 +1249,162 @@
       "copyright": "TODO"
     },
     "help": {
-      "pageTitle": "TODO",
-      "buyTitle": "TODO",
-      "sellTitle": "TODO",
-      "accountTitle": "TODO",
-      "miscTitle": "TODO",
+      "pageTitle": "Centre d'aide Bloomi",
+      "buyTitle": "ACHETER",
+      "sellTitle": "VENDRE",
+      "accountTitle": "COMPTE",
+      "miscTitle": "DIVERS",
+      "contactCta": {
+        "title": "Vous ne trouvez pas la réponse à votre question ?",
+        "bodyPrefix": "Notre équipe est là pour vous aider. N'hésitez pas à nous contacter à l'adresse ",
+        "bodySuffix": ". Nous vous répondrons dans les meilleurs délais."
+      },
       "buy": {
         "personalizeFeed": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment personnaliser votre fil ?",
+          "answer": "Votre fil s'adapte à vos recherches, favoris et interactions. Plus vous utilisez l'application, plus les suggestions deviennent pertinentes."
         },
         "buyItem": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment acheter un article ?",
+          "answer": "Ouvrez l'annonce, appuyez sur Acheter, choisissez la livraison ou la remise en main propre, puis confirmez le paiement."
         },
         "saveSearch": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment enregistrer une recherche ?",
+          "answer": "Après avoir appliqué vos filtres, utilisez Enregistrer la recherche pour être notifié lorsque de nouveaux articles correspondants sont publiés."
         },
         "chatMember": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment discuter avec un membre ?",
+          "answer": "Appuyez sur Message depuis une annonce pour poser vos questions avant d'acheter."
         },
         "favorites": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment ajouter un article aux favoris ?",
+          "answer": "Appuyez sur le cœur d'une annonce. Retrouvez vos favoris à tout moment."
         },
         "makeOffer": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment faire une offre ?",
+          "answer": "Si le vendeur l'autorise, utilisez Faire une offre pour proposer un autre prix."
         },
         "reserve": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment réserver un article ?",
+          "answer": "Certains vendeurs acceptent les réservations par message ou via une option dédiée."
         },
         "bundle": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment acheter un lot ?",
+          "answer": "Contactez le vendeur ou utilisez une option lot (si disponible) pour regrouper plusieurs articles."
         },
         "trackOrder": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment suivre votre commande ?",
+          "answer": "Rendez-vous dans Mes achats pour voir le suivi et les détails de livraison."
         },
         "itemMismatch": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Et si l'article ne correspond pas à l'annonce ?",
+          "answer": "Signalez le problème depuis votre commande avec des photos et une explication claire."
         },
         "cancelPurchase": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Pouvez-vous annuler un achat ?",
+          "answer": "Oui, mais uniquement avant l'expédition ou la confirmation."
         },
         "findItems": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment trouver des articles plus facilement ?",
+          "answer": "Utilisez les filtres, catégories, marques et la localisation pour affiner votre recherche."
         }
       },
       "sell": {
         "manageListings": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment gérer vos annonces ?",
+          "answer": "Dans Mes annonces, vous pouvez modifier, mettre en pause ou supprimer vos annonces."
         },
         "sellingBasics": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Les bases pour bien vendre ?",
+          "answer": "Utilisez des photos claires, une description honnête, un prix juste et répondez rapidement."
         },
         "postListing": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment publier une annonce ?",
+          "answer": "Appuyez sur Vendre, ajoutez photos, description, catégorie et prix, puis publiez."
         },
         "payments": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment fonctionnent les paiements et virements ?",
+          "answer": "Les fonds sont sécurisés et transférés une fois la transaction validée."
         },
         "listingRemoved": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Pourquoi une annonce peut-elle être supprimée ?",
+          "answer": "Une annonce peut être retirée si l'article est interdit, non conforme, contrefait ou décrit de manière trompeuse."
         },
         "shippingReturns": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment fonctionnent l'expédition et les retours ?",
+          "answer": "Les instructions sont envoyées après une vente. Les retours peuvent être possibles selon les conditions Bloomi."
         },
         "proAccount": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Compte vendeur professionnel (si activé)",
+          "answer": "Vous pouvez bénéficier d'outils spécifiques : plus de visibilité, gestion avancée et options professionnelles."
         },
         "tips": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Conseils recommandés pour vous",
+          "answer": "Bloomi peut vous suggérer des conseils en fonction de votre activité."
         }
       },
       "account": {
         "manageProfile": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Que pouvez-vous gérer dans votre profil ?",
+          "answer": "Photo, bio, informations personnelles, notifications, sécurité et préférences."
         },
         "verifyIdentity": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Pourquoi vérifier votre numéro ou identité ?",
+          "answer": "Pour sécuriser les transactions et réduire la fraude."
         },
         "signUpSignIn": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment fonctionnent l'inscription et la connexion ?",
+          "answer": "Vous pouvez créer un compte par e-mail, téléphone ou une autre méthode disponible. Votre mot de passe peut être réinitialisé."
         },
         "accountBlocked": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Pourquoi un compte peut-il être bloqué ?",
+          "answer": "En cas de violation des règles, de problème de sécurité ou d'activité inhabituelle."
         },
         "ratings": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment fonctionnent les notes et avis ?",
+          "answer": "Après une transaction, chaque membre peut laisser un avis."
         },
         "privacy": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Que faut-il savoir sur la confidentialité ?",
+          "answer": "Vous pouvez gérer vos paramètres et contrôler certaines informations visibles sur votre profil."
         },
         "security": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Sécurité et signalements : l'essentiel",
+          "answer": "Signalez les comportements suspects et évitez les paiements hors plateforme."
         },
         "referrals": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Parrainage",
+          "answer": "Certaines fonctionnalités de parrainage peuvent exister selon les mises à jour de l'application."
         },
         "policies": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Conditions et politiques Bloomi",
+          "answer": "Les règles d'utilisation et politiques sont disponibles dans l'application."
         },
         "suggestions": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Suggestions personnalisées",
+          "answer": "Des recommandations peuvent apparaître en fonction de votre utilisation."
         }
       },
       "misc": {
         "contactSupport": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment contacter le support Bloomi ?",
+          "answer": "Utilisez le Centre d'aide ou écrivez à contact@bloomi.ch."
         },
         "report": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment signaler un utilisateur ou une annonce ?",
+          "answer": "Utilisez le bouton Signaler depuis un profil, une annonce ou une conversation."
         },
         "prohibited": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Quels articles sont interdits ?",
+          "answer": "Les produits illégaux, dangereux, contrefaits ou non conformes ne sont pas autorisés."
         },
         "staySafe": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Comment rester en sécurité sur l'application ?",
+          "answer": "Restez dans la messagerie Bloomi et évitez de partager des informations sensibles."
         },
         "bug": {
-          "question": "TODO",
-          "answer": "TODO"
+          "question": "Et si l'application a un bug ?",
+          "answer": "Mettez à jour l'application, redémarrez votre téléphone ou vérifiez votre connexion."
         }
       }
     }
@@ -1413,30 +1414,6 @@
     "scam": "Arnaque",
     "illegal": "Contenu illégal",
     "other": "Autre"
-  },
-  "push": {
-    "like": {
-      "title": "❤️ Quelqu'un a aimé votre annonce !",
-      "body": "Quelqu'un s'intéresse à votre article. C'est peut-être le bon moment pour ajuster le prix !"
-    },
-    "newMessageFrom": "💬 Nouveau message de {{name}}",
-    "someone": "Quelqu'un",
-    "orderConfirmed": {
-      "title": "✅ Transaction terminée, bravo !",
-      "body": "Votre achat est confirmé. Profitez-en !"
-    },
-    "paymentReceived": {
-      "title": "💰 Paiement reçu !",
-      "body": "Le paiement a été transféré sur votre compte."
-    },
-    "shipReminder": {
-      "title": "📦 N'oubliez pas d'expédier votre colis 📬",
-      "body": "Vous avez une nouvelle vente ! Préparez votre colis."
-    },
-    "orderCancelled": {
-      "title": "✅ Commande annulée",
-      "body": "Votre commande a été annulée et vous serez remboursé(e)."
-    }
   },
   "notifications": {
     "newMessage": "Nouveau message",
@@ -1455,6 +1432,59 @@
     },
     "influencerBadge": {
       "label": "Profil influenceur"
+    }
+  },
+  "app": {
+    "termsModal": {
+      "title": "Conditions d'utilisation",
+      "body": "En créant un compte ou en utilisant Bloomi, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité. Vous vous engagez à traiter les autres utilisateurs avec respect, à ne pas publier de contenu illégal, trompeur ou inapproprié, et à respecter nos règles de sécurité et de modération. Les contenus signalés peuvent être examinés et supprimés.",
+      "readFullTerms": "Lire les Conditions d'utilisation",
+      "readPrivacy": "Lire la Politique de confidentialité",
+      "accept": "J'accepte"
+    }
+  },
+  "errors": {
+    "pageNotFound": {
+      "title": "Page introuvable",
+      "message": "Cette page n'existe pas ou a été déplacée."
+    }
+  },
+  "push": {
+    "likeListing": {
+      "title": "❤️ Ton article a été liké",
+      "body": "Baisse le prix de 1–2 CHF dans l'heure pour vendre plus vite !"
+    },
+    "likesHot": {
+      "title": "🔥 Ton article plaît beaucoup !",
+      "body": "Plusieurs personnes l'ont ajouté à leurs favoris. C'est le bon moment pour vendre !"
+    },
+    "newOffer": {
+      "title": "💸 Nouvelle offre reçue",
+      "body": "Un acheteur propose {{amount}} CHF pour ton article."
+    },
+    "urgencySomeoneElse": {
+      "title": "⚠️ Quelqu'un d'autre est intéressé par ton article",
+      "body": "Ne tarde pas trop, d'autres personnes le regardent aussi."
+    },
+    "urgencySellingFast": {
+      "title": "🔥 Cet article part vite !",
+      "body": "Il attire beaucoup d'attention en ce moment."
+    },
+    "newFollower": {
+      "title": "👋 Nouveau follower",
+      "body": "{{name}} a commencé à vous suivre."
+    }
+  },
+  "safety": {
+    "blockAction": "Bloquer",
+    "blockConfirmMessage": "Bloquer cet utilisateur ? Il ne pourra plus vous contacter.",
+    "blocking": "Blocage…",
+    "reportReasonsHint": "Sélectionnez une ou plusieurs raisons",
+    "reportReasons": {
+      "inappropriate": "Contenu inapproprié",
+      "scam": "Arnaque",
+      "illegal": "Contenu illégal",
+      "other": "Autre"
     }
   }
 }

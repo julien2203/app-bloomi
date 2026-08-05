@@ -19,6 +19,8 @@ import {
   type OAuthProvider
 } from '../../lib/socialAuth';
 import { useTranslation } from 'react-i18next';
+import { authDebug, authDebugError } from '../../lib/authDebugLog';
+import { postAuthDestination } from '../../lib/auth/needsPhoneVerification';
 
 export default function OnboardingStep3() {
   const { t } = useTranslation();
@@ -30,14 +32,25 @@ export default function OnboardingStep3() {
       Alert.alert(t('onboarding.social.facebook'), t('onboarding.social.facebookSoon'));
       return;
     }
+    if (oauthLoading) return;
 
     setOauthLoading(true);
+    authDebug('onboarding:oauth:start', { provider, step: 3 });
 
     try {
       const oauthProvider = provider as OAuthProvider;
       const { error } = await signInWithOAuthProvider(oauthProvider);
 
       if (error) {
+        const {
+          data: { session: recoveredSession }
+        } = await supabase.auth.getSession();
+        if (recoveredSession) {
+          authDebug('onboarding:oauth:recoveredSessionDespiteError', { provider, step: 3 });
+          await ensureProfileAfterOAuthLogin(recoveredSession);
+          router.replace(postAuthDestination(recoveredSession.user));
+          return;
+        }
         if (!isOAuthCancelled(error)) {
           Alert.alert(t('auth.login.submit'), error.message);
         }
@@ -53,8 +66,11 @@ export default function OnboardingStep3() {
       }
 
       await ensureProfileAfterOAuthLogin(session);
-      router.replace('/tabs/feed');
-    } catch {
+      authDebug('onboarding:oauth:navigateFeed:before', { provider, step: 3 });
+      router.replace(postAuthDestination(session.user));
+      authDebug('onboarding:oauth:navigateFeed:after', { provider, step: 3 });
+    } catch (e) {
+      authDebugError('onboarding:oauth:exception', e, { provider, step: 3 });
       Alert.alert(t('auth.login.submit'), t('onboarding.social.unableSocial'));
     } finally {
       setOauthLoading(false);

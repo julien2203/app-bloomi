@@ -1,4 +1,4 @@
-import "npm:@supabase/functions-js/edge-runtime.d.ts";
+import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
@@ -16,6 +16,10 @@ function normalizeAuthHeader(req: Request): string | null {
   if (!h) return null;
   if (!h.toLowerCase().startsWith("bearer ")) return null;
   return h;
+}
+
+function isValidExpoPushToken(value: string): boolean {
+  return value.startsWith("ExponentPushToken[") || value.startsWith("ExpoPushToken[");
 }
 
 Deno.serve(async (req) => {
@@ -44,7 +48,7 @@ Deno.serve(async (req) => {
 
   const tokenRaw = (body as any)?.expo_push_token;
   const expo_push_token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
-  if (!expo_push_token || !expo_push_token.startsWith("ExponentPushToken[")) {
+  if (!expo_push_token || !isValidExpoPushToken(expo_push_token)) {
     return jsonResponse({ error: "expo_push_token invalide" }, { status: 400 });
   }
 

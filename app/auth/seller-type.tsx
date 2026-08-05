@@ -17,8 +17,19 @@ import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import {
+  savePendingSellerProfile,
+  upsertSellerProfileFields,
+  clearPendingSellerProfile,
+  type PendingSellerProfile,
+  type SellerTypeChoice
+} from '../../lib/pendingSellerProfile';
 
-type SellerType = 'individual' | 'pro';
+const IDE_REGEX = /^CHE-\d{3}\.\d{3}\.\d{3}$/;
+
+function isBusinessSellerType(type: SellerTypeChoice | null): type is 'pro' | 'sole_proprietorship' {
+  return type === 'pro' || type === 'sole_proprietorship';
+}
 
 export default function SellerTypeScreen() {
   const { t } = useTranslation();
@@ -26,25 +37,30 @@ export default function SellerTypeScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const email = typeof params.email === 'string' ? params.email : '';
 
-  const [sellerType, setSellerType] = useState<SellerType | null>(null);
+  const [sellerType, setSellerType] = useState<SellerTypeChoice | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [ideNumber, setIdeNumber] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
   const [companySocial, setCompanySocial] = useState('');
   const [isInfluencer, setIsInfluencer] = useState<boolean | null>(null);
+  const [influencerInstagram, setInfluencerInstagram] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isPro = sellerType === 'pro';
+  const isBusinessForm = isBusinessSellerType(sellerType);
+  const ideRequired = sellerType === 'pro';
 
-  const validateProFields = () => {
-    if (!companyName.trim() || !ideNumber.trim() || !companyAddress.trim()) {
+  const validateBusinessFields = () => {
+    if (!companyName.trim() || !companyAddress.trim()) {
       setError(t('auth.sellerType.fillRequired'));
       return false;
     }
-    // Validation simple du format IDE (CHE-XXX.XXX.XXX)
-    const ideRegex = /^CHE-\d{3}\.\d{3}\.\d{3}$/;
-    if (!ideRegex.test(ideNumber.trim())) {
+    if (ideRequired && !ideNumber.trim()) {
+      setError(t('auth.sellerType.fillRequired'));
+      return false;
+    }
+    const ide = ideNumber.trim();
+    if (ide && !IDE_REGEX.test(ide)) {
       setError(t('auth.sellerType.ideFormat'));
       return false;
     }
@@ -65,53 +81,43 @@ export default function SellerTypeScreen() {
       setLoading(true);
       setError(null);
 
+      const pendingPayload: PendingSellerProfile = {
+        sellerType,
+        isInfluencer,
+        influencerInstagram: isInfluencer === true ? influencerInstagram : undefined,
+        companyName: isBusinessForm ? companyName : undefined,
+        ideNumber: isBusinessForm ? ideNumber : undefined,
+        companyAddress: isBusinessForm ? companyAddress : undefined,
+        companySocial: isBusinessForm ? companySocial : undefined,
+        email: email || undefined
+      };
+
+      if (isBusinessForm && !validateBusinessFields()) {
+        return;
+      }
+
+      if (isInfluencer === true && !influencerInstagram.trim()) {
+        setError(t('auth.sellerType.influencerInstagramRequired'));
+        return;
+      }
+
+      await savePendingSellerProfile(pendingPayload);
+
       const { data, error: userError } = await supabase.auth.getUser();
       if (userError || !data.user) {
-        // Sur certains projets (email confirmation activée), signUp ne crée pas de session immédiate.
-        // Dans ce cas, on laisse l'utilisateur poursuivre vers la vérification email
-        // plutôt que de bloquer le flow.
+        // Email confirmation activée : pas de session → données conservées localement
+        // et appliquées après vérification email / création du profil.
         goToVerifyEmail();
         return;
       }
 
-      // 1) Demande influenceur (optionnelle)
-      if (isInfluencer === true) {
-        const { error: influencerErr } = await supabase
-          .from('profiles')
-          .update({
-            is_influencer_request: true,
-            influencer_request_at: new Date().toISOString()
-          })
-          .eq('id', data.user.id);
-
-        if (influencerErr) {
-          setError(influencerErr.message);
-          return;
-        }
+      const { error: upsertError } = await upsertSellerProfileFields(data.user.id, pendingPayload);
+      if (upsertError) {
+        setError(upsertError.message);
+        return;
       }
 
-      // 2) Champs pro (si nécessaire)
-      if (isPro) {
-        if (!validateProFields()) {
-          return;
-        }
-
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            company_name: companyName.trim(),
-            ide_number: ideNumber.trim(),
-            company_address: companyAddress.trim(),
-            company_social: companySocial.trim() || null
-          })
-          .eq('id', data.user.id);
-
-        if (updateError) {
-          setError(updateError.message);
-          return;
-        }
-      }
-
+      await clearPendingSellerProfile();
       goToVerifyEmail();
     } finally {
       setLoading(false);
@@ -120,10 +126,11 @@ export default function SellerTypeScreen() {
 
   const canContinue =
     !!sellerType &&
-    (!isPro ||
+    (!isBusinessForm ||
       (companyName.trim().length > 0 &&
-        ideNumber.trim().length > 0 &&
-        companyAddress.trim().length > 0));
+        companyAddress.trim().length > 0 &&
+        (!ideRequired || ideNumber.trim().length > 0))) &&
+    (isInfluencer !== true || influencerInstagram.trim().length > 0);
 
   return (
     <>
@@ -148,11 +155,11 @@ export default function SellerTypeScreen() {
             <View style={styles.content}>
               <Text style={styles.sectionTitle}>{t('auth.sellerType.sellingAs')}</Text>
 
-              <View style={styles.pillsRow}>
+              <View style={styles.pillsColumn}>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   style={[
-                    styles.pill,
+                    styles.pillFull,
                     sellerType === 'individual' ? styles.pillActive : styles.pillInactive
                   ]}
                   onPress={() => setSellerType('individual')}
@@ -162,16 +169,26 @@ export default function SellerTypeScreen() {
                 <TouchableOpacity
                   activeOpacity={0.8}
                   style={[
-                    styles.pill,
+                    styles.pillFull,
                     sellerType === 'pro' ? styles.pillActive : styles.pillInactive
                   ]}
                   onPress={() => setSellerType('pro')}
                 >
                   <Text style={styles.pillText}>{t('auth.sellerType.professional')}</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[
+                    styles.pillFull,
+                    sellerType === 'sole_proprietorship' ? styles.pillActive : styles.pillInactive
+                  ]}
+                  onPress={() => setSellerType('sole_proprietorship')}
+                >
+                  <Text style={styles.pillText}>{t('auth.sellerType.soleProprietorship')}</Text>
+                </TouchableOpacity>
               </View>
 
-              {isPro && (
+              {isBusinessForm && (
                 <View style={styles.proForm}>
                   <View style={styles.fieldGroup}>
                     <Text style={styles.fieldLabel}>{t('auth.sellerType.companyName')}</Text>
@@ -187,7 +204,11 @@ export default function SellerTypeScreen() {
                   </View>
 
                   <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>{t('auth.sellerType.ideNumber')}</Text>
+                    <Text style={styles.fieldLabel}>
+                      {ideRequired
+                        ? t('auth.sellerType.ideNumber')
+                        : t('auth.sellerType.ideNumberOptional')}
+                    </Text>
                     <View style={styles.fieldInputWrapper}>
                       <TextInput
                         style={styles.fieldInput}
@@ -240,7 +261,9 @@ export default function SellerTypeScreen() {
                       styles.pillFull,
                       isInfluencer === true ? styles.pillActive : styles.pillInactive
                     ]}
-                    onPress={() => setIsInfluencer(true)}
+                    onPress={() => {
+                      setIsInfluencer(true);
+                    }}
                   >
                     <Text style={styles.pillText}>{t('auth.sellerType.influencerYes')}</Text>
                   </TouchableOpacity>
@@ -250,15 +273,36 @@ export default function SellerTypeScreen() {
                       styles.pillFull,
                       isInfluencer === false ? styles.pillActive : styles.pillInactive
                     ]}
-                    onPress={() => setIsInfluencer(false)}
+                    onPress={() => {
+                      setIsInfluencer(false);
+                      setInfluencerInstagram('');
+                    }}
                   >
                     <Text style={styles.pillText}>{t('auth.sellerType.influencerNo')}</Text>
                   </TouchableOpacity>
                 </View>
                 {isInfluencer === true ? (
-                  <Text style={styles.influencerHint}>
-                    {t('auth.sellerType.influencerHint')}
-                  </Text>
+                  <>
+                    <View style={[styles.fieldGroup, styles.influencerField]}>
+                      <Text style={styles.fieldLabel}>
+                        {t('auth.sellerType.influencerInstagram')}
+                      </Text>
+                      <View style={styles.fieldInputWrapper}>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={influencerInstagram}
+                          onChangeText={setInfluencerInstagram}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          placeholder={t('auth.sellerType.influencerInstagramPlaceholder')}
+                          placeholderTextColor={theme.colors.textSecondary}
+                        />
+                      </View>
+                    </View>
+                    <Text style={styles.influencerHint}>
+                      {t('auth.sellerType.influencerHint')}
+                    </Text>
+                  </>
                 ) : null}
               </View>
 
@@ -329,14 +373,10 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     marginBottom: 16
   },
-  pillsRow: {
-    flexDirection: 'row',
-    columnGap: 12,
-    marginBottom: 24
-  },
   pillsColumn: {
     flexDirection: 'column',
-    rowGap: 12
+    rowGap: 12,
+    marginBottom: 24
   },
   pill: {
     flex: 1,
@@ -381,6 +421,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 13,
     color: theme.colors.textSecondary
+  },
+  influencerField: {
+    marginTop: 16,
+    marginBottom: 0
   },
   proForm: {
     marginTop: 8

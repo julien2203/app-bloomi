@@ -8,7 +8,7 @@ ALTER TABLE public.orders
 
 ALTER TABLE public.orders
   ADD CONSTRAINT orders_parcel_size_check
-  CHECK (parcel_size IS NULL OR parcel_size IN ('small', 'large', 'xlarge'));
+  CHECK (parcel_size IS NULL OR parcel_size IN ('letter_aplus', 'small', 'large', 'xlarge'));
 
 CREATE OR REPLACE FUNCTION public.increment_completed_orders()
 RETURNS void

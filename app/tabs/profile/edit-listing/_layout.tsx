@@ -17,6 +17,7 @@ export default function EditListingStackLayout() {
       <Stack.Screen name="condition" />
       <Stack.Screen name="size" />
       <Stack.Screen name="price" />
+      <Stack.Screen name="color" />
     </Stack>
   );
 }

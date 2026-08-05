@@ -11,6 +11,7 @@ export type SellerProfileInput = {
   is_influencer?: boolean | null;
   company_name?: string | null;
   ide_number?: string | null;
+  seller_type?: 'individual' | 'pro' | 'sole_proprietorship' | null;
 };
 
 export type BuyerFeesBreakdown = {
@@ -70,6 +71,11 @@ export function roundChf(amount: number): number {
   return Math.round(amount * 100) / 100;
 }
 
+/** Prix catalogue / paiement acheteur (hors livraison) : arrondi à l’entier CHF supérieur. */
+export function roundChfToInteger(amount: number): number {
+  return Math.ceil(roundChf(amount));
+}
+
 export function chfToCents(amountChf: number): number {
   return Math.round(roundChf(amountChf) * 100);
 }
@@ -90,6 +96,8 @@ export function getPriceTier(itemPriceChf: number): PriceTier {
 
 export function resolveSellerProfileType(profile: SellerProfileInput): SellerProfileType {
   if (profile.is_influencer) return 'influencer';
+  const sellerType = profile.seller_type?.trim();
+  if (sellerType === 'pro' || sellerType === 'sole_proprietorship') return 'pro';
   if (profile.company_name?.trim() && profile.ide_number?.trim()) return 'pro';
   return 'individual';
 }
@@ -116,8 +124,13 @@ export function getBuyerFeeMultiplier(itemPriceChf: number): number {
 
 export function computeBuyerFinalPriceChf(itemPriceChf: number): number {
   const fees = computeBuyerFees(itemPriceChf);
-  if (!fees) return roundChf(Number(itemPriceChf) || 0);
+  if (!fees) return roundChfToInteger(Number(itemPriceChf) || 0);
   return fees.finalPriceChf;
+}
+
+/** Prix affiché catalogue : article + protection acheteur + frais bancaires (hors livraison). */
+export function computeBuyerDisplayPriceChf(itemPriceChf: number): number {
+  return computeBuyerFinalPriceChf(itemPriceChf);
 }
 
 export function computeBuyerFees(itemPriceChf: number): BuyerFeesBreakdown | null {
@@ -144,7 +157,7 @@ export function computeBuyerFees(itemPriceChf: number): BuyerFeesBreakdown | nul
     protectionChf,
     bankingChf,
     totalBuyerFeesChf,
-    finalPriceChf: roundChf(itemPrice + totalBuyerFeesChf)
+    finalPriceChf: roundChfToInteger(itemPrice + totalBuyerFeesChf)
   };
 }
 
@@ -218,6 +231,7 @@ export type PaymentIntentFeeMetadata = {
   sellerFeeRate: number;
   sellerProfileType: SellerProfileType;
   shippingFeeCents: number;
+  roundingAdjustmentCents: number;
   platformRetentionCents: number;
   totalCents: number;
 };
@@ -244,10 +258,19 @@ export function buildPaymentIntentFeeBreakdown(params: {
   const buyerBankingFeeCents = chfToCents(buyerFees.bankingChf);
   const sellerCommissionCents = chfToCents(sellerFees.commissionChf);
   const sellerPayoutCents = chfToCents(sellerFees.netPayoutChf);
+  const buyerSubtotalCentsRaw =
+    itemAmountCents + buyerProtectionCents + buyerBankingFeeCents;
+  const buyerSubtotalCentsRounded = chfToCents(
+    roundChfToInteger(centsToChf(buyerSubtotalCentsRaw))
+  );
+  const roundingAdjustmentCents = buyerSubtotalCentsRounded - buyerSubtotalCentsRaw;
   const platformRetentionCents =
-    buyerProtectionCents + buyerBankingFeeCents + shippingFeeCents + sellerCommissionCents;
-  const totalCents =
-    itemAmountCents + buyerProtectionCents + buyerBankingFeeCents + shippingFeeCents;
+    buyerProtectionCents +
+    buyerBankingFeeCents +
+    shippingFeeCents +
+    sellerCommissionCents +
+    roundingAdjustmentCents;
+  const totalCents = buyerSubtotalCentsRounded + shippingFeeCents;
 
   return {
     itemAmountCents,
@@ -258,6 +281,7 @@ export function buildPaymentIntentFeeBreakdown(params: {
     sellerFeeRate: sellerFees.feeRate,
     sellerProfileType: sellerFees.profileType,
     shippingFeeCents,
+    roundingAdjustmentCents,
     platformRetentionCents,
     totalCents
   };
@@ -275,6 +299,7 @@ export function paymentIntentFeeMetadataToStrings(
     seller_fee_rate: String(fees.sellerFeeRate),
     seller_profile_type: fees.sellerProfileType,
     shipping_fee_cents: String(fees.shippingFeeCents),
+    rounding_adjustment_cents: String(fees.roundingAdjustmentCents),
     platform_retention_cents: String(fees.platformRetentionCents),
     commission_cents: String(fees.platformRetentionCents)
   };
@@ -298,13 +323,19 @@ export function parsePaymentIntentFeeMetadata(
   const buyerBankingFeeCents = Number(metadata.buyer_banking_fee_cents ?? '0');
   const sellerCommissionCents = Number(metadata.seller_commission_cents ?? '0');
   const shippingFeeCents = Number(metadata.shipping_fee_cents ?? '0');
+  const roundingAdjustmentCents = Number(metadata.rounding_adjustment_cents ?? '0');
   const platformRetentionCents = Number(
     metadata.platform_retention_cents ?? metadata.commission_cents ?? '0'
   );
   const sellerFeeRate = Number(metadata.seller_fee_rate ?? '0');
   const sellerProfileType = (metadata.seller_profile_type ?? 'individual') as SellerProfileType;
-  const totalCents =
-    itemAmountCents + buyerProtectionCents + buyerBankingFeeCents + shippingFeeCents;
+  const buyerSubtotalCentsRaw =
+    itemAmountCents + buyerProtectionCents + buyerBankingFeeCents;
+  const buyerSubtotalCentsRounded =
+    roundingAdjustmentCents !== 0
+      ? buyerSubtotalCentsRaw + roundingAdjustmentCents
+      : chfToCents(roundChfToInteger(centsToChf(buyerSubtotalCentsRaw)));
+  const totalCents = buyerSubtotalCentsRounded + shippingFeeCents;
 
   return {
     itemAmountCents,
@@ -315,6 +346,7 @@ export function parsePaymentIntentFeeMetadata(
     sellerFeeRate,
     sellerProfileType,
     shippingFeeCents,
+    roundingAdjustmentCents,
     platformRetentionCents,
     totalCents
   };

@@ -15,6 +15,13 @@ import i18n, {
   type AppLanguage
 } from '../../../lib/i18n';
 
+const LANGUAGE_LABEL_KEYS: Record<AppLanguage, string> = {
+  fr: 'profile.personalization.french',
+  en: 'profile.personalization.english',
+  de: 'profile.personalization.german',
+  it: 'profile.personalization.italian'
+};
+
 export default function PersonalizationScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -85,9 +92,7 @@ export default function PersonalizationScreen() {
               disabled={Boolean(saving)}
             >
               <Text variant="body" style={styles.rowLabel}>
-                {lang === 'en'
-                  ? t('profile.personalization.english')
-                  : t('profile.personalization.french')}
+                {t(LANGUAGE_LABEL_KEYS[lang])}
               </Text>
               {isSaving ? (
                 <ActivityIndicator size="small" color={theme.colors.appleBlack} />

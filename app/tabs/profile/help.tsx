@@ -1,243 +1,127 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Text } from '../../../components/ui/Text';
 import { theme } from '../../../lib/theme';
 
-type HelpItem = {
-  question: string;
-  answer: string;
-};
+type HelpItemKey = { questionKey: string; answerKey: string };
+type HelpSectionKey = { titleKey: string; items: HelpItemKey[] };
 
-type HelpSection = {
-  title: string;
-  items: HelpItem[];
-};
+const SUPPORT_EMAIL = 'contact@bloomi.ch';
 
-const HELP_SECTIONS: HelpSection[] = [
+const HELP_SECTIONS: HelpSectionKey[] = [
   {
-    title: 'BUY',
+    titleKey: 'legal.help.buyTitle',
     items: [
-      {
-        question: 'How can you personalize your feed?',
-        answer:
-          'Your feed adapts based on your searches, favorites, and interactions. The more you use the app, the more relevant suggestions become.'
-      },
-      {
-        question: 'How do you buy an item?',
-        answer:
-          'Open the listing, tap Buy, choose delivery or in-person handoff, then confirm payment.'
-      },
-      {
-        question: 'How do you save a search?',
-        answer:
-          'After applying your filters, use Save search to get notified when new matching items are posted.'
-      },
-      {
-        question: 'How do you chat with a member?',
-        answer:
-          'Tap Message from a listing to ask your questions before buying.'
-      },
-      {
-        question: 'How do you add an item to favorites?',
-        answer:
-          'Tap the heart on a listing. You can quickly find your favorites later.'
-      },
-      {
-        question: 'How do you make an offer?',
-        answer:
-          'If enabled by the seller, use Make an offer to propose a different price.'
-      },
-      {
-        question: 'How do you reserve an item?',
-        answer:
-          'Some sellers accept reservations through messaging or with a dedicated option.'
-      },
-      {
-        question: 'How do you buy a bundle?',
-        answer:
-          'Contact the seller or use a bundle option (if available) to group multiple items.'
-      },
-      {
-        question: 'How do you track your order?',
-        answer:
-          'Go to My purchases to view tracking and delivery details.'
-      },
-      {
-        question: 'What if the item does not match the listing?',
-        answer:
-          'Report the issue from your order with photos and a clear explanation.'
-      },
-      {
-        question: 'Can you cancel a purchase?',
-        answer:
-          'Yes, but only before shipment or confirmation.'
-      },
-      {
-        question: 'How can you find items more easily?',
-        answer:
-          'Use filters, categories, brands, and location to narrow down your search.'
-      }
+      { questionKey: 'legal.help.buy.personalizeFeed.question', answerKey: 'legal.help.buy.personalizeFeed.answer' },
+      { questionKey: 'legal.help.buy.buyItem.question', answerKey: 'legal.help.buy.buyItem.answer' },
+      { questionKey: 'legal.help.buy.saveSearch.question', answerKey: 'legal.help.buy.saveSearch.answer' },
+      { questionKey: 'legal.help.buy.chatMember.question', answerKey: 'legal.help.buy.chatMember.answer' },
+      { questionKey: 'legal.help.buy.favorites.question', answerKey: 'legal.help.buy.favorites.answer' },
+      { questionKey: 'legal.help.buy.makeOffer.question', answerKey: 'legal.help.buy.makeOffer.answer' },
+      { questionKey: 'legal.help.buy.reserve.question', answerKey: 'legal.help.buy.reserve.answer' },
+      { questionKey: 'legal.help.buy.bundle.question', answerKey: 'legal.help.buy.bundle.answer' },
+      { questionKey: 'legal.help.buy.trackOrder.question', answerKey: 'legal.help.buy.trackOrder.answer' },
+      { questionKey: 'legal.help.buy.itemMismatch.question', answerKey: 'legal.help.buy.itemMismatch.answer' },
+      { questionKey: 'legal.help.buy.cancelPurchase.question', answerKey: 'legal.help.buy.cancelPurchase.answer' },
+      { questionKey: 'legal.help.buy.findItems.question', answerKey: 'legal.help.buy.findItems.answer' }
     ]
   },
   {
-    title: 'SELL',
+    titleKey: 'legal.help.sellTitle',
     items: [
-      {
-        question: 'How do you manage your listings?',
-        answer:
-          'In My listings, you can edit, pause, or delete your listings.'
-      },
-      {
-        question: 'What are the basics for selling well?',
-        answer:
-          'Use clear photos, an honest description, a fair price, and reply quickly.'
-      },
-      {
-        question: 'How do you post a listing?',
-        answer:
-          'Tap Sell, add photos, description, category, and price, then publish.'
-      },
-      {
-        question: 'How do payments and transfers work?',
-        answer:
-          'Funds are secured and transferred after the transaction is validated.'
-      },
-      {
-        question: 'Why can a listing be removed?',
-        answer:
-          'A listing may be removed if an item is prohibited, non-compliant, counterfeit, or misleadingly described.'
-      },
-      {
-        question: 'How do shipping and returns work?',
-        answer:
-          'Instructions are sent after a sale. Returns may be available under Bloomi conditions.'
-      },
-      {
-        question: 'Professional seller account (if enabled)',
-        answer:
-          'You may get specific tools such as more visibility, advanced management, and business options.'
-      },
-      {
-        question: 'Recommended tips for you',
-        answer:
-          'Bloomi may suggest tips or guidance based on your activity.'
-      }
+      { questionKey: 'legal.help.sell.manageListings.question', answerKey: 'legal.help.sell.manageListings.answer' },
+      { questionKey: 'legal.help.sell.sellingBasics.question', answerKey: 'legal.help.sell.sellingBasics.answer' },
+      { questionKey: 'legal.help.sell.postListing.question', answerKey: 'legal.help.sell.postListing.answer' },
+      { questionKey: 'legal.help.sell.payments.question', answerKey: 'legal.help.sell.payments.answer' },
+      { questionKey: 'legal.help.sell.listingRemoved.question', answerKey: 'legal.help.sell.listingRemoved.answer' },
+      { questionKey: 'legal.help.sell.shippingReturns.question', answerKey: 'legal.help.sell.shippingReturns.answer' },
+      { questionKey: 'legal.help.sell.proAccount.question', answerKey: 'legal.help.sell.proAccount.answer' },
+      { questionKey: 'legal.help.sell.tips.question', answerKey: 'legal.help.sell.tips.answer' }
     ]
   },
   {
-    title: 'ACCOUNT',
+    titleKey: 'legal.help.accountTitle',
     items: [
-      {
-        question: 'What can you manage in your profile?',
-        answer:
-          'Photo, bio, personal info, notifications, security settings, and preferences.'
-      },
-      {
-        question: 'Why verify your phone number or identity?',
-        answer:
-          'To secure transactions and reduce fraud.'
-      },
-      {
-        question: 'How do sign-up and sign-in work?',
-        answer:
-          'You can create an account with email, phone, or another available method. Your password can be reset.'
-      },
-      {
-        question: 'Why can an account be blocked?',
-        answer:
-          'Because of rule violations, security concerns, or unusual activity.'
-      },
-      {
-        question: 'How do ratings and stars work?',
-        answer:
-          'After a transaction, each member can leave a review.'
-      },
-      {
-        question: 'What should you know about data privacy?',
-        answer:
-          'You can manage your settings and control some visible profile information.'
-      },
-      {
-        question: 'Security and reports: the basics',
-        answer:
-          'Report suspicious behavior and avoid off-platform payments.'
-      },
-      {
-        question: 'Referrals',
-        answer:
-          'Some referral features may exist depending on app updates.'
-      },
-      {
-        question: 'Bloomi terms and policies',
-        answer:
-          'Usage rules and policies are available in the app.'
-      },
-      {
-        question: 'Personalized account suggestions',
-        answer:
-          'Recommendations may appear based on your usage.'
-      }
+      { questionKey: 'legal.help.account.manageProfile.question', answerKey: 'legal.help.account.manageProfile.answer' },
+      { questionKey: 'legal.help.account.verifyIdentity.question', answerKey: 'legal.help.account.verifyIdentity.answer' },
+      { questionKey: 'legal.help.account.signUpSignIn.question', answerKey: 'legal.help.account.signUpSignIn.answer' },
+      { questionKey: 'legal.help.account.accountBlocked.question', answerKey: 'legal.help.account.accountBlocked.answer' },
+      { questionKey: 'legal.help.account.ratings.question', answerKey: 'legal.help.account.ratings.answer' },
+      { questionKey: 'legal.help.account.privacy.question', answerKey: 'legal.help.account.privacy.answer' },
+      { questionKey: 'legal.help.account.security.question', answerKey: 'legal.help.account.security.answer' },
+      { questionKey: 'legal.help.account.referrals.question', answerKey: 'legal.help.account.referrals.answer' },
+      { questionKey: 'legal.help.account.policies.question', answerKey: 'legal.help.account.policies.answer' },
+      { questionKey: 'legal.help.account.suggestions.question', answerKey: 'legal.help.account.suggestions.answer' }
     ]
   },
   {
-    title: 'MISC',
+    titleKey: 'legal.help.miscTitle',
     items: [
-      {
-        question: 'How do you contact Bloomi support?',
-        answer:
-          'Use the Help center or email contact@bloomi.ch.'
-      },
-      {
-        question: 'How do you report a user or listing?',
-        answer:
-          'Use the Report button from a profile, listing, or conversation.'
-      },
-      {
-        question: 'Which items are prohibited?',
-        answer:
-          'Illegal, dangerous, counterfeit, or non-compliant products are not allowed.'
-      },
-      {
-        question: 'How can you stay safe on the app?',
-        answer:
-          'Stay within Bloomi messaging and avoid sharing sensitive information.'
-      },
-      {
-        question: 'What if the app has a bug?',
-        answer:
-          'Update the app, restart your phone, or check your connection.'
-      }
+      { questionKey: 'legal.help.misc.contactSupport.question', answerKey: 'legal.help.misc.contactSupport.answer' },
+      { questionKey: 'legal.help.misc.report.question', answerKey: 'legal.help.misc.report.answer' },
+      { questionKey: 'legal.help.misc.prohibited.question', answerKey: 'legal.help.misc.prohibited.answer' },
+      { questionKey: 'legal.help.misc.staySafe.question', answerKey: 'legal.help.misc.staySafe.answer' },
+      { questionKey: 'legal.help.misc.bug.question', answerKey: 'legal.help.misc.bug.answer' }
     ]
   }
 ];
 
 export default function HelpCenterScreen() {
-  return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text variant="h2" style={styles.pageTitle}>
-          BLOOMI Help Center
-        </Text>
+  const { t } = useTranslation();
+  const router = useRouter();
 
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={styles.header}>
+        <HeaderBackButton onPress={() => router.back()} />
+        <Text variant="body" style={styles.headerTitle}>
+          {t('profile.helpCenter')}
+        </Text>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
+      <View style={styles.separator} />
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {HELP_SECTIONS.map((section) => (
-          <View key={section.title} style={styles.section}>
+          <View key={section.titleKey} style={styles.section}>
             <Text variant="h3" style={styles.sectionTitle}>
-              {section.title}
+              {t(section.titleKey)}
             </Text>
 
             {section.items.map((item) => (
-              <View key={`${section.title}-${item.question}`} style={styles.item}>
+              <View key={item.questionKey} style={styles.item}>
                 <Text variant="body" style={styles.question}>
-                  {`\u2022 ${item.question}`}
+                  {`\u2022 ${t(item.questionKey)}`}
                 </Text>
                 <Text variant="captionSm" color="textSecondary" style={styles.answer}>
-                  {item.answer}
+                  {t(item.answerKey)}
                 </Text>
               </View>
             ))}
           </View>
         ))}
+
+        <View style={styles.contactCta}>
+          <Text variant="body" style={styles.contactCtaTitle}>
+            {t('legal.help.contactCta.title')}
+          </Text>
+          <Text variant="captionSm" color="textSecondary" style={styles.contactCtaBody}>
+            {t('legal.help.contactCta.bodyPrefix')}
+            <Text
+              style={styles.contactEmail}
+              onPress={() => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+            >
+              {SUPPORT_EMAIL}
+            </Text>
+            {t('legal.help.contactCta.bodySuffix')}
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -248,15 +132,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF'
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.settingsPaddingX,
+    paddingVertical: theme.spacing.settingsHeaderPaddingY
+  },
+  headerTitle: {
+    ...theme.typography.settingsHeaderTitle,
+    color: theme.colors.appleBlack,
+    textAlign: 'center',
+    flex: 1
+  },
+  headerRightPlaceholder: {
+    width: theme.spacing.settingsHeaderSideWidth
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.separator
+  },
   content: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 32
-  },
-  pageTitle: {
-    fontFamily: theme.fontFamily.bold,
-    color: '#000000',
-    marginBottom: 12
   },
   section: {
     marginTop: 8,
@@ -278,6 +177,23 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     marginTop: 2,
     lineHeight: 18
+  },
+  contactCta: {
+    marginTop: 24,
+    alignItems: 'center'
+  },
+  contactCtaTitle: {
+    fontFamily: theme.fontFamily.semiBold,
+    color: '#000000',
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  contactCtaBody: {
+    textAlign: 'center',
+    lineHeight: 20
+  },
+  contactEmail: {
+    color: theme.colors.primary,
+    textDecorationLine: 'underline'
   }
 });
-

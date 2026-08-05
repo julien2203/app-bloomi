@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getSafeBottomInset } from '../../../../lib/safeArea';
 import { theme } from '../../../../lib/theme';
 import { Button } from '../../../../components/ui/Button';
 import { useEditListingFormStore } from '../../../../lib/store/editListingForm';
@@ -19,11 +20,19 @@ export default function EditListingPriceScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { values, setField } = useEditListingFormStore();
   const [priceText, setPriceText] = useState<string>(
     values.draftPriceText ||
       (typeof values.price === 'number' ? String(values.price) : '')
   );
+
+  useEffect(() => {
+    const next =
+      values.draftPriceText ||
+      (typeof values.price === 'number' ? String(values.price) : '');
+    if (next) setPriceText(next);
+  }, [values.draftPriceText, values.price]);
 
   const handleConfirm = () => {
     const trimmed = priceText.trim();
@@ -59,7 +68,7 @@ export default function EditListingPriceScreen() {
             />
           </View>
 
-          <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.footer, { paddingBottom: safeBottom + 12 }]}>
             <Button
               title={t('common.confirm')}
               onPress={handleConfirm}

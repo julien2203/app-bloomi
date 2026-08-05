@@ -4,14 +4,16 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { Button } from '../../../components/ui/Button';
 import { Text } from '../../../components/ui/Text';
@@ -31,6 +33,7 @@ type LeaveReviewParams = {
 export default function LeaveReviewScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const params = useLocalSearchParams<LeaveReviewParams>();
 
@@ -128,55 +131,67 @@ export default function LeaveReviewScreen() {
 
       <KeyboardAvoidingView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <View style={styles.card}>
-          <View style={styles.userRow}>
-            {reviewedAvatar ? (
-              <Image source={{ uri: reviewedAvatar }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder} />
-            )}
-            <View style={styles.userText}>
-              <Text variant="captionSm" color="textSecondary">
-                {t('profile.leaveReview.youAreRating')}
-              </Text>
-              <Text variant="h3" style={styles.name} numberOfLines={1}>
-                {reviewedName}
-              </Text>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(getSafeBottomInset(insets.bottom), 16) + 24 }
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.card}>
+            <View style={styles.userRow}>
+              {reviewedAvatar ? (
+                <Image source={{ uri: reviewedAvatar }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder} />
+              )}
+              <View style={styles.userText}>
+                <Text variant="captionSm" color="textSecondary">
+                  {t('profile.leaveReview.youAreRating')}
+                </Text>
+                <Text variant="h3" style={styles.name} numberOfLines={1}>
+                  {reviewedName}
+                </Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.starsRow}>
-            {([1, 2, 3, 4, 5] as const).map((i) => {
-              const selected = rating >= i;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => setRating(i)}
-                  activeOpacity={0.85}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={styles.starButton}
-                >
-                  <Ionicons
-                    name={selected ? 'star' : 'star-outline'}
-                    size={30}
-                    color={selected ? theme.colors.primary : theme.colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+            <View style={styles.starsRow}>
+              {([1, 2, 3, 4, 5] as const).map((i) => {
+                const selected = rating >= i;
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setRating(i)}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.starButton}
+                  >
+                    <Ionicons
+                      name={selected ? 'star' : 'star-outline'}
+                      size={30}
+                      color={selected ? theme.colors.primary : theme.colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-          <TextField
-            label={t('profile.leaveReview.commentOptional')}
-            placeholder={t('profile.leaveReview.commentPlaceholder')}
-            value={comment}
-            onChangeText={setComment}
-            multiline
-            textAlignVertical="top"
-            style={styles.commentInput}
-          />
+            <TextField
+              label={t('profile.leaveReview.commentOptional')}
+              placeholder={t('profile.leaveReview.commentPlaceholder')}
+              value={comment}
+              onChangeText={setComment}
+              multiline
+              textAlignVertical="top"
+              style={styles.commentInput}
+            />
+          </View>
 
           <View style={styles.actionsWrap}>
             <Button
@@ -188,7 +203,7 @@ export default function LeaveReviewScreen() {
             />
             <Button title={t('profile.leaveReview.skip')} onPress={onSkip} variant="secondary" />
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -218,7 +233,13 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   content: {
-    flex: 1,
+    flex: 1
+  },
+  scroll: {
+    flex: 1
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: theme.spacing.screenPaddingX,
     paddingTop: 8
   },
@@ -268,7 +289,7 @@ const styles = StyleSheet.create({
     paddingTop: 12
   },
   actionsWrap: {
-    marginTop: 8,
+    marginTop: 16,
     gap: 10
   }
 });

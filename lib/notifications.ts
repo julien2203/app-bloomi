@@ -16,12 +16,12 @@ export async function ensureNotificationsConfigured() {
 
   const Notifications = await import('expo-notifications');
 
-  // Afficher les notifs même en foreground (iOS)
+  // Afficher les notifs même en foreground (iOS) + pastille icône
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: false,
-      shouldSetBadge: false
+      shouldSetBadge: true
     })
   });
 
@@ -29,7 +29,13 @@ export async function ensureNotificationsConfigured() {
 
   const current = await Notifications.getPermissionsAsync();
   if (current.status !== 'granted') {
-    await Notifications.requestPermissionsAsync();
+    await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true
+      }
+    });
   }
 }
 

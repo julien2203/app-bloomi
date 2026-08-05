@@ -19,10 +19,10 @@ import { Screen } from '../../components/ui/Screen';
 import { Text as UiText } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
-import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { getFilterFooterPaddingBottom, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getPriceBounds } from '../../lib/api';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 
 const LIME = '#C3EA4F';
 const SEPARATOR_GRAY = '#E5E5E5';
@@ -52,6 +52,7 @@ export default function PriceFilterScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
   const [min, setMin] = useState<string>(
     filters.priceMin != null ? String(filters.priceMin) : ''
   );
@@ -87,7 +88,7 @@ export default function PriceFilterScreen() {
     const priceMax = Number.isFinite(parsedMax || NaN) ? (parsedMax as number) : null;
     setFilter('priceMin', priceMin);
     setFilter('priceMax', priceMax);
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   useEffect(() => {
@@ -255,9 +256,8 @@ export default function PriceFilterScreen() {
               styles.footer,
               {
                 paddingBottom:
-                  (keyboardHeight > 0 ? keyboardHeight + 8 : 24) +
-                  insets.bottom +
-                  FLOATING_TAB_BAR_BOTTOM_RESERVE
+                  getFilterFooterPaddingBottom(insets) +
+                  (keyboardHeight > 0 ? keyboardHeight + 8 - 24 : 0)
               }
             ]}
           >

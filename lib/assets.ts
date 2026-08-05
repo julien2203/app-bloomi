@@ -142,7 +142,7 @@ export const icons = {
   forbiddenCircleBold: ForbiddenCircleBold,
   homeBold: HomeBold,
   infoCircleBold: InfoCircleBold,
-  likeHeartBold: Heart2,
+  likeHeartBold: LikeHeartBold,
   mapPointBold: MapPointBold,
   menuDotsBold: MenuDotsBold,
   messagesLetterBold: MessagesLetterBold,

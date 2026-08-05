@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { ensureProfileExists } from '../profile';
+import { applyPendingSellerProfile } from '../pendingSellerProfile';
 import { useAuthStore } from '../../stores/authStore';
 import { navigateInTabs } from './navigateInTabs';
 
@@ -24,6 +25,9 @@ export async function goToMainApp(options?: { phone?: string }) {
       session,
       options?.phone ? { phone: options.phone } : undefined
     );
+    await applyPendingSellerProfile(session.user.id, {
+      email: session.user.email ?? null
+    });
   }
 
   navigateInTabs('/tabs/feed');

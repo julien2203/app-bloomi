@@ -7,7 +7,8 @@ import { Text } from '../../components/ui/Text';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +22,7 @@ export default function BrandGenderScreen() {
   const router = useRouter();
   const stackBase = useFiltersStackBase();
   const insets = useSafeAreaInsets();
+  const { navigateAfterFilterCommit } = useFilterExit();
   const params = useLocalSearchParams<{
     returnTo?: string;
     resultsSection?: string;
@@ -42,7 +44,7 @@ export default function BrandGenderScreen() {
   };
 
   const handleShowResult = () => {
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const genderSegments: GenderSegment[] = [
@@ -82,7 +84,7 @@ export default function BrandGenderScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

@@ -158,6 +158,7 @@ Deno.serve(async (req) => {
         capabilities: {
           transfers: { requested: true },
           card_payments: { requested: true },
+          twint_payments: { requested: true },
         },
         business_profile: {
           url: "https://bloomi.ch",

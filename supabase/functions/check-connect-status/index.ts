@@ -37,6 +37,35 @@ type ProfileStripeRow = {
   stripe_connect_onboarding_completed?: boolean | null;
 };
 
+function evaluateConnectOnboarding(account: Stripe.Account) {
+  const detailsSubmitted = Boolean(account.details_submitted);
+  const chargesEnabled = Boolean(account.charges_enabled);
+  const payoutsEnabled = Boolean(account.payouts_enabled);
+  const currentlyDue = account.requirements?.currently_due ?? [];
+  const pendingVerification = account.requirements?.pending_verification ?? [];
+  const transfersStatus = String(account.capabilities?.transfers ?? "inactive");
+
+  // Formulaire Stripe terminé côté vendeur : pas d'exigence bloquante restante.
+  const completed = detailsSubmitted && currentlyDue.length === 0;
+
+  const pendingStripeReview =
+    completed &&
+    transfersStatus !== "active" &&
+    !payoutsEnabled &&
+    !chargesEnabled;
+
+  return {
+    completed,
+    pending_stripe_review: pendingStripeReview,
+    charges_enabled: chargesEnabled,
+    details_submitted: detailsSubmitted,
+    payouts_enabled: payoutsEnabled,
+    transfers_status: transfersStatus,
+    currently_due: currentlyDue,
+    pending_verification: pendingVerification,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -150,13 +179,11 @@ Deno.serve(async (req) => {
       throw e;
     }
 
-    const chargesEnabled = Boolean(account.charges_enabled);
-    const detailsSubmitted = Boolean(account.details_submitted);
-    const completed = chargesEnabled && detailsSubmitted;
+    const status = evaluateConnectOnboarding(account);
 
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ stripe_connect_onboarding_completed: completed })
+      .update({ stripe_connect_onboarding_completed: status.completed })
       .eq("id", userId);
 
     if (updateError) {
@@ -164,18 +191,14 @@ Deno.serve(async (req) => {
         {
           error: "Stripe status checked but profile update failed",
           details: updateError.message,
-          completed,
-          charges_enabled: chargesEnabled,
-          details_submitted: detailsSubmitted,
+          ...status,
         },
         { status: 500 },
       );
     }
 
     return jsonResponse({
-      completed,
-      charges_enabled: chargesEnabled,
-      details_submitted: detailsSubmitted,
+      ...status,
       stripe_account_id: connectAccountId,
     });
   } catch (e) {

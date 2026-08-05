@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Dimensions,
   StyleSheet,
   TouchableOpacity,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle
 } from 'react-native';
@@ -17,7 +17,12 @@ import { useAuthStore } from '../stores/authStore';
 import { likeListing, unlikeListing } from '../lib/api';
 import { useLikesStore } from '../stores/likesStore';
 import { useTranslation } from 'react-i18next';
-import { computeBuyerFees } from '../lib/fees';
+import { formatCatalogPriceChf, computeBuyerDisplayPriceChf } from '../lib/formatBuyerPrice';
+import { translateSizeLabel } from '../lib/sizeI18n';
+import { runGuardedNav } from '../lib/navigation/guardedNav';
+import { gridCardWidth } from '../lib/cardLayout';
+
+const CARD_TEXT_MAX_FONT_SCALE = 1.25;
 
 interface ProductCardProps {
   listingId: string;
@@ -62,6 +67,7 @@ function ProductCardComponent({
 }: ProductCardProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const { user } = useAuthStore();
 
   const isOwnListing = useMemo(
@@ -76,11 +82,14 @@ function ProductCardComponent({
   const rollback = useLikesStore((s) => s.rollback);
 
   const safePrice = Number(price);
-  const formattedPrice = `${(Number.isFinite(safePrice) ? safePrice : 0).toFixed(2)} ${currency}`;
-  const fees = safePrice > 0 && !isNaN(safePrice) ? computeBuyerFees(safePrice) : null;
-  const formattedPriceIncl = fees
-    ? `${fees.finalPriceChf.toFixed(2)} ${currency} ${t('feed.pricing.priceIncl')}`
-    : null;
+  const displayPriceChf = useMemo(() => {
+    if (!Number.isFinite(safePrice) || safePrice <= 0) return 0;
+    return computeBuyerDisplayPriceChf(safePrice);
+  }, [safePrice]);
+  const displaySize = useMemo(
+    () => (size?.trim() ? translateSizeLabel(size, t) : null),
+    [size, t]
+  );
 
   const heartIcon = useMemo(() => {
     if (likedByMe) return { name: 'likeHeartBold' as const, color: theme.colors.primary };
@@ -113,23 +122,28 @@ function ProductCardComponent({
   };
 
   const effectiveWidth = useMemo(() => {
-    if (typeof cardWidth === 'number' && Number.isFinite(cardWidth) && cardWidth > 0) return cardWidth;
-    const { width } = Dimensions.get('window');
-    const padding = 16;
-    const gap = 12;
-    return (width - padding * 2 - gap) / 2;
-  }, [cardWidth]);
+    if (typeof cardWidth === 'number' && Number.isFinite(cardWidth) && cardWidth > 0) {
+      return Math.min(cardWidth, windowWidth - 32);
+    }
+    return gridCardWidth(windowWidth);
+  }, [cardWidth, windowWidth]);
 
   const effectiveImageHeight = useMemo(() => {
     const r = typeof imageRatio === 'number' && Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : 1;
     return Math.round(effectiveWidth * r);
   }, [effectiveWidth, imageRatio]);
 
+  const handlePress = useMemo(() => {
+    if (!onPress) return undefined;
+    return () => runGuardedNav(`product-card:${listingId}`, onPress);
+  }, [listingId, onPress]);
+
   return (
     <TouchableOpacity
       style={[styles.container, { width: effectiveWidth }, style]}
       activeOpacity={0.85}
-      onPress={onPress}
+      onPress={handlePress}
+      disabled={!handlePress}
     >
       {imageUrl ? (
         <View style={[styles.imageContainer, styles.imageFrame, { height: effectiveImageHeight }]}>
@@ -172,40 +186,42 @@ function ProductCardComponent({
 
       <View style={styles.body}>
         {title && (
-          <Text variant="captionSm" numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
+          <Text
+            variant="captionSm"
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            maxFontSizeMultiplier={CARD_TEXT_MAX_FONT_SCALE}
+            style={styles.title}
+          >
             {title}
           </Text>
         )}
 
-        {(brand || size) && (
+        {(brand || displaySize) && (
           <Text
             variant="captionSm"
             color="textSecondary"
             numberOfLines={1}
             ellipsizeMode="tail"
+            maxFontSizeMultiplier={CARD_TEXT_MAX_FONT_SCALE}
             style={styles.meta}
           >
-            {[brand ?? null, size ?? null]
+            {[brand ?? null, displaySize]
               .filter((x) => !!x && String(x).trim().length > 0)
               .join(' · ')}
           </Text>
         )}
 
         <View style={styles.priceBlock}>
-          <Text variant="captionSm" style={styles.priceMain} numberOfLines={1} ellipsizeMode="tail">
-            {formattedPrice}
+          <Text
+            variant="captionSm"
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            maxFontSizeMultiplier={CARD_TEXT_MAX_FONT_SCALE}
+            style={styles.price}
+          >
+            {formatCatalogPriceChf(displayPriceChf)}
           </Text>
-          {formattedPriceIncl ? (
-            <Text
-              variant="captionSm"
-              color="primary"
-              style={styles.priceIncl}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {formattedPriceIncl}
-            </Text>
-          ) : null}
         </View>
       </View>
     </TouchableOpacity>
@@ -255,18 +271,8 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   priceBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     alignSelf: 'stretch',
-    marginBottom: 4,
-    columnGap: 6
-  },
-  priceIncl: {
-    flexShrink: 1,
-    textAlign: 'right',
-    color: '#C3EA4F',
-    fontFamily: theme.fontFamily.semiBold
+    marginBottom: 4
   },
   meta: {
     marginBottom: 4
@@ -275,9 +281,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     alignSelf: 'stretch'
   },
-  priceMain: {
-    fontFamily: theme.fontFamily.semiBold,
+  price: {
     color: '#171819',
-    flexShrink: 0
+    fontFamily: theme.fontFamily.semiBold
   }
 });

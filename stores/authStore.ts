@@ -3,8 +3,11 @@ import type { Session, User } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { ensureProfileExists } from '../lib/profile';
+import { applyPendingSellerProfile } from '../lib/pendingSellerProfile';
 import { useNotificationsBadgeStore } from './notificationsBadgeStore';
 import { useUnreadMessagesStore } from './unreadMessagesStore';
+import { authDebug, authDebugError } from '../lib/authDebugLog';
+import { invalidateBlockedSellerIdsCache } from '../lib/blockedSellerIdsCache';
 
 export const GUEST_BROWSE_STORAGE_KEY = 'bloomi_guest_browse_v1';
 
@@ -30,6 +33,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   isGuest: false,
 
   setAuthFromSession: (session) => {
+    authDebug('store:setAuthFromSession', {
+      hasSession: Boolean(session),
+      userId: session?.user?.id ?? null,
+      hasPhone: Boolean(session?.user?.phone)
+    });
     if (!session?.user) {
       useNotificationsBadgeStore.getState().setUnreadCount(0);
       useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
@@ -48,38 +56,51 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   restoreSession: async () => {
+    authDebug('store:restoreSession:start');
     set({ isLoading: true });
     const guestRaw = await AsyncStorage.getItem(GUEST_BROWSE_STORAGE_KEY);
-    const { data, error } = await supabase.auth.getSession();
+    const session = await restoreAuthSession('coldStart');
 
-    if (error) {
-      set({
-        session: null,
-        user: null,
-        isGuest: guestRaw === 'true',
-        isLoading: false,
-        initialized: true
+    if (session) {
+      authDebug('store:restoreSession:existingSession', {
+        userId: session.user.id,
+        hasPhone: Boolean(session.user.phone)
       });
-      return;
-    }
-
-    if (data.session) {
-      await ensureProfileExists(data.session);
       await AsyncStorage.removeItem(GUEST_BROWSE_STORAGE_KEY);
+    } else {
+      authDebug('store:restoreSession:noSession', { isGuest: guestRaw === 'true' });
     }
 
     set({
-      session: data.session,
-      user: data.session?.user ?? null,
-      isGuest: data.session?.user ? false : guestRaw === 'true',
+      session,
+      user: session?.user ?? null,
+      isGuest: session?.user ? false : guestRaw === 'true',
       isLoading: false,
       initialized: true
     });
+    authDebug('store:restoreSession:done', {
+      hasSession: Boolean(session),
+      isGuest: session?.user ? false : guestRaw === 'true'
+    });
+
+    if (session?.user) {
+      void (async () => {
+        try {
+          await ensureProfileExists(session);
+          await applyPendingSellerProfile(session.user.id, {
+            email: session.user.email ?? null
+          });
+        } catch (e) {
+          authDebugError('store:restoreSession:profileBackground', e);
+        }
+      })();
+    }
   },
 
   signOut: async () => {
     set({ isLoading: true });
     await supabase.auth.signOut();
+    invalidateBlockedSellerIdsCache();
     useNotificationsBadgeStore.getState().setUnreadCount(0);
     useUnreadMessagesStore.getState().setUnreadThreadsCount(0);
     await AsyncStorage.setItem(GUEST_BROWSE_STORAGE_KEY, 'true');
@@ -92,8 +113,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   enterGuestMode: async () => {
+    authDebug('guest:enter:start');
     await AsyncStorage.setItem(GUEST_BROWSE_STORAGE_KEY, 'true');
     set({ isGuest: true });
+    authDebug('guest:enter:done');
   },
 
   // TEMPORAIRE: Crée une session mock pour le développement

@@ -3,60 +3,34 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { theme } from '../../../lib/theme';
-
-type Segment = {
-  labelKey: string;
-  gender: string;
-  type: string | null;
-};
+import { getBrandSegmentsForGender } from '../../../lib/inferProductType';
 
 export default function SellBrandSegmentScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
 
   const params = useLocalSearchParams<{ gender?: string }>();
   const genderParam = typeof params.gender === 'string' ? params.gender : 'femme';
 
-  const segments = useMemo<Segment[]>(() => {
-    switch (genderParam) {
-      case 'femme':
-      default:
-        return [
-          { labelKey: 'filters.segment.womenClothing', gender: 'femme', type: 'vetements' },
-          { labelKey: 'filters.segment.womenShoes', gender: 'femme', type: 'chaussures' },
-          { labelKey: 'filters.segment.womenBags', gender: 'femme', type: 'sacs' },
-          { labelKey: 'filters.segment.womenAccessories', gender: 'femme', type: 'accessoires' }
-        ];
-      case 'homme':
-        return [
-          { labelKey: 'filters.segment.menClothing', gender: 'homme', type: 'vetements' },
-          { labelKey: 'filters.segment.menShoes', gender: 'homme', type: 'chaussures' },
-          { labelKey: 'filters.segment.menAccessories', gender: 'homme', type: 'accessoires' }
-        ];
-      case 'enfant':
-        return [
-          { labelKey: 'filters.segment.kidsClothing', gender: 'enfant', type: 'vetements' },
-          { labelKey: 'filters.segment.kidsShoes', gender: 'enfant', type: 'chaussures' },
-          { labelKey: 'filters.segment.kidsBags', gender: 'enfant', type: 'sacs' },
-          { labelKey: 'filters.segment.kidsAccessories', gender: 'enfant', type: 'accessoires' }
-        ];
-      case 'bebe':
-        return [{ labelKey: 'filters.babyClothing', gender: 'bebe', type: 'vetements' }];
-    }
-  }, [genderParam]);
+  const segments = useMemo(
+    () => getBrandSegmentsForGender(genderParam),
+    [genderParam]
+  );
 
-  const openSegment = (segment: Segment) => {
+  const openSegment = (segment: (typeof segments)[number]) => {
     const label = t(segment.labelKey);
     router.push({
       pathname: '/tabs/sell/brand',
       params: {
         gender: segment.gender,
-        type: segment.type ?? undefined,
+        type: segment.type,
         title: label
       }
     });
@@ -67,7 +41,7 @@ export default function SellBrandSegmentScreen() {
   };
 
   return (
-    <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF', paddingBottom: insets.bottom }}>
+    <Screen noHorizontalPadding style={{ backgroundColor: '#FFFFFF', paddingBottom: safeBottom }}>
       <View style={styles.container}>
         <View style={styles.header}>
           <HeaderBackButton onPress={handleBack} />
@@ -80,7 +54,7 @@ export default function SellBrandSegmentScreen() {
         <View style={styles.content}>
           {segments.map((segment) => (
             <TouchableOpacity
-              key={`${segment.gender}-${segment.type ?? 'all'}`}
+              key={`${segment.gender}-${segment.type}`}
               style={styles.row}
               activeOpacity={0.7}
               onPress={() => openSegment(segment)}

@@ -7,10 +7,11 @@ import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { Ionicons } from '@expo/vector-icons';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
 import { FILTER_GENDER_OPTIONS } from '../../lib/filterGenderParams';
 
@@ -27,6 +28,7 @@ export default function CategoryFilterScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
 
   const isInitiallyAllSelected = useMemo(
     () => (filters.categoryIds?.length ?? 0) === 0,
@@ -55,7 +57,7 @@ export default function CategoryFilterScreen() {
   };
 
   const handleShowResult = () => {
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   return (
@@ -108,7 +110,7 @@ export default function CategoryFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

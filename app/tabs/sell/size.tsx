@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { Screen } from '../../../components/ui/Screen';
@@ -10,6 +11,7 @@ import { useSellFormStore } from '../../../lib/store/sellForm';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
 import { getSizes } from '../../../lib/api/filters';
 import { useTranslation } from 'react-i18next';
+import { translateSizeLabel } from '../../../lib/sizeI18n';
 
 type SizeRow = {
   id: number;
@@ -52,6 +54,7 @@ export default function SellSizeScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { values, setField } = useSellFormStore();
   const [sections, setSections] = useState<SizeSection[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(values.size?.id ?? null);
@@ -218,7 +221,7 @@ export default function SellSizeScreen() {
                             variant="body"
                             style={styles.rowLabel}
                           >
-                            {row.label}
+                            {translateSizeLabel(row.label, t)}
                           </Text>
                           <Text
                             variant="body"
@@ -247,7 +250,7 @@ export default function SellSizeScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: safeBottom + 24 }
           ]}
         >
           <Button

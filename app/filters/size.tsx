@@ -7,12 +7,13 @@ import { Screen } from '../../components/ui/Screen';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { theme } from '../../lib/theme';
-import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { getFilterFooterPaddingBottom, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
-import { getCategoryFilterContext, getSizes } from '../../lib/api/filters';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { getSizes, resolveCategoryFilterContext } from '../../lib/api/filters';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { useTranslation } from 'react-i18next';
+import { translateSizeLabel } from '../../lib/sizeI18n';
 
 type SizeRow = {
   id: number;
@@ -62,6 +63,7 @@ export default function SizeFilterScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
   const [sections, setSections] = useState<SizeSection[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([...(filters.sizeIds ?? [])]);
   const [loading, setLoading] = useState(false);
@@ -80,7 +82,7 @@ export default function SizeFilterScreen() {
 
   const handleShowResult = () => {
     setFilter('sizeIds', selectedSizes);
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const loadSizes = async () => {
@@ -90,18 +92,21 @@ export default function SizeFilterScreen() {
 
       let gender: string | undefined;
       let type: string | undefined;
-      let categoryIdForCounts: string | undefined;
+      let categoryIdsForCounts: string[] | undefined;
 
-      const categoryId = filters.categoryIds?.[0];
-      if (categoryId) {
-        categoryIdForCounts = String(categoryId);
-        const ctx = await getCategoryFilterContext(categoryId);
+      const selectedCategoryIds = (filters.categoryIds ?? [])
+        .map((id) => String(id).trim())
+        .filter(Boolean);
+
+      if (selectedCategoryIds.length > 0) {
+        categoryIdsForCounts = selectedCategoryIds;
+        const ctx = await resolveCategoryFilterContext(selectedCategoryIds);
         if (ctx?.gender) gender = ctx.gender;
         if (ctx?.type) type = ctx.type;
       }
 
       const data = await getSizes(gender, type, {
-        categoryIdForCounts: categoryIdForCounts ?? null
+        categoryIdsForCounts: categoryIdsForCounts ?? null
       });
 
       const bySectionTitle: Record<string, SizeRow[]> = {};
@@ -256,7 +261,7 @@ export default function SizeFilterScreen() {
                               disabled && styles.rowLabelDisabled
                             ]}
                           >
-                            {row.label}
+                            {translateSizeLabel(row.label, t)}
                           </Text>
                           <Text
                             variant="body"
@@ -291,7 +296,7 @@ export default function SizeFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

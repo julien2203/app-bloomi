@@ -1,15 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  View
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -19,12 +21,13 @@ import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { openGuestAuthPrompt } from '../../lib/guestAuthPrompt';
+import { sendPushNotificationWithUserJwt } from '../../lib/pushNotifications';
 import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import type { FeedListing } from '../../lib/api';
 import {
   cloneFeedListings,
-  createOrGetThreadForListing,
+  getExistingThreadForListing,
   deactivateListingToDraft,
   deleteListing,
   getSellerClosetListings,
@@ -34,14 +37,32 @@ import {
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { getSafeBottomInset } from '../../lib/safeArea';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ZoomableImage } from '../../components/ui/ZoomableImage';
 import { ProductCard } from '../../components/ProductCard';
+import { GRID_GAP_COMPACT, gridCardWidth } from '../../lib/cardLayout';
 import { InfluencerBadge } from '../../components/InfluencerBadge';
 import { OwnerListingBottomSheet } from '../../components/listing/OwnerListingBottomSheet';
 import { SafetyChoiceSheet } from '../../components/safety/SafetyChoiceSheet';
 import { bumpBlockedUsersRevision } from '../../lib/store/blockedUsersSync';
 import { REPORT_REASON_KEYS, reportReasonToDbValue } from '../../lib/reports';
 import { useTranslation } from 'react-i18next';
+import {
+  listingDetailFromPublicProfileHref,
+  navigateBackFromPublicProfile,
+  pickListingReturnParams,
+  publicProfileHref
+} from '../../lib/navigation/listingDetailNav';
+import { guardedPush } from '../../lib/navigation/guardedNav';
+import { Feather } from '@expo/vector-icons';
+import { Rocket, TrendingUp } from 'lucide-react-native';
+import { useStripe } from '@stripe/stripe-react-native';
+import * as Clipboard from 'expo-clipboard';
+import { getDressingShareUrl, shareCloset } from '../../lib/closetShare';
+import { BoostDurationSheet } from '../../components/listing/BoostDurationSheet';
+import { BoostPaymentCancelledError, runBoostPayment } from '../../lib/runBoostPayment';
+import type { BoostSponsorType } from '../../lib/fees';
 
 type PublicProfileParams = {
   user_id?: string;
@@ -79,13 +100,14 @@ type ReviewerMini = {
 type TabKey = 'closet' | 'reviews';
 
 const LIME = '#C3EA4F';
+const BOOST_GREEN = theme.colors.primary;
 const STAR_ORANGE = '#F59E0B';
 const COVER_HEIGHT = 160;
 const PAGE_SIZE = 20;
 const PROFILE_AVATAR_SIZE = 56;
 const PROFILE_TEXT_LEFT_GAP = 10;
 
-function formatRelativeDate(dateString: string | null): string {
+function formatRelativeDate(dateString: string | null, t: (key: string, options?: any) => string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
@@ -100,13 +122,13 @@ function formatRelativeDate(dateString: string | null): string {
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
 
-  if (diffMinutes < 1) return 'Just now';
-  if (diffHours < 1) return `${diffMinutes}m ago`;
-  if (diffDays < 1) return `${diffHours}h ago`;
-  if (diffWeeks < 1) return `${diffDays}d ago`;
-  if (diffMonths < 1) return `${diffWeeks}w ago`;
-  if (diffYears < 1) return `${diffMonths}mo ago`;
-  return `${diffYears}y ago`;
+  if (diffMinutes < 1) return t('feed.listingDetail.justNow');
+  if (diffHours < 1) return t('feed.listingDetail.minutesAgo', { count: diffMinutes });
+  if (diffDays < 1) return t('feed.listingDetail.hoursAgo', { count: diffHours });
+  if (diffWeeks < 1) return t('feed.listingDetail.daysAgo', { count: diffDays });
+  if (diffMonths < 1) return t('feed.listingDetail.weeksAgo', { count: diffWeeks });
+  if (diffYears < 1) return t('feed.listingDetail.monthsAgo', { count: diffMonths });
+  return t('feed.listingDetail.yearsAgo', { count: diffYears });
 }
 
 function formatMemberSince(dateString: string | null): string {
@@ -125,7 +147,7 @@ function formatMemberSince(dateString: string | null): string {
   return `${diffYears}y`;
 }
 
-function formatTimeAgoEn(dateString: string | null): string {
+function formatTimeAgoEn(dateString: string | null, t: (key: string, options?: any) => string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
@@ -140,20 +162,24 @@ function formatTimeAgoEn(dateString: string | null): string {
   const months = Math.floor(days / 30);
   const years = Math.floor(days / 365);
 
-  if (minutes < 1) return 'just now';
-  if (hours < 1) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-  if (days < 1) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-  if (weeks < 1) return `${days} day${days === 1 ? '' : 's'} ago`;
-  if (months < 1) return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
-  if (years < 1) return `${months} month${months === 1 ? '' : 's'} ago`;
-  return `${years} year${years === 1 ? '' : 's'} ago`;
+  if (minutes < 1) return t('feed.listingDetail.justNow');
+  if (hours < 1) return t('feed.listingDetail.minutesAgo', { count: minutes });
+  if (days < 1) return t('feed.listingDetail.hoursAgo', { count: hours });
+  if (weeks < 1) return t('feed.listingDetail.daysAgo', { count: days });
+  if (months < 1) return t('feed.listingDetail.weeksAgo', { count: weeks });
+  if (years < 1) return t('feed.listingDetail.monthsAgo', { count: months });
+  return t('feed.listingDetail.yearsAgo', { count: years });
 }
 
 export default function PublicProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { user } = useAuthStore();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const params = useLocalSearchParams<PublicProfileParams>();
+  const returnCtx = useMemo(() => pickListingReturnParams(params), [params]);
 
   const userIdParam = useMemo(() => String(params.user_id ?? '').trim(), [params.user_id]);
   const usernameParam = useMemo(() => String(params.username ?? '').trim(), [params.username]);
@@ -193,7 +219,17 @@ export default function PublicProfileScreen() {
   const [safetyModal, setSafetyModal] = useState<SafetyModalState | null>(null);
   const [safetyBusy, setSafetyBusy] = useState(false);
 
-  const resolvedUsername = profile?.display_name ?? usernameParam ?? 'Profil';
+  const [profilePhotoZoomUri, setProfilePhotoZoomUri] = useState<string | null>(null);
+  const [selectedReview, setSelectedReview] = useState<ReviewRow | null>(null);
+  const [profilePhotoZoomLayout, setProfilePhotoZoomLayout] = useState({ width: 0, height: 0 });
+
+  const [boostSheet, setBoostSheet] = useState<{
+    sponsorType: BoostSponsorType;
+    listingId: string;
+  } | null>(null);
+  const [boostPaying, setBoostPaying] = useState(false);
+
+  const resolvedUsername = profile?.display_name ?? usernameParam ?? t('profile.title');
   const myId = user?.id ?? null;
   const isMe = Boolean(myId && profile?.id && myId === profile.id);
 
@@ -205,6 +241,39 @@ export default function PublicProfileScreen() {
 
   const reviewsCount = useMemo(() => profile?.reviews_count ?? 0, [profile?.reviews_count]);
 
+  /** Invalide les réponses async d'un dressing précédent (réutilisation de l'écran). */
+  const loadGenRef = useRef(0);
+
+  const resetSellerUi = useCallback(() => {
+    setProfile(null);
+    setFollowersCount(0);
+    setFollowingCount(0);
+    setIsFollowing(false);
+    setTogglingFollow(false);
+    setClosetItems([]);
+    setClosetDraftItems([]);
+    setClosetOffset(0);
+    setClosetHasMore(true);
+    setClosetLoadingMore(false);
+    closetLoadingRef.current = false;
+    lastLoadMoreScrollYRef.current = -1;
+    setReviews([]);
+    setReviewersById({});
+    setReviewsLoading(false);
+    setClosetOwnerMenuListing(null);
+    setSafetyModal(null);
+    setSelectedReview(null);
+    setBoostSheet(null);
+    setTab('closet');
+  }, []);
+
+  // Avant paint : vider l'ancien dressing dès que user_id / username change (évite le flash Android).
+  useLayoutEffect(() => {
+    loadGenRef.current += 1;
+    resetSellerUi();
+    setLoadingInitial(Boolean(userIdParam || usernameParam));
+  }, [userIdParam, usernameParam, resetSellerUi]);
+
   const loadProfile = useCallback(async () => {
     if (!userIdParam && !usernameParam) {
       setProfile(null);
@@ -212,6 +281,7 @@ export default function PublicProfileScreen() {
       return;
     }
 
+    const gen = loadGenRef.current;
     setLoadingInitial(true);
     try {
       let q = supabase
@@ -225,6 +295,7 @@ export default function PublicProfileScreen() {
 
       const { data, error } = await q.maybeSingle();
       if (error) throw error;
+      if (gen !== loadGenRef.current) return;
 
       const p = (data as any as PublicProfile | null) ?? null;
       setProfile(p);
@@ -236,8 +307,10 @@ export default function PublicProfileScreen() {
             .from('follows')
             .select('follower_id', { count: 'exact', head: true })
             .eq('following_id', p.id);
+          if (gen !== loadGenRef.current) return;
           setFollowersCount(followers ?? 0);
         } catch {
+          if (gen !== loadGenRef.current) return;
           setFollowersCount(0);
         }
 
@@ -246,8 +319,10 @@ export default function PublicProfileScreen() {
             .from('follows')
             .select('following_id', { count: 'exact', head: true })
             .eq('follower_id', p.id);
+          if (gen !== loadGenRef.current) return;
           setFollowingCount(following ?? 0);
         } catch {
+          if (gen !== loadGenRef.current) return;
           setFollowingCount(0);
         }
 
@@ -265,8 +340,10 @@ export default function PublicProfileScreen() {
               throw followErr;
             }
 
+            if (gen !== loadGenRef.current) return;
             setIsFollowing(!!row);
           } catch {
+            if (gen !== loadGenRef.current) return;
             setIsFollowing(false);
           }
         } else {
@@ -274,19 +351,23 @@ export default function PublicProfileScreen() {
         }
       }
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       setProfile(null);
       const message =
         e instanceof Error && e.message ? e.message : t('profile.publicProfile.unableLoadProfile');
       Alert.alert(t('common.error'), message);
     } finally {
-      setLoadingInitial(false);
+      if (gen === loadGenRef.current) {
+        setLoadingInitial(false);
+      }
     }
-  }, [myId, userIdParam, usernameParam]);
+  }, [myId, userIdParam, usernameParam, t]);
 
   const loadClosetPage = useCallback(
     async (opts?: { reset?: boolean }) => {
       const sellerId = profile?.id ?? null;
       if (!sellerId) return;
+      const gen = loadGenRef.current;
 
       const reset = Boolean(opts?.reset);
       const nextOffset = reset ? 0 : closetOffset;
@@ -309,6 +390,7 @@ export default function PublicProfileScreen() {
         });
 
         if (error) throw new Error(error);
+        if (gen !== loadGenRef.current) return;
 
         const rows = cloneFeedListings(data ?? []);
         setClosetItems((prev) => (reset ? rows : [...prev, ...rows]));
@@ -317,6 +399,7 @@ export default function PublicProfileScreen() {
 
         if (reset && myId && myId === sellerId) {
           const draftRes = await getSellerDraftListingsForCloset(sellerId);
+          if (gen !== loadGenRef.current) return;
           if (draftRes.error) {
             // eslint-disable-next-line no-console
             console.log('Erreur chargement brouillons:', draftRes.error);
@@ -329,8 +412,10 @@ export default function PublicProfileScreen() {
         // eslint-disable-next-line no-console
         console.log('Erreur chargement closet:', e);
       } finally {
-        closetLoadingRef.current = false;
-        setClosetLoadingMore(false);
+        if (gen === loadGenRef.current) {
+          closetLoadingRef.current = false;
+          setClosetLoadingMore(false);
+        }
       }
     },
     [closetHasMore, closetOffset, profile?.id, myId]
@@ -339,6 +424,7 @@ export default function PublicProfileScreen() {
   const loadReviews = useCallback(async () => {
     const reviewedId = profile?.id ?? null;
     if (!reviewedId) return;
+    const gen = loadGenRef.current;
     setReviewsLoading(true);
     try {
       const { data, error } = await supabase
@@ -349,6 +435,7 @@ export default function PublicProfileScreen() {
         .limit(50);
 
       if (error) throw error;
+      if (gen !== loadGenRef.current) return;
       const rows = (data || []) as ReviewRow[];
       setReviews(rows);
 
@@ -359,6 +446,7 @@ export default function PublicProfileScreen() {
           .select('id, display_name, avatar_url')
           .in('id', reviewerIds);
         if (profErr) throw profErr;
+        if (gen !== loadGenRef.current) return;
 
         const map: Record<string, ReviewerMini> = {};
         (profs || []).forEach((p: any) => {
@@ -373,12 +461,15 @@ export default function PublicProfileScreen() {
         setReviewersById({});
       }
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       // eslint-disable-next-line no-console
       console.log('Erreur chargement reviews:', e);
       setReviews([]);
       setReviewersById({});
     } finally {
-      setReviewsLoading(false);
+      if (gen === loadGenRef.current) {
+        setReviewsLoading(false);
+      }
     }
   }, [profile?.id]);
 
@@ -449,6 +540,24 @@ export default function PublicProfileScreen() {
           following_id: profile.id
         });
         if (error) throw error;
+
+        const { data: myProfile } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', myId)
+          .maybeSingle();
+        const followerName =
+          typeof (myProfile as { display_name?: string } | null)?.display_name === 'string'
+            ? String((myProfile as { display_name: string }).display_name).trim()
+            : '';
+        void sendPushNotificationWithUserJwt({
+          user_id: profile.id,
+          titleKey: 'push.newFollower.title',
+          bodyKey: 'push.newFollower.body',
+          bodyParams: { name: followerName || 'Someone' },
+          notification_type: 'new_followers',
+          data: { follower_id: myId }
+        });
       } else {
         const { error } = await supabase
           .from('follows')
@@ -486,15 +595,28 @@ export default function PublicProfileScreen() {
     }
 
     void (async () => {
-      const { data, error } = await createOrGetThreadForListing(firstListing.id, profile.id);
-      if (error || !data) {
+      const { data: existing, error } = await getExistingThreadForListing(firstListing.id);
+      if (error) {
         Alert.alert(
           t('common.error'),
           error ?? t('profile.publicProfile.unableCreateConversation')
         );
         return;
       }
-      router.push({ pathname: '/tabs/messages/[id]', params: { id: data.id } });
+
+      if (existing?.id) {
+        router.push({ pathname: '/tabs/messages/[id]', params: { id: existing.id } });
+        return;
+      }
+
+      router.push({
+        pathname: '/tabs/messages/[id]',
+        params: {
+          id: 'draft',
+          listing_id: firstListing.id,
+          seller_id: profile.id
+        }
+      });
     })();
   }, [closetItems, isMe, myId, profile?.id, router]);
 
@@ -504,8 +626,8 @@ export default function PublicProfileScreen() {
   }, [profile]);
 
   const timeAgo = useMemo(
-    () => formatTimeAgoEn(profile?.created_at ?? null),
-    [profile?.created_at]
+    () => formatTimeAgoEn(profile?.created_at ?? null, t),
+    [profile?.created_at, t]
   );
 
   const closetListData = useMemo(() => {
@@ -555,7 +677,7 @@ export default function PublicProfileScreen() {
 
       const { data: publicData } = supabase.storage.from('cover').getPublicUrl(coverPath);
       const publicUrl = publicData?.publicUrl ?? '';
-      if (!publicUrl) throw new Error('Unable to generate the public URL.');
+      if (!publicUrl) throw new Error(t('profile.publicProfile.unableUpdateCover'));
 
       const { error: updateErr } = await supabase
         .from('profiles')
@@ -576,28 +698,19 @@ export default function PublicProfileScreen() {
 
   const closetCountLabel = useMemo(() => {
     const n = isMe ? closetDraftItems.length + closetItems.length : closetItems.length;
-    return `${n} item${n !== 1 ? 's' : ''}`;
-  }, [closetDraftItems.length, closetItems.length, isMe]);
+    return n === 1
+      ? t('feed.listingDetail.oneItem')
+      : t('feed.listingDetail.itemsCount', { count: n });
+  }, [closetDraftItems.length, closetItems.length, isMe, t]);
 
-  const closetCardWidth = useMemo(() => {
-    const { width } = Dimensions.get('window');
-    const pad = theme.spacing.screenPaddingX * 2;
-    const gap = 8;
-    return (width - pad - gap) / 2;
-  }, []);
+  const closetCardWidth = useMemo(
+    () => gridCardWidth(windowWidth, theme.spacing.screenPaddingX, GRID_GAP_COMPACT),
+    [windowWidth]
+  );
 
   const handleBack = useCallback(() => {
-    // Depuis "View my closet" (profil public de soi-même), retour explicite vers Profile.
-    if (isMe) {
-      router.replace('/tabs/profile');
-      return;
-    }
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/tabs/profile');
-  }, [isMe, router]);
+    navigateBackFromPublicProfile(router, { ...returnCtx, isMe });
+  }, [isMe, returnCtx, router]);
 
   const handleDeleteClosetListing = useCallback(async (listingId: string) => {
     let removedSnapshot: FeedListing | undefined;
@@ -690,8 +803,73 @@ export default function PublicProfileScreen() {
     setClosetOwnerMenuListing(listing);
   }, [isMe]);
 
+  const openListingBoost = useCallback(
+    (listingId: string) => {
+      if (!isMe || !myId) return;
+      setBoostSheet({ sponsorType: 'listing', listingId });
+    },
+    [isMe, myId]
+  );
+
+  const openDressingBoost = useCallback(() => {
+    if (!isMe || !myId) return;
+    const anchorId = closetItems.find(
+      (it) => String(it.status ?? '').toLowerCase() === 'published'
+    )?.id;
+    if (!anchorId) {
+      Alert.alert(t('common.error'), t('profile.publicProfile.noPublishedForDressingBoost'));
+      return;
+    }
+    setBoostSheet({ sponsorType: 'dressing', listingId: anchorId });
+  }, [closetItems, isMe, myId, t]);
+
+  const handleBoostConfirm = useCallback(
+    async (durationDays: 3 | 7) => {
+      if (!boostSheet || !myId || boostPaying) return;
+
+      setBoostPaying(true);
+      try {
+        const result = await runBoostPayment({
+          listingId: boostSheet.listingId,
+          sellerId: myId,
+          sponsorType: boostSheet.sponsorType,
+          durationDays,
+          initPaymentSheet,
+          presentPaymentSheet
+        });
+
+        setBoostSheet(null);
+        Alert.alert(
+          t('common.success'),
+          t('profile.publicProfile.boostSuccess', { count: result.updated_count })
+        );
+        void loadClosetPage({ reset: true });
+      } catch (e) {
+        if (e instanceof BoostPaymentCancelledError) return;
+        Alert.alert(
+          t('feed.checkout.paymentFailed'),
+          e instanceof Error ? e.message : t('auth.signUp.somethingWrong')
+        );
+      } finally {
+        setBoostPaying(false);
+      }
+    },
+    [
+      boostPaying,
+      boostSheet,
+      initPaymentSheet,
+      loadClosetPage,
+      myId,
+      presentPaymentSheet,
+      t
+    ]
+  );
+
   const renderClosetItem = useCallback(
-    ({ item }: { item: FeedListing }) => (
+    ({ item }: { item: FeedListing }) => {
+      const isPublished = String(item.status ?? '').toLowerCase() === 'published';
+
+      return (
       <View style={styles.gridItem}>
         <View style={styles.closetCardWrap}>
           <ProductCard
@@ -708,7 +886,17 @@ export default function PublicProfileScreen() {
             condition={item.condition ?? undefined}
             imageUrl={item.cover_photo_url}
             cardWidth={closetCardWidth}
-            onPress={() => router.push({ pathname: '/tabs/feed/[id]', params: { id: item.id } })}
+            onPress={() =>
+              guardedPush(
+                router,
+                listingDetailFromPublicProfileHref(
+                  item.id,
+                  profile?.id ?? userIdParam ?? '',
+                  returnCtx,
+                  { cover_photo: item.cover_photo_url ?? undefined }
+                )
+              )
+            }
             imageRatio={1.3}
           />
           {isMe ? (
@@ -724,10 +912,34 @@ export default function PublicProfileScreen() {
               </Text>
             </Pressable>
           ) : null}
+          {isMe && isPublished ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.publicProfile.boostButton')}
+              style={styles.boostCardButton}
+              onPress={() => openListingBoost(item.id)}
+            >
+              <Rocket size={14} color={BOOST_GREEN} strokeWidth={2.2} />
+              <Text variant="captionSm" style={styles.boostCardButtonText}>
+                {t('profile.publicProfile.boostButton')}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
-    ),
-    [closetCardWidth, isMe, openClosetListingMenu, router]
+      );
+    },
+    [
+      closetCardWidth,
+      isMe,
+      openClosetListingMenu,
+      openListingBoost,
+      profile?.id,
+      returnCtx,
+      router,
+      t,
+      userIdParam
+    ]
   );
 
   const renderReviewStars = useCallback((value: number) => {
@@ -928,7 +1140,32 @@ export default function PublicProfileScreen() {
     return null;
   };
 
-  const headerTitle = resolvedUsername || 'Profil';
+  const headerTitle = resolvedUsername || t('profile.title');
+  const canShareCloset = Boolean(profile?.id) && closetItems.length > 0;
+
+  const handleShareCloset = useCallback(async () => {
+    if (!profile?.id) return;
+    const shareUrl = getDressingShareUrl(profile.id);
+    const headline = isMe
+      ? t('profile.publicProfile.shareClosetHeadline')
+      : t('profile.publicProfile.shareClosetHeadlineOther', { name: resolvedUsername });
+    const imageUrl =
+      profile.avatar_url?.trim() ||
+      closetItems[0]?.cover_photo_url?.trim() ||
+      null;
+    try {
+      await shareCloset({
+        sellerId: profile.id,
+        imageUrl,
+        displayName: resolvedUsername,
+        headline,
+        url: shareUrl
+      });
+    } catch {
+      await Clipboard.setStringAsync(shareUrl);
+      Alert.alert(t('feed.listingDetail.linkCopied'));
+    }
+  }, [closetItems, isMe, profile?.avatar_url, profile?.id, resolvedUsername, t]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -940,15 +1177,28 @@ export default function PublicProfileScreen() {
         <Text variant="body" style={styles.headerTitle} numberOfLines={1}>
           {headerTitle}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.publicProfile.menu')}
-          hitSlop={HIT_SLOP_COMFORTABLE}
-          onPress={openMenu}
-          style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
-        >
-          <AppIcon name="menuDotsOutline" size={20} color={theme.colors.textPrimary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          {canShareCloset ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.publicProfile.shareCloset')}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              onPress={() => void handleShareCloset()}
+              style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
+            >
+              <Feather name="share-2" size={20} color={theme.colors.textPrimary} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.publicProfile.menu')}
+            hitSlop={HIT_SLOP_COMFORTABLE}
+            onPress={openMenu}
+            style={[styles.iconTouch, HEADER_ICON_TOUCH_CONTAINER]}
+          >
+            <AppIcon name="menuDotsOutline" size={20} color={theme.colors.textPrimary} />
+          </Pressable>
+        </View>
       </View>
       <View style={styles.headerSeparator} />
 
@@ -980,7 +1230,13 @@ export default function PublicProfileScreen() {
         {/* Cover */}
         <View style={styles.coverWrap}>
           {coverImageUri ? (
-            <Image source={{ uri: coverImageUri }} style={styles.coverImage} />
+            <Pressable
+              onPress={() => setProfilePhotoZoomUri(coverImageUri)}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={t('profile.publicProfile.viewCoverPhoto')}
+            >
+              <Image source={{ uri: coverImageUri }} style={styles.coverImage} />
+            </Pressable>
           ) : (
             <View style={styles.coverPlaceholder}>
               {isMe ? (
@@ -999,7 +1255,7 @@ export default function PublicProfileScreen() {
               disabled={coverUploading}
             >
               <Text variant="captionSm" style={styles.coverEditButtonText}>
-                {coverUploading ? 'Uploading...' : 'Edit'}
+                {coverUploading ? t('common.loading') : t('common.edit')}
               </Text>
             </Pressable>
           ) : null}
@@ -1009,7 +1265,13 @@ export default function PublicProfileScreen() {
         <View style={styles.profileBlock}>
           <View style={styles.profileLeft}>
             {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+              <Pressable
+                onPress={() => setProfilePhotoZoomUri(profile.avatar_url)}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={t('profile.publicProfile.viewProfilePhoto')}
+              >
+                <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+              </Pressable>
             ) : (
               <View style={styles.avatarPlaceholder} />
             )}
@@ -1087,9 +1349,10 @@ export default function PublicProfileScreen() {
               <AppIcon name="infoCircleOutline" size={14} color="#888888" />
               <Text style={styles.secondaryText} numberOfLines={1}>
                 <Text style={styles.limeNumber}>{followersCount}</Text>
-                <Text style={styles.secondaryText}> {t('profile.publicProfile.followers')} </Text>
+                <Text style={styles.secondaryText}> {t('profile.publicProfile.followers')}</Text>
+                <Text style={styles.secondaryText}> · </Text>
                 <Text style={styles.limeNumber}>{followingCount}</Text>
-                <Text style={styles.secondaryText}> {t('profile.publicProfile.following')}</Text>
+                <Text style={styles.secondaryText}> {t('profile.publicProfile.followingCount')}</Text>
               </Text>
             </View>
           </View>
@@ -1125,11 +1388,26 @@ export default function PublicProfileScreen() {
         {/* Tab content */}
         {tab === 'closet' ? (
           <View style={styles.tabContent}>
-            <Text variant="captionSm" color="textSecondary" style={styles.sectionMeta}>
-              {closetCountLabel}
-            </Text>
+            <View style={styles.closetMetaRow}>
+              <Text variant="captionSm" color="textSecondary" style={styles.closetCountText}>
+                {closetCountLabel}
+              </Text>
+              {isMe ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.publicProfile.sponsorDressing')}
+                  style={styles.sponsorDressingButton}
+                  onPress={openDressingBoost}
+                >
+                  <TrendingUp size={14} color={BOOST_GREEN} strokeWidth={2.2} />
+                  <Text variant="captionSm" style={styles.sponsorDressingButtonText} numberOfLines={1}>
+                    {t('profile.publicProfile.sponsorDressing')}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
 
-            {loadingInitial && closetListData.length === 0 ? (
+            {loadingInitial ? (
               <View style={styles.skeletonGrid}>
                 {[0, 1, 2, 3].map((k) => (
                   <View key={k} style={styles.skeletonCard} />
@@ -1172,8 +1450,15 @@ export default function PublicProfileScreen() {
                   const reviewer = reviewersById[r.reviewer_id];
                   const name = reviewer?.display_name ?? 'User';
                   const avatar = reviewer?.avatar_url ?? null;
+                  const hasLongComment = Boolean(r.comment && r.comment.length > 120);
                   return (
-                    <View key={r.id} style={styles.reviewRow}>
+                    <Pressable
+                      key={r.id}
+                      style={({ pressed }) => [styles.reviewRow, pressed && styles.reviewRowPressed]}
+                      onPress={() => setSelectedReview(r)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('profile.publicProfile.viewReview')}
+                    >
                       {avatar ? (
                         <Image source={{ uri: avatar }} style={styles.reviewAvatar} />
                       ) : (
@@ -1186,17 +1471,33 @@ export default function PublicProfileScreen() {
                             {name}
                           </Text>
                           <Text variant="captionSm" color="textSecondary">
-                            {formatRelativeDate(r.created_at)}
+                            {formatRelativeDate(r.created_at, t)}
                           </Text>
                         </View>
                         {renderReviewStars(r.rating)}
                         {r.comment ? (
-                          <Text variant="caption" color="textSecondary" style={styles.reviewComment}>
-                            {r.comment}
+                          <>
+                            <Text
+                              variant="caption"
+                              color="textSecondary"
+                              style={styles.reviewComment}
+                              numberOfLines={3}
+                            >
+                              {r.comment}
+                            </Text>
+                            {hasLongComment ? (
+                              <Text variant="captionSm" style={styles.reviewReadMore}>
+                                {t('profile.publicProfile.readMoreReview')}
+                              </Text>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Text variant="captionSm" color="textSecondary" style={styles.reviewComment}>
+                            {t('profile.publicProfile.reviewNoComment')}
                           </Text>
-                        ) : null}
+                        )}
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -1212,7 +1513,16 @@ export default function PublicProfileScreen() {
         onClose={() => setClosetOwnerMenuListing(null)}
         onEdit={() => {
           if (closetOwnerMenuListing) {
-            router.push(`/tabs/profile/edit-listing/${closetOwnerMenuListing.id}` as any);
+            router.push({
+              pathname: `/tabs/profile/edit-listing/${closetOwnerMenuListing.id}`,
+              params: {
+                return_to: 'public-profile',
+                return_user_id: profile?.id ?? userIdParam,
+                profile_return_to: returnCtx.return_to,
+                return_query: returnCtx.return_query,
+                return_search_tab: returnCtx.return_search_tab
+              }
+            } as any);
           }
         }}
         onDeleteConfirmed={async () => {
@@ -1228,6 +1538,132 @@ export default function PublicProfileScreen() {
         listingStatus={closetOwnerMenuListing?.status ?? null}
         onRequestPermanentDeleteDraft={handlePermanentDeleteDraftRequest}
       />
+      <BoostDurationSheet
+        visible={boostSheet != null}
+        sponsorType={boostSheet?.sponsorType ?? 'listing'}
+        paying={boostPaying}
+        onClose={() => {
+          if (!boostPaying) setBoostSheet(null);
+        }}
+        onConfirm={handleBoostConfirm}
+      />
+
+      <Modal
+        visible={profilePhotoZoomUri != null}
+        animationType="fade"
+        transparent
+        presentationStyle="fullScreen"
+        onRequestClose={() => setProfilePhotoZoomUri(null)}
+      >
+        <SafeAreaView style={styles.photoZoomModalContainer}>
+          <View style={[styles.photoZoomModalHeader, { top: insets.top + 8 }]}>
+            <TouchableOpacity
+              style={styles.photoZoomCloseButton}
+              onPress={() => setProfilePhotoZoomUri(null)}
+              activeOpacity={0.8}
+            >
+              <Text variant="body" color="appleBlack" style={styles.photoZoomCloseText}>
+                {t('common.close')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View
+            style={styles.photoZoomImageContainer}
+            onLayout={(event) => {
+              const { width, height } = event.nativeEvent.layout;
+              if (width > 0 && height > 0) {
+                setProfilePhotoZoomLayout({ width, height });
+              }
+            }}
+          >
+            {profilePhotoZoomUri ? (
+              <ZoomableImage
+                uri={profilePhotoZoomUri}
+                width={profilePhotoZoomLayout.width}
+                height={profilePhotoZoomLayout.height}
+                maxScale={4}
+              />
+            ) : null}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={selectedReview != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedReview(null)}
+      >
+        <View style={styles.reviewDetailRoot} pointerEvents="box-none">
+          <Pressable
+            style={styles.reviewDetailBackdrop}
+            onPress={() => setSelectedReview(null)}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+          />
+          <View
+            style={[styles.reviewDetailSheet, { paddingBottom: Math.max(getSafeBottomInset(insets.bottom), 16) }]}
+            accessibilityViewIsModal
+          >
+            <View style={styles.reviewDetailHandleZone}>
+              <View style={styles.reviewDetailHandle} />
+            </View>
+            <Text variant="h3" style={styles.reviewDetailTitle}>
+              {t('profile.publicProfile.reviewDetailTitle')}
+            </Text>
+            {selectedReview ? (
+              <ScrollView
+                style={styles.reviewDetailScroll}
+                bounces={false}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
+                {(() => {
+                  const reviewer = reviewersById[selectedReview.reviewer_id];
+                  const name = reviewer?.display_name ?? 'User';
+                  const avatar = reviewer?.avatar_url ?? null;
+                  return (
+                    <View style={styles.reviewDetailContent}>
+                      <View style={styles.reviewDetailHeader}>
+                        {avatar ? (
+                          <Image source={{ uri: avatar }} style={styles.reviewDetailAvatar} />
+                        ) : (
+                          <View style={styles.reviewDetailAvatarPlaceholder} />
+                        )}
+                        <View style={styles.reviewDetailHeaderText}>
+                          <Text variant="body" style={styles.reviewDetailName}>
+                            {name}
+                          </Text>
+                          <Text variant="captionSm" color="textSecondary">
+                            {formatRelativeDate(selectedReview.created_at, t)}
+                          </Text>
+                        </View>
+                      </View>
+                      {renderReviewStars(selectedReview.rating)}
+                      <Text variant="body" color="textSecondary" style={styles.reviewDetailComment}>
+                        {selectedReview.comment?.trim()
+                          ? selectedReview.comment
+                          : t('profile.publicProfile.reviewNoComment')}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </ScrollView>
+            ) : null}
+            <Pressable
+              style={({ pressed }) => [styles.reviewDetailCloseButton, pressed && styles.reviewDetailClosePressed]}
+              onPress={() => setSelectedReview(null)}
+              accessibilityRole="button"
+            >
+              <Text variant="body" style={styles.reviewDetailCloseLabel}>
+                {t('common.close')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {renderSafetyModal()}
     </SafeAreaView>
   );
@@ -1256,6 +1692,13 @@ const styles = StyleSheet.create({
   iconTouch: {
     // style hook for touch container composition
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 72,
+    justifyContent: 'flex-end'
+  },
   headerSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#E5E5E5'
@@ -1265,6 +1708,31 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 0
+  },
+  photoZoomModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)'
+  },
+  photoZoomModalHeader: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10
+  },
+  photoZoomCloseButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF'
+  },
+  photoZoomCloseText: {
+    fontSize: 15,
+    fontWeight: '500'
+  },
+  photoZoomImageContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16
   },
   coverWrap: {
     height: COVER_HEIGHT,
@@ -1485,6 +1953,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.screenPaddingX,
     marginBottom: 10
   },
+  closetMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    marginBottom: 10,
+    gap: 8
+  },
+  closetCountText: {
+    flexShrink: 1
+  },
+  sponsorDressingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: BOOST_GREEN,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexShrink: 0
+  },
+  sponsorDressingButtonText: {
+    color: theme.colors.appleBlack,
+    fontFamily: theme.fontFamily.semiBold,
+    fontSize: 11,
+    maxWidth: 148
+  },
+  boostCardButton: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: BOOST_GREEN,
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 8
+  },
+  boostCardButtonText: {
+    color: theme.colors.appleBlack,
+    fontFamily: theme.fontFamily.semiBold,
+    fontSize: 12
+  },
   gridContent: {
     paddingHorizontal: theme.spacing.screenPaddingX,
     paddingBottom: 10
@@ -1558,6 +2073,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.border
   },
+  reviewRowPressed: {
+    opacity: 0.72
+  },
   reviewAvatar: {
     width: 32,
     height: 32,
@@ -1591,6 +2109,89 @@ const styles = StyleSheet.create({
   },
   reviewComment: {
     marginTop: 6
+  },
+  reviewReadMore: {
+    marginTop: 4,
+    color: theme.colors.primary,
+    fontFamily: theme.fontFamily.semiBold
+  },
+  reviewDetailRoot: {
+    flex: 1,
+    justifyContent: 'flex-end'
+  },
+  reviewDetailBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)'
+  },
+  reviewDetailSheet: {
+    maxHeight: '78%',
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: 8
+  },
+  reviewDetailHandleZone: {
+    alignItems: 'center',
+    paddingVertical: 8
+  },
+  reviewDetailHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border
+  },
+  reviewDetailTitle: {
+    marginBottom: 12
+  },
+  reviewDetailScroll: {
+    flexGrow: 0
+  },
+  reviewDetailContent: {
+    paddingBottom: 8
+  },
+  reviewDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10
+  },
+  reviewDetailAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.muted
+  },
+  reviewDetailAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.muted
+  },
+  reviewDetailHeaderText: {
+    flex: 1,
+    gap: 2
+  },
+  reviewDetailName: {
+    fontFamily: theme.fontFamily.semiBold
+  },
+  reviewDetailComment: {
+    marginTop: 12,
+    lineHeight: 22
+  },
+  reviewDetailCloseButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border
+  },
+  reviewDetailClosePressed: {
+    opacity: 0.7
+  },
+  reviewDetailCloseLabel: {
+    fontFamily: theme.fontFamily.semiBold
   }
 });
 

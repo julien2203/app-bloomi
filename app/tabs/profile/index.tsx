@@ -19,7 +19,9 @@ import { theme } from '../../../lib/theme';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { AppIcon } from '../../../components/ui/AppIcon';
+import { Text as HeaderText } from '../../../components/ui/Text';
 import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
+import { openProfileShortcutFromProfile } from '../../../lib/navigation/feedShortcutNav';
 import { InfluencerBadge } from '../../../components/InfluencerBadge';
 import CoeurIcon from '../../../assets/icons/heart2.svg';
 import BellIcon from '../../../assets/icons/bell2.svg';
@@ -191,7 +193,7 @@ export default function ProfileScreen() {
         label={t('profile.favoriteItems')}
         icon="likeHeartOutline"
         useFeedHeartIcon
-        onPress={() => router.push('/tabs/profile/favorites')}
+        onPress={() => openProfileShortcutFromProfile(router, '/tabs/profile/favorites')}
       />
       {user?.id ? (
         <ProfileItem
@@ -213,18 +215,13 @@ export default function ProfileScreen() {
       <ProfileItem
         label={t('profile.myOrders')}
         icon="billListOutline"
-        onPress={() => router.push('/tabs/profile/orders')}
+        onPress={() => openProfileShortcutFromProfile(router, '/tabs/profile/orders')}
       />
       <ProfileItem
         label={t('profile.notifications')}
         icon="notificationsBellOutline"
         useFeedBellIcon
-        onPress={() =>
-          router.push({
-            pathname: '/tabs/profile/notifications',
-            params: { from: 'profile' }
-          } as any)
-        }
+        onPress={() => openProfileShortcutFromProfile(router, '/tabs/profile/notifications')}
       />
       <ProfileItem
         label={t('sell.activateAccount')}
@@ -260,6 +257,10 @@ export default function ProfileScreen() {
           ios_backgroundColor="#E8E8E8"
           disabled={updatingVacation}
         />
+      </View>
+      <View style={styles.vacationInfoRow}>
+        <Feather name="info" size={14} color="#888888" />
+        <Text style={styles.vacationInfoText}>{t('profile.vacationModeInfo')}</Text>
       </View>
 
       {/* Déconnexion */}
@@ -319,7 +320,15 @@ export default function ProfileScreen() {
   const scrollPaddingBottom = getFixedTabBarHeight(insets.bottom) + 8;
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={styles.pageHeader}>
+        <View style={styles.pageHeaderSide} />
+        <HeaderText variant="body" style={styles.pageHeaderTitle}>
+          {t('navigation.profile')}
+        </HeaderText>
+        <View style={styles.pageHeaderSide} />
+      </View>
+      <View style={styles.pageHeaderSeparator} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -362,6 +371,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF'
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.backgroundWhite
+  },
+  pageHeaderTitle: {
+    ...theme.typography.body,
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    flex: 1
+  },
+  pageHeaderSide: {
+    width: 28
+  },
+  pageHeaderSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.separator
   },
   scroll: {
     flex: 1,
@@ -482,6 +513,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000000',
     marginLeft: 14
+  },
+  vacationInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    columnGap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E8E8E8',
+    backgroundColor: '#FFFFFF'
+  },
+  vacationInfoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#888888'
   },
   footer: {
     flexDirection: 'row',

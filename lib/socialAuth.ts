@@ -1,9 +1,23 @@
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { ensureProfileExists } from './profile';
+import { authDebug, authDebugError } from './authDebugLog';
+import {
+  exchangePkceCallbackOnce,
+  getOAuthRedirectUri,
+  markOAuthFlowStarted,
+  noteOAuthRedirectTo,
+  runWithOAuthBrowserSession
+} from './auth/oauthExchangeGuard';
+
+export {
+  getEmailAuthCallbackRedirectUri,
+  getOAuthRedirectUri,
+  isOAuthBrowserSessionActive,
+  shouldSkipOAuthDeepLinkNavigation
+} from './auth/oauthExchangeGuard';
 
 /**
  * Termine une session Safari/Chrome Custom Tabs lancée pour OAuth (iOS).
@@ -13,10 +27,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export type OAuthProvider = 'google' | 'apple';
 
-/** Doit être autorisée dans Supabase → Authentication → URL Configuration (Redirect URLs). */
-export function getOAuthRedirectUri(): string {
-  return Linking.createURL('auth/callback');
-}
+let oauthSignInInFlight: Promise<{ error: Error | null }> | null = null;
 
 function extractFragmentParams(callbackUrl: string): URLSearchParams {
   const hashIdx = callbackUrl.indexOf('#');
@@ -37,6 +48,11 @@ function parseQueryParams(url: string): URLSearchParams {
 
 /** Échange code PKCE ou applique les tokens présents dans le fragment (#access_token=…). */
 export async function completeOAuthFromCallbackUrl(callbackUrl: string): Promise<{ error: Error | null }> {
+  authDebug('oauth:callbackUrl', {
+    hasCode: callbackUrl.includes('code='),
+    hasFragmentTokens: callbackUrl.includes('access_token='),
+    urlPrefix: callbackUrl.slice(0, 80)
+  });
   const lower = callbackUrl.toLowerCase();
   if (lower.includes('error=')) {
     const q = parseQueryParams(callbackUrl);
@@ -46,8 +62,8 @@ export async function completeOAuthFromCallbackUrl(callbackUrl: string): Promise
   }
 
   if (callbackUrl.includes('code=')) {
-    const { error } = await supabase.auth.exchangeCodeForSession(callbackUrl);
-    return { error: error ?? null };
+    const { error } = await exchangePkceCallbackOnce(callbackUrl);
+    return { error };
   }
 
   const params = extractFragmentParams(callbackUrl);
@@ -62,34 +78,62 @@ export async function completeOAuthFromCallbackUrl(callbackUrl: string): Promise
 }
 
 export async function signInWithOAuthProvider(provider: OAuthProvider): Promise<{ error: Error | null }> {
-  const redirectTo = getOAuthRedirectUri();
+  if (oauthSignInInFlight) {
+    authDebug('oauth:dedupeInFlight', { provider });
+    return oauthSignInInFlight;
+  }
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
-      redirectTo,
-      skipBrowserRedirect: true
+  const redirectTo = getOAuthRedirectUri();
+  markOAuthFlowStarted();
+  noteOAuthRedirectTo(redirectTo);
+  authDebug('oauth:start', { provider, redirectTo });
+
+  oauthSignInInFlight = runWithOAuthBrowserSession(async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true
+      }
+    });
+
+    if (error) return { error };
+    if (!data?.url) return { error: new Error('No OAuth URL returned') };
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    authDebug('oauth:browserResult', { provider, type: result.type });
+
+    if (result.type !== 'success') {
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        return { error: new Error('cancelled') };
+      }
+      return { error: new Error('OAuth session ended without success') };
     }
+
+    const callbackUrl = 'url' in result && result.url ? result.url : null;
+    if (!callbackUrl) {
+      return { error: new Error('No callback URL from browser') };
+    }
+
+    const completed = await completeOAuthFromCallbackUrl(callbackUrl);
+    if (completed.error) {
+      authDebugError('oauth:completeFailed', completed.error, { provider });
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        authDebug('oauth:recoveredSessionDespiteError', { provider });
+        return { error: null };
+      }
+    } else {
+      authDebug('oauth:completeOk', { provider });
+    }
+    return completed;
   });
 
-  if (error) return { error };
-  if (!data?.url) return { error: new Error('No OAuth URL returned') };
-
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-  if (result.type !== 'success') {
-    if (result.type === 'cancel' || result.type === 'dismiss') {
-      return { error: new Error('cancelled') };
-    }
-    return { error: new Error('OAuth session ended without success') };
+  try {
+    return await oauthSignInInFlight;
+  } finally {
+    oauthSignInInFlight = null;
   }
-
-  const callbackUrl = 'url' in result && result.url ? result.url : null;
-  if (!callbackUrl) {
-    return { error: new Error('No callback URL from browser') };
-  }
-
-  return completeOAuthFromCallbackUrl(callbackUrl);
 }
 
 /** Même logique que après `signInWithPassword` dans `login.tsx` (profil + marqueur AuthGate). */
@@ -97,6 +141,7 @@ export async function ensureProfileAfterOAuthLogin(session: Session | null): Pro
   if (!session?.user) return;
   const userId = session.user.id;
   const markerKey = `profile_ensured_after_login:${userId}`;
+  authDebug('oauth:ensureProfile:start', { userId });
   await AsyncStorage.setItem(markerKey, String(Date.now()));
   await ensureProfileExists(session, {
     phone: (session.user.phone as string | null | undefined) ?? '+41791234567',

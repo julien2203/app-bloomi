@@ -9,10 +9,15 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
+import { getFilterFooterPaddingBottom } from '../../lib/touchTargets';
 import type { FeedSort } from '../../lib/store/feedFilters';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import {
+  useFilterExit,
+  type FilterResultsReturnParams
+} from '../../lib/navigation/filterExit';
 import { filtersScreenPath, useFiltersStackBase } from '../../lib/navigation/filterRoutes';
+import { navigateToBrandFilter } from '../../lib/navigation/brandFilterNav';
 
 export default function FiltersIndexScreen() {
   const { t } = useTranslation();
@@ -28,6 +33,7 @@ export default function FiltersIndexScreen() {
   }>();
   const { filters } = useFiltersScreenStore();
   const stackBase = useFiltersStackBase();
+  const { navigateAfterFilterCommit, navigateBackFromFiltersIndex } = useFilterExit();
   const { categoryLabel, brandLabel, sizeLabel, colorLabel, conditionLabel } =
     useFilterSummaryLabels(filters);
 
@@ -77,8 +83,37 @@ export default function FiltersIndexScreen() {
     });
   };
 
+  const filterNavParams = () => ({
+    ...(params.returnTo ? { returnTo: params.returnTo } : {}),
+    ...(typeof params.resultsSection === 'string' ? { resultsSection: params.resultsSection } : {}),
+    ...(typeof params.resultsQuery === 'string' ? { resultsQuery: params.resultsQuery } : {}),
+    ...(typeof params.resultsTitle === 'string' ? { resultsTitle: params.resultsTitle } : {})
+  });
+
+  const goToBrandFilter = () => {
+    void navigateToBrandFilter(
+      router,
+      stackBase,
+      filters.categoryIds ?? [],
+      filterNavParams(),
+      t('filters.brand')
+    );
+  };
+
+  const filterResultsParams = useMemo<FilterResultsReturnParams>(
+    () => ({
+      ...(typeof params.resultsSection === 'string' ? { section: params.resultsSection } : {}),
+      ...(typeof params.resultsQuery === 'string' ? { query: params.resultsQuery } : {}),
+      ...(typeof params.resultsTitle === 'string' ? { title: params.resultsTitle } : {})
+    }),
+    [params.resultsQuery, params.resultsSection, params.resultsTitle]
+  );
+
   const handleShowResult = () => {
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(
+      typeof params.returnTo === 'string' ? params.returnTo : undefined,
+      filterResultsParams
+    );
   };
 
   return (
@@ -86,16 +121,12 @@ export default function FiltersIndexScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <HeaderBackButton
-            onPress={() => {
-              if (router.canGoBack && router.canGoBack()) {
-                router.back();
-              } else {
-                navigateAfterFilterCommit(
-                  router,
-                  typeof params.returnTo === 'string' ? params.returnTo : undefined
-                );
-              }
-            }}
+            onPress={() =>
+              navigateBackFromFiltersIndex(
+                typeof params.returnTo === 'string' ? params.returnTo : undefined,
+                filterResultsParams
+              )
+            }
           />
           <Text variant="body" style={styles.headerTitle}>
             {headerTitle}
@@ -169,9 +200,9 @@ export default function FiltersIndexScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => goToFilterScreen('brand-gender')}>
+          <TouchableOpacity style={styles.row} onPress={goToBrandFilter}>
             <Text variant="body" style={styles.rowLabel}>
-              {t('filters.searchBrands')}
+              {t('filters.brand')}
             </Text>
             <View style={styles.rowValueContainer}>
               {brandLabel ? (
@@ -280,7 +311,7 @@ export default function FiltersIndexScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

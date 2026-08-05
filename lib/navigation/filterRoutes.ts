@@ -28,3 +28,11 @@ export function filtersScreenPath(base: FiltersStackBase, segment: string): stri
   const s = segment.replace(/^\/+/, '');
   return `${base}/${s}`;
 }
+
+export function isOnSearchFiltersStack(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '');
+  return (
+    normalized === FILTERS_PATH_SEARCH_STACK ||
+    normalized.startsWith(`${FILTERS_PATH_SEARCH_STACK}/`)
+  );
+}

@@ -1,41 +1,60 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  View
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { supabase } from '../../../lib/supabase';
 import { getMyLikedListings, unlikeListing, type LikedListingCard } from '../../../lib/api';
 import { theme } from '../../../lib/theme';
 import { Text } from '../../../components/ui/Text';
 import { AppIcon } from '../../../components/ui/AppIcon';
 import { HeaderBackButton } from '../../../components/ui/HeaderBackButton';
+import {
+  navigateBackFromProfileShortcut,
+  pickProfileShortcutOrigin
+} from '../../../lib/navigation/feedShortcutNav';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
-import { useTranslation } from 'react-i18next';
+import { openListingDetail } from '../../../lib/navigation/openListingDetail';
 import { ListingCoverImage } from '../../../components/ui/ListingCoverImage';
 import { getCardImagePriority, LIST_IMAGE_PERF_PROPS } from '../../../lib/cardImagePriority';
 import { formatBuyerFinalPrice } from '../../../lib/formatBuyerPrice';
+import { translateSizeLabel } from '../../../lib/sizeI18n';
+import { useTranslation } from 'react-i18next';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_PADDING_H = 12;
 const GAP = 12;
-const ITEM_WIDTH = (SCREEN_WIDTH - GRID_PADDING_H * 2 - GAP) / 2;
-const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.3);
+const FAVORITES_IMAGE_RATIO = 1.35;
+const FAVORITES_TEXT_MAX_FONT_SCALE = 1.25;
 
 type Item = LikedListingCard;
 
 export default function FavoritesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const shortcutOrigin = pickProfileShortcutOrigin(params);
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
+  const { width: windowWidth } = useWindowDimensions();
+  const itemWidth = useMemo(
+    () => (windowWidth - GRID_PADDING_H * 2 - GAP) / 2,
+    [windowWidth]
+  );
+  const itemHeight = useMemo(
+    () => Math.round(itemWidth * FAVORITES_IMAGE_RATIO),
+    [itemWidth]
+  );
   const { user } = useAuthStore();
   const unlikeOptimistic = useLikesStore((s) => s.unlikeOptimistic);
   const rollbackLike = useLikesStore((s) => s.rollback);
@@ -132,6 +151,8 @@ export default function FavoritesScreen() {
             style={[
               styles.skeletonBox,
               {
+                width: itemWidth,
+                height: itemHeight,
                 opacity
               }
             ]}
@@ -139,7 +160,7 @@ export default function FavoritesScreen() {
         ))}
       </View>
     );
-  }, [shimmer]);
+  }, [itemHeight, itemWidth, shimmer]);
 
   const renderEmpty = () => (
     <View style={styles.empty}>
@@ -154,20 +175,31 @@ export default function FavoritesScreen() {
   );
 
   const renderItem = ({ item, index }: { item: Item; index: number }) => {
-    const price = `${item.price.toFixed(2)} CHF`;
     const priceIncl = `${formatBuyerFinalPrice(item.price)} ${t('feed.pricing.priceIncl')}`;
+    const sizeText = item.size ? translateSizeLabel(item.size, t) : '—';
 
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => router.push(`/tabs/feed/${item.id}`)}
-        style={styles.card}
+        onPress={() =>
+          openListingDetail(router, item.id, {
+            return_to: 'favorites',
+            cover_photo: item.cover_photo_url,
+            detailPathBase: '/tabs/feed',
+            imageWidthDp: itemWidth,
+            imageHeightDp: itemHeight,
+            ...(pathname.startsWith('/tabs/feed/favorites')
+              ? { favorites_stack: 'feed' }
+              : {})
+          })
+        }
+        style={[styles.card, { width: itemWidth, height: itemHeight }]}
       >
         {item.cover_photo_url ? (
           <ListingCoverImage
             uri={item.cover_photo_url}
-            widthDp={ITEM_WIDTH}
-            heightDp={ITEM_HEIGHT}
+            widthDp={itemWidth}
+            heightDp={itemHeight}
             recyclingKey={item.id}
             priority={getCardImagePriority(index)}
             style={styles.image}
@@ -189,29 +221,34 @@ export default function FavoritesScreen() {
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.9)']}
           style={styles.gradient}
         >
-          <Text numberOfLines={1} style={styles.title}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={FAVORITES_TEXT_MAX_FONT_SCALE} style={styles.title}>
             {item.title}
           </Text>
 
           {!!item.brand && (
-            <Text numberOfLines={1} style={styles.brand}>
-              {item.brand} · {item.size ?? '—'}
+            <Text numberOfLines={1} maxFontSizeMultiplier={FAVORITES_TEXT_MAX_FONT_SCALE} style={styles.brand}>
+              {item.brand} · {sizeText}
             </Text>
           )}
           {!item.brand && (
-            <Text numberOfLines={1} style={styles.brand}>
-              {item.size ?? '—'}
+            <Text numberOfLines={1} maxFontSizeMultiplier={FAVORITES_TEXT_MAX_FONT_SCALE} style={styles.brand}>
+              {sizeText}
             </Text>
           )}
 
           <View style={styles.priceRow}>
-            <Text style={styles.price}>{price}</Text>
-            <Text style={styles.priceIncl}>{priceIncl}</Text>
+            <Text maxFontSizeMultiplier={FAVORITES_TEXT_MAX_FONT_SCALE} style={styles.priceIncl}>
+              {priceIncl}
+            </Text>
           </View>
         </LinearGradient>
       </TouchableOpacity>
     );
   };
+
+  const handleBack = useCallback(() => {
+    navigateBackFromProfileShortcut(router, shortcutOrigin);
+  }, [router, shortcutOrigin]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -219,7 +256,7 @@ export default function FavoritesScreen() {
       <StatusBar style="dark" />
 
       <View style={styles.header}>
-        <HeaderBackButton onPress={() => router.back()} />
+        <HeaderBackButton onPress={handleBack} />
         <Text variant="body" style={styles.headerTitle}>
           {t('profile.favorites.title')}
         </Text>
@@ -241,7 +278,7 @@ export default function FavoritesScreen() {
           contentContainerStyle={{
             marginTop: 20,
             paddingHorizontal: GRID_PADDING_H,
-            paddingBottom: insets.bottom + 16
+            paddingBottom: safeBottom + 16
           }}
           columnWrapperStyle={{ gap: GAP }}
           ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
@@ -286,8 +323,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: GRID_PADDING_H
   },
   skeletonBox: {
-    width: ITEM_WIDTH,
-    height: ITEM_HEIGHT,
     backgroundColor: '#E5E5E5'
   },
   empty: {
@@ -307,8 +342,6 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   card: {
-    width: ITEM_WIDTH,
-    height: ITEM_HEIGHT,
     backgroundColor: '#000000',
     borderRadius: 12,
     overflow: 'hidden'
@@ -335,8 +368,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 10,
-    paddingTop: 26,
-    paddingBottom: 10
+    paddingTop: 32,
+    paddingBottom: 12
   },
   title: {
     color: theme.colors.googleWhite,
@@ -344,20 +377,12 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 8,
     marginTop: 6
   },
-  price: {
+  priceIncl: {
     color: theme.colors.googleWhite,
     fontSize: 13,
     fontWeight: '700'
-  },
-  priceIncl: {
-    color: '#C3EA4F',
-    fontSize: 12,
-    textDecorationLine: 'line-through'
   },
   meta: {
     marginTop: 4,

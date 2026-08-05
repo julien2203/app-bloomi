@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { getSafeBottomInset } from '../../lib/safeArea';
 import { theme } from '../../lib/theme';
 import { Text } from '../ui/Text';
 import { useTranslation } from 'react-i18next';
@@ -103,7 +104,7 @@ export function OwnerListingBottomSheet({
           style={[
             styles.sheet,
             {
-              paddingBottom: Math.max(insets.bottom, 16) + 8
+              paddingBottom: Math.max(getSafeBottomInset(insets.bottom), 16) + 8
             }
           ]}
         >

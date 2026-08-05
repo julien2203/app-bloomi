@@ -44,12 +44,12 @@ export default function VerifyPhoneScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(''));
-  const otpInputsRef = useRef<Array<TextInput | null>>([]);
+  const otpAutofillRef = useRef<TextInput | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
 
   const [abandonModalVisible, setAbandonModalVisible] = useState(false);
-  const [abandonDeleting, setAbandonDeleting] = useState(false);
+  const [abandonLeaving, setAbandonLeaving] = useState(false);
   const [abandonModalError, setAbandonModalError] = useState<string | null>(null);
 
   const canResend = secondsLeft === 0 && !!formattedPhone;
@@ -91,6 +91,7 @@ export default function VerifyPhoneScreen() {
       setStep(2);
       setOtpDigits(Array(6).fill(''));
       setSecondsLeft(60);
+      setTimeout(() => otpAutofillRef.current?.focus(), 300);
     } catch {
       setError(t('auth.verifyPhone.sendCodeError'));
     } finally {
@@ -183,46 +184,29 @@ export default function VerifyPhoneScreen() {
     setAbandonModalVisible(true);
   };
 
-  const handleConfirmAbandonRegistration = async () => {
-    if (abandonDeleting) return;
-    setAbandonDeleting(true);
+  /** Quitter = déconnexion seule. Ne jamais supprimer le compte ici (vendeurs / comptes existants). */
+  const handleConfirmAbandonVerification = async () => {
+    if (abandonLeaving) return;
+    setAbandonLeaving(true);
     setAbandonModalError(null);
     try {
-      const { error: rpcError } = await supabase.rpc('delete_user');
-      if (rpcError) {
-        setAbandonModalError(rpcError.message);
-        return;
-      }
       setAbandonModalVisible(false);
       await signOut();
-      router.replace('/onboarding/splash');
+      router.replace('/auth/login');
     } catch {
-      setAbandonModalError(
-        t('auth.verifyPhone.deleteAccountError')
-      );
+      setAbandonModalError(t('auth.verifyPhone.signOutError'));
     } finally {
-      setAbandonDeleting(false);
+      setAbandonLeaving(false);
     }
   };
 
-  const handleChangeOtpDigit = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, '').slice(0, 1);
-    if (!digit && !value) {
-      const updated = [...otpDigits];
-      updated[index] = '';
-      setOtpDigits(updated);
-      return;
-    }
+  const applyOtpCode = (raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 6);
+    setOtpDigits(Array.from({ length: 6 }, (_, i) => digits[i] ?? ''));
+  };
 
-    if (!digit) return;
-
-    const updated = [...otpDigits];
-    updated[index] = digit;
-    setOtpDigits(updated);
-
-    if (index < otpInputsRef.current.length - 1) {
-      otpInputsRef.current[index + 1]?.focus();
-    }
+  const handleAutofillOtp = (value: string) => {
+    applyOtpCode(value);
   };
 
   const renderStep1 = () => (
@@ -285,18 +269,27 @@ export default function VerifyPhoneScreen() {
       <Text style={styles.subtitle}>{t('auth.verifyPhone.subtitleStep2')}</Text>
 
       <View style={styles.otpRow}>
+        <TextInput
+          ref={otpAutofillRef}
+          value={otpDigits.join('')}
+          onChangeText={handleAutofillOtp}
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+          importantForAutofill="yes"
+          maxLength={6}
+          autoFocus
+          caretHidden
+          style={styles.otpAutofillInput}
+        />
         {otpDigits.map((digit, index) => (
-          <TextInput
+          <Pressable
             key={index}
-            ref={(ref) => {
-              otpInputsRef.current[index] = ref;
-            }}
-            style={styles.otpInput}
-            keyboardType="number-pad"
-            maxLength={1}
-            value={digit}
-            onChangeText={(value) => handleChangeOtpDigit(index, value)}
-          />
+            style={styles.otpCell}
+            onPress={() => otpAutofillRef.current?.focus()}
+          >
+            <Text style={styles.otpCellText}>{digit || ' '}</Text>
+          </Pressable>
         ))}
       </View>
 
@@ -423,13 +416,13 @@ export default function VerifyPhoneScreen() {
         transparent
         animationType="fade"
         onRequestClose={() => {
-          if (!abandonDeleting) setAbandonModalVisible(false);
+          if (!abandonLeaving) setAbandonModalVisible(false);
         }}
       >
         <Pressable
           style={styles.abandonOverlay}
           onPress={() => {
-            if (!abandonDeleting) setAbandonModalVisible(false);
+            if (!abandonLeaving) setAbandonModalVisible(false);
           }}
         >
           <Pressable style={styles.abandonCard} onPress={() => null}>
@@ -442,25 +435,25 @@ export default function VerifyPhoneScreen() {
             <View style={styles.abandonActionsRow}>
               <Pressable
                 onPress={() => {
-                  if (!abandonDeleting) setAbandonModalVisible(false);
+                  if (!abandonLeaving) setAbandonModalVisible(false);
                 }}
                 style={({ pressed }) => [
                   styles.abandonCancelBtn,
-                  pressed && !abandonDeleting && styles.abandonBtnPressed
+                  pressed && !abandonLeaving && styles.abandonBtnPressed
                 ]}
-                disabled={abandonDeleting}
+                disabled={abandonLeaving}
               >
                 <Text style={styles.abandonCancelText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
-                onPress={() => void handleConfirmAbandonRegistration()}
+                onPress={() => void handleConfirmAbandonVerification()}
                 style={({ pressed }) => [
                   styles.abandonConfirmBtn,
-                  pressed && !abandonDeleting && styles.abandonBtnPressed
+                  pressed && !abandonLeaving && styles.abandonBtnPressed
                 ]}
-                disabled={abandonDeleting}
+                disabled={abandonLeaving}
               >
-                {abandonDeleting ? (
+                {abandonLeaving ? (
                   <ActivityIndicator size="small" color={theme.colors.googleWhite} />
                 ) : (
                   <Text style={styles.abandonConfirmText}>{t('auth.verifyPhone.abandonConfirm')}</Text>
@@ -595,18 +588,29 @@ const styles = StyleSheet.create({
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8
+    marginTop: 8,
+    position: 'relative'
   },
-  otpInput: {
+  otpAutofillInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.02,
+    color: 'transparent'
+  },
+  otpCell: {
     width: 48,
     height: 56,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    textAlign: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF'
+  },
+  otpCellText: {
     ...theme.typography.body,
     fontSize: 20,
-    color: theme.colors.textPrimary
+    color: theme.colors.textPrimary,
+    textAlign: 'center'
   },
   resendContainer: {
     marginTop: 16

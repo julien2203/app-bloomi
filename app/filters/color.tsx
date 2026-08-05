@@ -8,11 +8,11 @@ import { Text } from '../../components/ui/Text';
 import { Button } from '../../components/ui/Button';
 import { HeaderBackButton } from '../../components/ui/HeaderBackButton';
 import { theme } from '../../lib/theme';
-import { FLOATING_TAB_BAR_BOTTOM_RESERVE, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
+import { getFilterFooterPaddingBottom, HIT_SLOP_COMFORTABLE } from '../../lib/touchTargets';
 import { useFiltersScreenStore } from '../../lib/store/useFiltersScreenStore';
 import { getColors } from '../../lib/api/filters';
-import { translateColorName } from '../../lib/colorI18n';
-import { navigateAfterFilterCommit } from '../../lib/navigation/filterExit';
+import { sortColorsOtherLast, translateColorName } from '../../lib/colorI18n';
+import { useFilterExit } from '../../lib/navigation/filterExit';
 import { useTranslation } from 'react-i18next';
 
 type ColorRow = {
@@ -33,6 +33,7 @@ export default function ColorFilterScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { filters, setFilter } = useFiltersScreenStore();
+  const { navigateAfterFilterCommit } = useFilterExit();
 
   const [colors, setColors] = useState<ColorRow[]>([]);
   const [selectedColorIds, setSelectedColorIds] = useState<string[]>([...(filters.colorIds ?? [])]);
@@ -52,7 +53,7 @@ export default function ColorFilterScreen() {
 
   const handleShowResult = () => {
     setFilter('colorIds', selectedColorIds);
-    navigateAfterFilterCommit(router, typeof params.returnTo === 'string' ? params.returnTo : undefined);
+    navigateAfterFilterCommit(typeof params.returnTo === 'string' ? params.returnTo : undefined);
   };
 
   const loadColors = async () => {
@@ -60,7 +61,11 @@ export default function ColorFilterScreen() {
       setLoading(true);
       setError(null);
 
-      const data = await getColors();
+      const data = await getColors({
+        categoryIdsForCounts: (filters.categoryIds ?? [])
+          .map((id) => String(id).trim())
+          .filter(Boolean)
+      });
 
       const mapped: ColorRow[] = (data as any[]).map((row) => {
         const rawCount = typeof row.items_count === 'number' ? row.items_count : 0;
@@ -83,7 +88,7 @@ export default function ColorFilterScreen() {
 
       disabled.sort((a, b) => a.name.localeCompare(b.name));
 
-      setColors([...enabled, ...disabled]);
+      setColors(sortColorsOtherLast([...enabled, ...disabled]));
     } catch {
       setError(t('filters.colorsLoadError'));
       setColors([]);
@@ -201,7 +206,7 @@ export default function ColorFilterScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 + FLOATING_TAB_BAR_BOTTOM_RESERVE }
+            { paddingBottom: getFilterFooterPaddingBottom(insets) }
           ]}
         >
           <Button

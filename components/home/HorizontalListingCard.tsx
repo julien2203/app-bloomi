@@ -5,7 +5,7 @@ import { theme } from '../../lib/theme';
 import type { FeedListing } from '../../lib/api';
 import { Text } from '../ui/Text';
 import { useTranslation } from 'react-i18next';
-import { computeBuyerFees } from '../../lib/fees';
+import { computeBuyerDisplayPriceChf, formatCatalogPriceChf } from '../../lib/formatBuyerPrice';
 import { ListingCoverImage } from '../ui/ListingCoverImage';
 
 interface HorizontalListingCardProps {
@@ -25,7 +25,8 @@ export function HorizontalListingCard({
   const { t } = useTranslation();
   const likeCount = 12;
   const itemPrice = Number(item.price);
-  const fees = itemPrice > 0 && !isNaN(itemPrice) ? computeBuyerFees(itemPrice) : null;
+  const displayPriceChf =
+    itemPrice > 0 && !isNaN(itemPrice) ? computeBuyerDisplayPriceChf(itemPrice) : 0;
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
@@ -60,13 +61,8 @@ export function HorizontalListingCard({
         ) : null}
         <View style={styles.priceRow}>
           <Text variant="button" style={styles.priceMain}>
-            {Math.round(item.price)} CHF
+            {formatCatalogPriceChf(displayPriceChf)}
           </Text>
-          {fees ? (
-            <Text variant="caption" style={styles.priceIncl}>
-              {Math.round(fees.finalPriceChf)} CHF {t('feed.pricing.priceIncl')}
-            </Text>
-          ) : null}
         </View>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
           {item.category ?? 'Marque inconnue'} · {item.condition ?? '—'}

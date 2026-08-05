@@ -12,7 +12,7 @@ import type { Database } from './supabase';
 export type ListingStatus = 'draft' | 'published' | 'sold' | 'archived' | 'reserved' | 'deleted';
 export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
 export type DeliveryMode = 'pickup' | 'shipping' | 'both';
-export type ParcelSize = 'small' | 'large' | 'xlarge';
+export type ParcelSize = 'letter_aplus' | 'small' | 'large' | 'xlarge';
 
 // ============================================
 // PROFILES
@@ -61,6 +61,12 @@ export interface Listing {
   brand?: string | null;
   size?: string | null;
   color?: string | null;
+  pickup_primary_street?: string | null;
+  pickup_primary_postal_code?: string | null;
+  pickup_primary_city?: string | null;
+  pickup_work_street?: string | null;
+  pickup_work_postal_code?: string | null;
+  pickup_work_city?: string | null;
 }
 
 export type ListingInsert = Omit<
@@ -112,6 +118,8 @@ export interface Thread {
   buyer_id: string;
   seller_id: string;
   last_message_at: string | null;
+  buyer_hidden_at?: string | null;
+  seller_hidden_at?: string | null;
   created_at: string;
 }
 
@@ -176,6 +184,8 @@ export interface Order {
   shipping_city: string | null;
   shipping_postal_code: string | null;
   shipping_country: string | null;
+  shipping_first_name?: string | null;
+  shipping_last_name?: string | null;
   tracking_number: string | null;
   seller_commission_chf?: number | null;
   seller_fee_rate?: number | null;

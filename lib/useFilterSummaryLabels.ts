@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { translateCategoryLabel } from './categoryI18n';
 import { translateColorName } from './colorI18n';
-import { translateConditionLabel } from './conditionI18n';
+import { normalizeConditionFilterSelection, translateConditionLabel } from './conditionI18n';
+import { translateSizeLabel } from './sizeI18n';
 import { supabase } from './supabase';
 import type { FeedFilters } from './store/feedFilters';
 
@@ -67,13 +68,18 @@ export function useFilterSummaryLabels(filters: FeedFilters) {
       for (const row of (data ?? []) as { id: number; name: string }[]) {
         byId.set(String(row.id), row.name);
       }
-      const names = ids.map((id) => byId.get(String(id))).filter((n): n is string => Boolean(n));
+      const names = ids
+        .map((id) => {
+          if (id === '__other__') return t('filters.other');
+          return byId.get(String(id));
+        })
+        .filter((n): n is string => Boolean(n));
       setBrandLabel(names.length > 0 ? truncateJoined(names) : truncateJoined(ids));
     })();
     return () => {
       cancelled = true;
     };
-  }, [filters.brandIds]);
+  }, [filters.brandIds, t]);
 
   useEffect(() => {
     const ids = filters.sizeIds ?? [];
@@ -93,13 +99,16 @@ export function useFilterSummaryLabels(filters: FeedFilters) {
       for (const row of (data ?? []) as { id: number; label: string }[]) {
         byId.set(String(row.id), row.label);
       }
-      const labels = ids.map((id) => byId.get(String(id))).filter((l): l is string => Boolean(l));
+      const labels = ids
+        .map((id) => byId.get(String(id)))
+        .filter((l): l is string => Boolean(l))
+        .map((l) => translateSizeLabel(l, t));
       setSizeLabel(labels.length > 0 ? truncateJoined(labels) : truncateJoined(ids));
     })();
     return () => {
       cancelled = true;
     };
-  }, [filters.sizeIds]);
+  }, [filters.sizeIds, t]);
 
   useEffect(() => {
     const ids = filters.colorIds ?? [];
@@ -129,7 +138,7 @@ export function useFilterSummaryLabels(filters: FeedFilters) {
   }, [filters.colorIds, t]);
 
   const conditionLabel = useMemo(() => {
-    const ids = filters.conditionIds ?? [];
+    const ids = normalizeConditionFilterSelection(filters.conditionIds ?? []);
     if (ids.length === 0) return undefined;
     const labels = ids.map((v) => translateConditionLabel(v, t));
     return truncateJoined(labels);

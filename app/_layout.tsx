@@ -4,7 +4,6 @@ import { GuestAuthPromptModal } from '../components/auth/GuestAuthPromptModal';
 import { isGuestBrowseRoute } from '../lib/guestRoutes';
 import { openGuestAuthPrompt } from '../lib/guestAuthPrompt';
 import {
-  ActivityIndicator,
   View,
   Linking,
   AppState,
@@ -13,16 +12,25 @@ import {
   StyleSheet,
   TouchableOpacity
 } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { ensureProfileExists } from '../lib/profile';
+import { applyPendingSellerProfile } from '../lib/pendingSellerProfile';
 import { ensureNotificationsConfigured, notifyNewMessage } from '../lib/notifications';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeDeepLinkHandler } from '../components/stripe/StripeDeepLinkHandler';
+import {
+  STRIPE_MERCHANT_IDENTIFIER,
+  STRIPE_URL_SCHEME,
+  isStripePaymentReturnUrl
+} from '../lib/stripePaymentSheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { STRIPE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/env';
-import { isAuthCallbackUrl } from '../lib/auth/authCallbackUrl';
+import { isAuthCallbackUrl, authCallbackRouteParams } from '../lib/auth/authCallbackUrl';
+import { shouldSkipOAuthDeepLinkNavigation } from '../lib/auth/oauthExchangeGuard';
+import { needsAuthPhoneVerification } from '../lib/auth/needsPhoneVerification';
 import {
   isStripeConnectReturnUrl,
   consumeStripeConnectReturnPending,
@@ -37,6 +45,7 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold
 } from '@expo-google-fonts/poppins';
+import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { Text } from '../components/ui/Text';
 import { Button } from '../components/ui/Button';
 import { theme } from '../lib/theme';
@@ -45,14 +54,32 @@ import '../lib/i18n';
 import { initAppLanguage } from '../lib/i18n';
 import { useTranslation } from 'react-i18next';
 import { installGlobalCrashLogging } from '../lib/crashLogging';
+import { authDebug, authDebugContext, authDebugError } from '../lib/authDebugLog';
+import { setupAuthSessionRefresh, isAuthBootRestoreInProgress } from '../lib/authSessionRefresh';
+import {
+  isDressingDeepLinkUrl,
+  navigateToSharedDressing,
+  navigateToSharedDressingFromUrl
+} from '../lib/navigation/dressingDeepLinkNav';
+import {
+  consumePendingSharedDressing,
+  flushPendingSharedDressing,
+  hasPendingSharedDressing
+} from '../lib/navigation/pendingShareDeepLinkNav';
+import { parseListingIdFromUrl } from '../lib/listingShare';
+import { openPrivacyPolicy, openTermsOfUse } from '../lib/legalLinks';
+import {
+  flushPendingNotificationNav,
+  hasPendingNotificationNav,
+  queueNotificationNavFromResponse
+} from '../lib/navigation/pendingNotificationNav';
 
 installGlobalCrashLogging();
+authDebugContext('app:boot');
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const TERMS_ACCEPTED_KEY = 'terms_accepted_v1';
-const TERMS_OF_USE_URL = 'https://bloomi.app/terms';
-const PRIVACY_POLICY_URL = 'https://bloomi.app/privacy';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -72,8 +99,19 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   // Initialisation de la session + abonnement aux changements Supabase
   useEffect(() => {
-    restoreSession();
-    const { data } = supabase.auth.onAuthStateChange((_event, sess) => {
+    supabase.auth.stopAutoRefresh();
+
+    const { data } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === 'SIGNED_OUT' && isAuthBootRestoreInProgress()) {
+        authDebug('authGate:onAuthStateChange:ignored', { event, reason: 'bootRestore' });
+        return;
+      }
+      authDebug('authGate:onAuthStateChange', {
+        event,
+        hasSession: Boolean(sess),
+        userId: sess?.user?.id ?? null,
+        hasPhone: Boolean(sess?.user?.phone)
+      });
       setAuthFromSession(sess);
       if (sess) {
         void (async () => {
@@ -90,14 +128,25 @@ function AuthGate({ children }: { children: React.ReactNode }) {
           // Juste après `signInWithPassword`, `login.tsx` a déjà fait l'upsert profil.
           // On saute ici pour garantir qu'on n'a pas 2 appels séquentiels identiques.
           if (isRecent) {
+            authDebug('authGate:ensureProfile:skipped', { userId, reason: 'recentLoginMarker' });
             await AsyncStorage.removeItem(markerKey);
             return;
           }
 
+          authDebug('authGate:ensureProfile:start', { userId, event });
           await ensureProfileExists(sess);
+          await applyPendingSellerProfile(userId, {
+            email: sess.user.email ?? null
+          });
+          authDebug('authGate:ensureProfile:done', { userId });
         })();
       }
     });
+
+    void (async () => {
+      await restoreSession();
+      setupAuthSessionRefresh();
+    })();
 
     return () => {
       data.subscription.unsubscribe();
@@ -129,25 +178,55 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const isVerificationRoute =
       segments[0] === 'auth' &&
       (segments[1] === 'verify-email' ||
+        segments[1] === 'seller-type' ||
         segments[1] === 'callback' ||
+        segments[1] === 'oauth-callback' ||
         segments[1] === 'reset-password' ||
         segments[1] === 'verify-phone' ||
         segments[1] === 'verify-phone-info' ||
         segments[1] === 'verify-phone-code');
-    const needsPhoneVerification = !!session && !user?.phone;
+    // SMS obligatoire tant que auth.users.phone_confirmed_at est vide
+    // (signup email sans numéro, ou OTP phone_change non validé).
+    const needsPhoneVerification = !!session && needsAuthPhoneVerification(user);
     const normalizedPath = (pathname ?? '').replace(/\/+$/, '') || '/';
+
+    // Lien dressing partagé : ne pas écraser par onboarding / verify-phone / feed.
+    if (
+      normalizedPath.startsWith('/dressing') ||
+      normalizedPath.startsWith('/tabs/public-profile') ||
+      hasPendingSharedDressing()
+    ) {
+      authDebug('authGate:redirect:stay', {
+        reason: hasPendingSharedDressing() ? 'pendingDressingDeepLink' : 'dressingRoute',
+        path: normalizedPath
+      });
+      return;
+    }
 
     if (!session) {
       if (isPublicRoute) {
-        // ok : auth / onboarding
+        authDebug('authGate:redirect:stay', { reason: 'publicRoute', path: normalizedPath });
       } else if (isGuest && isGuestBrowseRoute(normalizedPath)) {
-        // ok : parcours invité (feed, recherche en lecture, fiche annonce, profil public)
+        authDebug('authGate:redirect:stay', { reason: 'guestBrowse', path: normalizedPath });
       } else if (isGuest && !isGuestBrowseRoute(normalizedPath)) {
+        authDebug('authGate:redirect:guestToFeed', { path: normalizedPath });
         navigateInTabs('/tabs/feed');
         setTimeout(() => openGuestAuthPrompt(), 0);
         return;
+      } else if (
+        (hasPendingNotificationNav() || hasPendingSharedDressing()) &&
+        isAuthBootRestoreInProgress()
+      ) {
+        // Cold start depuis une push / deep link : attendre la restauration de session
+        // avant de renvoyer vers l'onboarding (évite la boucle splash).
+        authDebug('authGate:redirect:stay', {
+          reason: 'pendingNavDuringBootRestore',
+          path: normalizedPath
+        });
+        return;
       } else {
-        router.replace('/onboarding/splash');
+        authDebug('authGate:redirect:onboarding', { path: normalizedPath });
+        router.replace('/onboarding/step-1');
         return;
       }
     }
@@ -155,6 +234,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Si connecté mais que le numéro de téléphone n'est pas encore vérifié,
     // forcer le passage par le flow de vérification téléphone.
     if (session && needsPhoneVerification && !isVerificationRoute) {
+      authDebug('authGate:redirect:verifyPhone', {
+        path: normalizedPath,
+        userId: user?.id ?? null
+      });
       router.replace('/auth/verify-phone');
       return;
     }
@@ -162,9 +245,52 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Si connecté (et profil complet) et sur un écran auth/onboarding,
     // rediriger vers le feed sauf pour les écrans de vérification (email / téléphone)
     if (session && !needsPhoneVerification && isPublicRoute && !isVerificationRoute) {
+      authDebug('authGate:redirect:feed', { path: normalizedPath, userId: user?.id ?? null });
       navigateInTabs('/tabs/feed');
     }
   }, [initialized, isLoading, session, user, router, segments, pathname, isGuest]);
+
+  // Après auth prête : appliquer la navigation push mise en file d'attente.
+  useEffect(() => {
+    if (!initialized || isLoading || !session || !termsAccepted) return;
+
+    if (needsAuthPhoneVerification(user)) return;
+
+    flushPendingNotificationNav(router);
+  }, [
+    initialized,
+    isLoading,
+    session,
+    termsAccepted,
+    user?.phone_confirmed_at,
+    router
+  ]);
+
+  // Dressing partagé : flush dès que l'app est prête (session optionnelle — lien public).
+  useEffect(() => {
+    if (!initialized || isLoading || !termsAccepted) return;
+    if (!hasPendingSharedDressing()) return;
+
+    const normalizedPath = (pathname ?? '').replace(/\/+$/, '') || '/';
+
+    // Destination déjà atteinte : juste vider la file.
+    if (normalizedPath.startsWith('/tabs/public-profile')) {
+      consumePendingSharedDressing();
+      return;
+    }
+
+    // Laisser le Redirect de /dressing/[userId] agir, puis forcer si bloqué.
+    if (normalizedPath.startsWith('/dressing/')) {
+      const timer = setTimeout(() => {
+        if (hasPendingSharedDressing()) {
+          flushPendingSharedDressing(router);
+        }
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+
+    flushPendingSharedDressing(router);
+  }, [initialized, isLoading, termsAccepted, pathname, router]);
 
   // Notifications locales : nouveaux messages (hors écran de thread)
   const notifiedIdsRef = useRef<Set<string>>(new Set());
@@ -211,8 +337,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     void (async () => {
       try {
-        if (Platform.OS === 'web') return;
-        if (Constants.appOwnership === 'expo') return;
+        authDebug('push:register:start', { userId });
+        if (Platform.OS === 'web') {
+          authDebug('push:register:skipped', { reason: 'web' });
+          return;
+        }
+        if (Constants.appOwnership === 'expo') {
+          authDebug('push:register:skipped', { reason: 'expoGo' });
+          return;
+        }
 
         // Import dynamique pour éviter le crash Expo Go (SDK 53+)
         const Notifications = await import('expo-notifications');
@@ -224,10 +357,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
           });
         }
 
-        const permission = await Notifications.requestPermissionsAsync();
+        const permission = await Notifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true
+          }
+        });
         const granted =
           (permission as any).granted ||
           permission.status === Notifications.PermissionStatus.GRANTED;
+        authDebug('push:permission', { granted, status: permission.status });
         if (!granted) return;
 
         const expoToken = await Notifications.getExpoPushTokenAsync({
@@ -235,6 +375,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         });
 
         const token = (expoToken as any)?.data;
+        authDebug('push:token', { hasToken: Boolean(token) });
         if (!token) return;
 
         // Associer le token à l'utilisateur courant + dédupliquer côté serveur (évite qu'un autre compte
@@ -250,27 +391,25 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
         if (!response.ok) {
           const text = await response.text().catch(() => '');
-          console.warn('Erreur register-push-token:', text || `${response.status}`);
+          authDebugError('push:register:apiFailed', text || `${response.status}`, { userId });
+        } else {
+          authDebug('push:register:done', { userId });
         }
       } catch (e) {
-        console.warn("Erreur enregistrement push token Expo:", e);
+        authDebugError('push:register:exception', e, { userId });
       }
     })();
   }, [session]);
 
+  // Masquer le splash natif (vert + logo) une fois l'app prête — pas d'écran de chargement JS intermédiaire.
+  useEffect(() => {
+    if (initialized && termsChecked) {
+      void SplashScreen.hideAsync();
+    }
+  }, [initialized, termsChecked]);
+
   if (!initialized || !termsChecked) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: theme.colors.primary
-        }}
-      >
-        <ActivityIndicator color={theme.colors.textPrimary} />
-      </View>
-    );
+    return null;
   }
 
   if (!termsAccepted) {
@@ -288,7 +427,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => {
-                  void Linking.openURL(TERMS_OF_USE_URL);
+                  openTermsOfUse(router);
                 }}
               >
                 <Text variant="captionSm" style={styles.termsLinkText}>
@@ -297,9 +436,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => {
-                  void Linking.openURL(PRIVACY_POLICY_URL);
-                }}
+                onPress={openPrivacyPolicy}
               >
                 <Text variant="captionSm" style={styles.termsLinkText}>
                   {t('app.termsModal.readPrivacy')}
@@ -337,17 +474,15 @@ export default function RootLayout() {
     Poppins_400Regular,
     Poppins_500Medium,
     Poppins_600SemiBold,
-    Poppins_700Bold
+    Poppins_700Bold,
+    Inter_400Regular
   });
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      void SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
-
-  // Navigation au tap sur une notification (push/local)
+  // Navigation au tap sur une notification (push/local) :
+  // on met en file d'attente, AuthGate flush une fois la session prête.
   useEffect(() => {
     if (Platform.OS === 'web') return;
     if (Constants.appOwnership === 'expo') return;
@@ -355,22 +490,26 @@ export default function RootLayout() {
     let subscription: { remove: () => void } | null = null;
     let cancelled = false;
 
-    const handleNotificationResponse = (response: any) => {
-      const data = response?.notification?.request?.content?.data ?? {};
-      const threadId = typeof data?.thread_id === 'string' ? data.thread_id : null;
-      const listingId = typeof data?.listing_id === 'string' ? data.listing_id : null;
-      const orderId = typeof data?.order_id === 'string' ? data.order_id : null;
+    const ingestResponse = async (response: any) => {
+      const queued = queueNotificationNavFromResponse(response);
+      if (!queued) return;
 
-      if (threadId) {
-        router.push({ pathname: '/tabs/messages/[id]', params: { id: threadId } });
-        return;
+      try {
+        const Notifications = await import('expo-notifications');
+        await Notifications.clearLastNotificationResponseAsync();
+      } catch {
+        // silencieux
       }
-      if (listingId) {
-        router.push({ pathname: '/tabs/feed/[id]', params: { id: listingId } });
-        return;
-      }
-      if (orderId) {
-        router.push('/tabs/profile/orders');
+
+      // Si la session est déjà prête (app chaude), naviguer tout de suite.
+      const { session, initialized, isLoading, user } = useAuthStore.getState();
+      if (
+        initialized &&
+        !isLoading &&
+        session &&
+        !needsAuthPhoneVerification(user)
+      ) {
+        flushPendingNotificationNav(routerRef.current);
       }
     };
 
@@ -379,14 +518,13 @@ export default function RootLayout() {
         const Notifications = await import('expo-notifications');
         if (cancelled) return;
 
-        // Cold start: app ouverte depuis une notification
         const last = await Notifications.getLastNotificationResponseAsync();
-        if (last) {
-          handleNotificationResponse(last);
+        if (last && !cancelled) {
+          await ingestResponse(last);
         }
 
         subscription = Notifications.addNotificationResponseReceivedListener((resp) => {
-          handleNotificationResponse(resp);
+          void ingestResponse(resp);
         });
       } catch {
         // silencieux
@@ -397,7 +535,7 @@ export default function RootLayout() {
       cancelled = true;
       subscription?.remove();
     };
-  }, [router]);
+  }, []);
 
   // Retour Stripe : reprise à chaud (app déjà ouverte, sans repasser par index)
   const appStateRef = useRef(AppState.currentState);
@@ -421,7 +559,21 @@ export default function RootLayout() {
   useEffect(() => {
     const handleUrl = (event: { url: string }) => {
       const { url } = event;
-      if (!url || !url.startsWith('bloomi://')) return;
+      if (!url) return;
+
+      if (isDressingDeepLinkUrl(url)) {
+        authDebug('deepLink:dressing', { urlPrefix: url.slice(0, 80) });
+        navigateToSharedDressingFromUrl(url);
+        return;
+      }
+
+      const listingIdFromHttps = parseListingIdFromUrl(url);
+      if (listingIdFromHttps) {
+        router.push({ pathname: '/tabs/feed/[id]', params: { id: listingIdFromHttps } });
+        return;
+      }
+
+      if (!url.startsWith('bloomi://')) return;
 
       try {
         const parsed = new URL(url);
@@ -433,22 +585,58 @@ export default function RootLayout() {
           return;
         }
 
-        if (host === 'auth' && pathname === '/callback') {
-          const searchParams = parsed.searchParams;
-          const token = searchParams.get('token') ?? undefined;
-          const tokenHash = searchParams.get('token_hash') ?? undefined;
-          const type = searchParams.get('type') ?? undefined;
-          const email = searchParams.get('email') ?? undefined;
+        if (isStripePaymentReturnUrl(url)) {
+          return;
+        }
 
+        if (host === 'listing') {
+          const listingId = pathname.replace(/^\//, '').trim();
+          if (listingId) {
+            router.push({ pathname: '/tabs/feed/[id]', params: { id: listingId } });
+          }
+          return;
+        }
+
+        if (host === 'dressing') {
+          const sellerId = pathname.replace(/^\//, '').trim();
+          if (sellerId) {
+            authDebug('deepLink:dressing', { sellerId });
+            navigateToSharedDressing(sellerId);
+          }
+          return;
+        }
+
+        if (host === 'auth' && pathname === '/oauth-callback') {
+          if (shouldSkipOAuthDeepLinkNavigation(url)) {
+            authDebug('deepLink:oauthCallback:skipped', { reason: 'inlineOrRecentOAuth' });
+            return;
+          }
+          authDebug('deepLink:oauthCallback', {
+            urlPrefix: url.slice(0, 100),
+            hasCode: url.includes('code=')
+          });
+          router.replace({
+            pathname: '/auth/oauth-callback',
+            params: authCallbackRouteParams(url)
+          });
+          return;
+        }
+
+        if (host === 'auth' && pathname === '/callback') {
+          // Pendant Google/Apple, Supabase peut renvoyer vers Site URL (auth/callback).
+          // Ne pas remonter l'écran email : socialAuth échange déjà le code.
+          if (shouldSkipOAuthDeepLinkNavigation(url)) {
+            authDebug('deepLink:authCallback:skipped', { reason: 'inlineOrRecentOAuth' });
+            return;
+          }
+          authDebug('deepLink:authCallback', {
+            urlPrefix: url.slice(0, 100),
+            hasCode: url.includes('code='),
+            hasFragmentTokens: url.includes('access_token=')
+          });
           router.replace({
             pathname: '/auth/callback',
-            params: {
-              rawUrl: url,
-              ...(token ? { token } : {}),
-              ...(tokenHash ? { token_hash: tokenHash } : {}),
-              ...(type ? { type } : {}),
-              ...(email ? { email } : {})
-            }
+            params: authCallbackRouteParams(url)
           });
         }
       } catch (e) {
@@ -459,15 +647,27 @@ export default function RootLayout() {
     // Quand l’app est déjà ouverte
     const subscription = Linking.addEventListener('url', handleUrl);
 
-    // Quand l’app est lancée via un lien (cold start)
+    // Quand l'app est lancée via un lien (cold start)
     (async () => {
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl) {
+        if (isStripePaymentReturnUrl(initialUrl)) {
+          return;
+        }
         if (isStripeConnectReturnUrl(initialUrl)) {
           navigateAfterStripeConnectReturn();
           return;
         }
         if (isAuthCallbackUrl(initialUrl)) {
+          handleUrl({ url: initialUrl });
+          return;
+        }
+        if (isDressingDeepLinkUrl(initialUrl)) {
+          handleUrl({ url: initialUrl });
+          return;
+        }
+        const listingIdFromInitialUrl = parseListingIdFromUrl(initialUrl);
+        if (listingIdFromInitialUrl) {
           handleUrl({ url: initialUrl });
           return;
         }
@@ -480,8 +680,8 @@ export default function RootLayout() {
     };
   }, [router]);
 
-  // Garder le splash natif (vert + logo) jusqu’au chargement des polices
-  if (!fontsLoaded) {
+  // Attendre les polices ; le splash natif (vert + logo) reste visible pendant ce temps.
+  if (!fontsLoaded && !fontError) {
     return null;
   }
 
@@ -493,9 +693,11 @@ export default function RootLayout() {
   return (
     <StripeProvider
       publishableKey={STRIPE_PUBLISHABLE_KEY ?? ''}
-      merchantIdentifier="merchant.com.jupouch.bloomiapp"
+      merchantIdentifier={STRIPE_MERCHANT_IDENTIFIER}
+      urlScheme={STRIPE_URL_SCHEME}
     >
-      <SafeAreaProvider>
+      <StripeDeepLinkHandler />
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <AuthGate>
           <Slot />
         </AuthGate>

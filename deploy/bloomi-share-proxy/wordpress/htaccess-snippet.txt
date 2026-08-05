@@ -1,0 +1,34 @@
+# =============================================================================
+# Bloomi — pages de partage + Universal / App Links
+# À placer DANS le .htaccess à la RACINE du site WordPress (souvent public_html
+# ou www), AVANT le bloc « BEGIN WordPress ».
+#
+# IMPORTANT :
+# 1. Supprimer toute règle Redirect / RedirectMatch / RewriteRule [R] qui envoie
+#    /listing/ ou /dressing/ vers supabase.co (c’est la cause du HTML brut / 302).
+# 2. Copier le dossier bloomi-share/ à la racine web (voir README).
+# =============================================================================
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Fichiers .well-known (Universal Links iOS / App Links Android)
+RewriteRule ^\.well-known/apple-app-site-association$ /bloomi-share/well-known/apple-app-site-association [L]
+RewriteRule ^\.well-known/assetlinks\.json$ /bloomi-share/well-known/assetlinks.json [L]
+
+# Pages de partage — proxy PHP (pas de 302)
+RewriteRule ^listing/([0-9a-fA-F-]{36})/?$ /bloomi-share/share-proxy.php?type=listing&id=$1 [L,QSA]
+RewriteRule ^dressing/([0-9a-fA-F-]{36})/?$ /bloomi-share/share-proxy.php?type=dressing&id=$1 [L,QSA]
+</IfModule>
+
+# Content-Type correct pour apple-app-site-association (sans extension)
+<IfModule mod_headers.c>
+<Files "apple-app-site-association">
+    Header set Content-Type "application/json"
+    Header set Cache-Control "public, max-age=3600"
+</Files>
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType application/json .json
+</IfModule>

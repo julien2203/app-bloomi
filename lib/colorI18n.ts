@@ -95,8 +95,24 @@ const ALIASES: Record<string, string> = {
   pois: 'polka_dot',
   animalier: 'animal_print',
   transparent: 'clear',
-  autre: 'other'
+  autre: 'other',
+  autres: 'other'
 };
+
+export function isOtherColorName(name: string): boolean {
+  return resolveColorSlug(name) === 'other';
+}
+
+/** Place « Other » en fin de liste (vente / filtres). */
+export function sortColorsOtherLast<T extends { name: string }>(colors: T[]): T[] {
+  const other: T[] = [];
+  const rest: T[] = [];
+  for (const c of colors) {
+    if (isOtherColorName(c.name)) other.push(c);
+    else rest.push(c);
+  }
+  return [...rest, ...other];
+}
 
 export function normalizeColorKey(raw: string): string {
   return raw

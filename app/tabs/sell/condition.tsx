@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getSafeBottomInset } from '../../../lib/safeArea';
 import { theme } from '../../../lib/theme';
 import { Button } from '../../../components/ui/Button';
 import { useSellFormStore } from '../../../lib/store/sellForm';
@@ -22,6 +23,7 @@ export default function SellConditionScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { values, setField } = useSellFormStore();
   const [selected, setSelected] = useState<ConditionValue | undefined>(
     values.condition as ConditionValue | undefined
@@ -110,7 +112,7 @@ export default function SellConditionScreen() {
         <View
           style={[
             styles.footer,
-            { paddingBottom: insets.bottom + 24 }
+            { paddingBottom: safeBottom + 24 }
           ]}
         >
           <Button

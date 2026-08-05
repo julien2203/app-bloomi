@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getSafeBottomInset } from '../../../../lib/safeArea';
 import { theme } from '../../../../lib/theme';
 import { Button } from '../../../../components/ui/Button';
 import { Screen } from '../../../../components/ui/Screen';
@@ -10,6 +11,7 @@ import { useEditListingFormStore } from '../../../../lib/store/editListingForm';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { getSizes } from '../../../../lib/api/filters';
 import { useTranslation } from 'react-i18next';
+import { translateSizeLabel } from '../../../../lib/sizeI18n';
 
 type SizeRow = { id: number; label: string; count: number; sortOrder: number };
 type SizeSection = { title?: string; rows: SizeRow[] };
@@ -39,6 +41,7 @@ export default function EditListingSizeScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const safeBottom = getSafeBottomInset(insets.bottom);
   const { values, setField } = useEditListingFormStore();
   const [sections, setSections] = useState<SizeSection[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(values.size?.id ?? null);
@@ -194,7 +197,7 @@ export default function EditListingSizeScreen() {
                       >
                         <View style={styles.rowTextContainer}>
                           <Text variant="body" style={styles.rowLabel}>
-                            {row.label}
+                            {translateSizeLabel(row.label, t)}
                           </Text>
                           <Text variant="body" style={styles.rowStock}>
                             {row.count > 500 ? ' (500+)' : ` (${row.count})`}
@@ -212,7 +215,7 @@ export default function EditListingSizeScreen() {
           )}
         </View>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.footer, { paddingBottom: safeBottom + 24 }]}>
           <Button
             title={t('common.confirm')}
             onPress={handleConfirm}

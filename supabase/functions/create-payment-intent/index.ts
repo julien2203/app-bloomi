@@ -11,8 +11,10 @@ import {
   buildPaymentIntentFeeBreakdown,
   paymentIntentFeeMetadataToStrings,
 } from "../_shared/fees.ts";
+import { isCompleteShippingAddress } from "../_shared/shippingAddress.ts";
 
 type DeliveryMode = "pickup" | "shipping" | "both";
+type CheckoutPaymentMethod = "card" | "twint";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -75,7 +77,10 @@ Deno.serve(async (req) => {
     shipping_city: body_shipping_city,
     shipping_postal_code: body_shipping_postal_code,
     shipping_country: body_shipping_country,
+    shipping_first_name: body_shipping_first_name,
+    shipping_last_name: body_shipping_last_name,
     offer_message_id: body_offer_message_id,
+    payment_method: body_payment_method,
   } = (body ?? {}) as Record<string, unknown>;
 
   const parcelSize =
@@ -88,6 +93,9 @@ Deno.serve(async (req) => {
       ? body_offer_message_id.trim()
       : null;
 
+  const paymentMethod: CheckoutPaymentMethod =
+    body_payment_method === "twint" ? "twint" : "card";
+
   if (!listing_id || !buyer_id || !seller_id || amount == null || !delivery_mode) {
     return jsonResponse(
       { error: "listing_id, buyer_id, seller_id, amount, delivery_mode sont requis" },
@@ -98,6 +106,9 @@ Deno.serve(async (req) => {
   const dm = delivery_mode as DeliveryMode;
   if (dm !== "pickup" && dm !== "shipping" && dm !== "both") {
     return jsonResponse({ error: "delivery_mode invalide" }, { status: 400 });
+  }
+  if (body_payment_method != null && body_payment_method !== "card" && body_payment_method !== "twint") {
+    return jsonResponse({ error: "payment_method invalide" }, { status: 400 });
   }
 
   const authHeader = normalizeAuthHeader(req);
@@ -138,6 +149,8 @@ Deno.serve(async (req) => {
   let shipping_city: string | null = null;
   let shipping_postal_code: string | null = null;
   let shipping_country: string | null = null;
+  let shipping_first_name: string | null = null;
+  let shipping_last_name: string | null = null;
 
   if (typeof shipping_address === "string" && shipping_address.trim()) {
     shipping_line = shipping_address.trim();
@@ -147,6 +160,8 @@ Deno.serve(async (req) => {
     shipping_city = (sa.city ?? sa.shipping_city ?? null) as string | null;
     shipping_postal_code = (sa.postal_code ?? sa.postal ?? sa.zip ?? sa.shipping_postal_code ?? null) as string | null;
     shipping_country = (sa.country ?? sa.shipping_country ?? null) as string | null;
+    shipping_first_name = String(sa.first_name ?? sa.shipping_first_name ?? "").trim() || null;
+    shipping_last_name = String(sa.last_name ?? sa.shipping_last_name ?? "").trim() || null;
   }
 
   if (typeof body_shipping_city === "string" && body_shipping_city.trim()) {
@@ -158,17 +173,56 @@ Deno.serve(async (req) => {
   if (typeof body_shipping_country === "string" && body_shipping_country.trim()) {
     shipping_country = body_shipping_country.trim().toUpperCase();
   }
+  if (typeof body_shipping_first_name === "string" && body_shipping_first_name.trim()) {
+    shipping_first_name = body_shipping_first_name.trim();
+  }
+  if (typeof body_shipping_last_name === "string" && body_shipping_last_name.trim()) {
+    shipping_last_name = body_shipping_last_name.trim();
+  }
+
+  if (dm === "shipping") {
+    const shipCountry = (shipping_country ?? "CH").trim().toUpperCase();
+    if (shipCountry !== "CH") {
+      return jsonResponse(
+        { error: "L'expédition n'est disponible qu'en Suisse" },
+        { status: 400 },
+      );
+    }
+    shipping_country = "CH";
+
+    if (
+      !isCompleteShippingAddress({
+        street: shipping_line,
+        city: shipping_city,
+        postalCode: shipping_postal_code,
+        country: shipping_country,
+      }) ||
+      !shipping_first_name ||
+      !shipping_last_name
+    ) {
+      return jsonResponse(
+        {
+          error: "Adresse de livraison incomplète",
+          details:
+            "Prénom, nom, rue, code postal, ville et pays (CH) sont requis pour l'expédition",
+        },
+        { status: 400 },
+      );
+    }
+  }
 
   const metaShippingAddress = shipping_line ?? "";
   const metaShippingCity = shipping_city ?? "";
   const metaShippingPostal = shipping_postal_code ?? "";
   const metaShippingCountry = shipping_country ?? "";
+  const metaShippingFirstName = shipping_first_name ?? "";
+  const metaShippingLastName = shipping_last_name ?? "";
 
   try {
     // Vérifie que le listing est achetable (published)
     const { data: listingRow, error: listingErr } = await supabaseAdmin
       .from("listings")
-      .select("id, status, title, price")
+      .select("id, status, title, price, delivery_mode, parcel_size")
       .eq("id", String(listing_id))
       .maybeSingle();
 
@@ -183,6 +237,37 @@ Deno.serve(async (req) => {
       return jsonResponse(
         { error: "Annonce indisponible", details: `listing.status=${listingStatus || "unknown"}` },
         { status: 409 },
+      );
+    }
+
+    const listingDeliveryMode = String((listingRow as { delivery_mode?: string } | null)?.delivery_mode ?? "both")
+      .toLowerCase();
+    const listingAllowsPickup = listingDeliveryMode === "pickup" || listingDeliveryMode === "both";
+    const listingAllowsShipping = listingDeliveryMode === "shipping" || listingDeliveryMode === "both";
+
+    if (dm === "pickup" && !listingAllowsPickup) {
+      return jsonResponse(
+        { error: "Cette annonce n'accepte pas la remise en main propre" },
+        { status: 400 },
+      );
+    }
+    if (dm === "shipping" && !listingAllowsShipping) {
+      return jsonResponse(
+        { error: "Cette annonce n'accepte pas l'expédition" },
+        { status: 400 },
+      );
+    }
+
+    const listingParcelSize = String((listingRow as { parcel_size?: string | null } | null)?.parcel_size ?? "")
+      .trim() || null;
+    const effectiveParcelSize =
+      (typeof parcelSize === "string" && parcelSize.trim() ? parcelSize.trim() : null) ??
+      listingParcelSize;
+
+    if (dm === "shipping" && !effectiveParcelSize) {
+      return jsonResponse(
+        { error: "Taille de colis requise pour l'expédition" },
+        { status: 400 },
       );
     }
 
@@ -250,16 +335,16 @@ Deno.serve(async (req) => {
 
     const { data: sellerProfileRow } = await supabaseAdmin
       .from("profiles")
-      .select("is_influencer, company_name, ide_number")
+      .select("is_influencer, company_name, ide_number, seller_type")
       .eq("id", String(seller_id))
       .maybeSingle();
 
     let shippingFeeCents = 0;
     let isPromoShipping = false;
 
-    if (dm === "shipping" && parcelSize) {
+    if (dm === "shipping" && effectiveParcelSize) {
       const { data: feeData, error: feeErr } = await supabaseAdmin.rpc("get_shipping_fee", {
-        p_parcel_size: parcelSize,
+        p_parcel_size: effectiveParcelSize,
       });
       if (feeErr) {
         return jsonResponse(
@@ -278,23 +363,43 @@ Deno.serve(async (req) => {
         is_influencer?: boolean | null;
         company_name?: string | null;
         ide_number?: string | null;
+        seller_type?: 'individual' | 'pro' | 'sole_proprietorship' | null;
       },
       shippingFeeCents,
     });
 
+    const TWINT_MAX_TOTAL_CENTS = 10000; // 100 CHF
+    const isTwintPayment = paymentMethod === "twint";
+    const requiresImmediateCapture = isTwintPayment;
+    if (isTwintPayment && feeBreakdown.totalCents > TWINT_MAX_TOTAL_CENTS) {
+      return jsonResponse(
+        { error: "TWINT est disponible uniquement jusqu'à 100 CHF" },
+        { status: 400 },
+      );
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: feeBreakdown.totalCents,
       currency: "chf",
-      capture_method: "manual",
-      payment_method_types: ["card"],
+      capture_method: requiresImmediateCapture ? "automatic" : "manual",
+      ...(isTwintPayment
+        ? { payment_method_types: ["twint"] as const }
+        : {
+          automatic_payment_methods: {
+            enabled: true,
+            allow_redirects: "never",
+          },
+        }),
       metadata: {
         ...paymentIntentFeeMetadataToStrings(feeBreakdown),
         is_promo_shipping: String(isPromoShipping),
-        parcel_size: parcelSize ?? "",
+        parcel_size: effectiveParcelSize ?? "",
         delivery_mode: dm,
         listing_id: String(listing_id),
         seller_id: String(seller_id),
         buyer_id: String(buyer_id),
+        payment_method: paymentMethod,
+        payment_flow: requiresImmediateCapture ? "instant_capture" : "escrow_manual_capture",
         ...(offerMessageId ? { offer_message_id: offerMessageId } : {}),
         ...(dm === "shipping"
           ? {
@@ -302,6 +407,8 @@ Deno.serve(async (req) => {
             shipping_city: metaShippingCity.slice(0, 500),
             shipping_postal_code: metaShippingPostal.slice(0, 500),
             shipping_country: metaShippingCountry.slice(0, 500),
+            shipping_first_name: metaShippingFirstName.slice(0, 100),
+            shipping_last_name: metaShippingLastName.slice(0, 100),
           }
           : {}),
       },
@@ -309,6 +416,8 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       client_secret: paymentIntent.client_secret,
+      payment_method: paymentMethod,
+      payment_flow: requiresImmediateCapture ? "instant_capture" : "escrow_manual_capture",
       total_cents: feeBreakdown.totalCents,
       item_amount_cents: feeBreakdown.itemAmountCents,
       buyer_protection_cents: feeBreakdown.buyerProtectionCents,

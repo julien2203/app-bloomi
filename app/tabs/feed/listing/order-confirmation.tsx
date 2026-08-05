@@ -1,18 +1,24 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { getSafeBottomInset } from '../../../../lib/safeArea';
 import { Text } from '../../../../components/ui/Text';
 import { Button } from '../../../../components/ui/Button';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { theme } from '../../../../lib/theme';
 import { supabase } from '../../../../lib/supabase';
-import { computeBuyerFees } from '../../../../lib/fees';
-import { formatChf, formatPercent } from '../../../../lib/formatBuyerPrice';
+import { formatCatalogPriceChf, formatChf, formatFeeLineChf } from '../../../../lib/formatBuyerPrice';
+import { fetchAcceptedOfferAmountForOrder } from '../../../../lib/fetchOrderAcceptedOfferAmount';
+import { computeOrderBuyerTotals, formatOrderShippingFeeValue } from '../../../../lib/orderTotals';
+import { isOrderPickupDelivery } from '../../../../lib/deliveryMode';
 
 type OrderRow = {
   id: string;
+  listing_id: string;
+  buyer_id: string;
   status: string | null;
   payment_status: string | null;
   delivery_mode: string | null;
@@ -22,18 +28,14 @@ type OrderRow = {
   buyer_protection_chf?: number | string | null;
   buyer_banking_fee_chf?: number | string | null;
   shipping_fee_chf?: number | string | null;
+  parcel_size?: string | null;
+  is_promo_shipping?: boolean | null;
   shipping_city?: string | null;
   shipping_postal_code?: string | null;
   shipping_country?: string | null;
   shipping_address?: string | null;
+  listing?: { price: number | string | null } | null;
 };
-
-function parseNumber(v: number | string | null | undefined): number | null {
-  if (v == null) return null;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
 
 function normalizePhotoUrl(rawUrl: string) {
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
@@ -45,11 +47,15 @@ export default function OrderConfirmationScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ order_id?: string }>();
+  const safeBottom = getSafeBottomInset(insets.bottom);
+  const params = useLocalSearchParams<{ order_id?: string; from_messages_thread?: string }>();
   const orderId = params.order_id ?? null;
+  const fromMessagesThread =
+    typeof params.from_messages_thread === 'string' ? params.from_messages_thread.trim() : '';
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderRow | null>(null);
+  const [acceptedOfferAmount, setAcceptedOfferAmount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,6 +76,8 @@ export default function OrderConfirmationScreen() {
           .select(
             `
             id,
+            listing_id,
+            buyer_id,
             status,
             payment_status,
             delivery_mode,
@@ -79,10 +87,13 @@ export default function OrderConfirmationScreen() {
             buyer_protection_chf,
             buyer_banking_fee_chf,
             shipping_fee_chf,
+            parcel_size,
+            is_promo_shipping,
             shipping_city,
             shipping_postal_code,
             shipping_country,
-            shipping_address
+            shipping_address,
+            listing:listings(price)
           `
           )
           .eq('id', orderId)
@@ -90,8 +101,16 @@ export default function OrderConfirmationScreen() {
 
         if (qError) throw qError;
         if (!data) throw new Error(t('messages.notFound'));
+
+        const row = data as OrderRow;
+        const offerAmount = await fetchAcceptedOfferAmountForOrder({
+          listingId: row.listing_id,
+          buyerId: row.buyer_id
+        });
+
         if (!cancelled) {
-          setOrder({ ...(data as OrderRow) });
+          setOrder({ ...row });
+          setAcceptedOfferAmount(offerAmount);
         }
       } catch (e) {
         if (!cancelled) {
@@ -113,30 +132,22 @@ export default function OrderConfirmationScreen() {
   const rawCover = order?.listing_cover_photo_url ?? null;
   const coverUrl = rawCover ? normalizePhotoUrl(rawCover) : null;
 
-  const price = useMemo(() => parseNumber(order?.listing_price ?? null), [order?.listing_price]);
-  const buyerFees = useMemo(() => {
-    if (price == null) return null;
-    const storedProtection = parseNumber(order?.buyer_protection_chf ?? null);
-    const storedBanking = parseNumber(order?.buyer_banking_fee_chf ?? null);
-    if (storedProtection != null && storedBanking != null) {
-      return {
-        protectionChf: storedProtection,
-        bankingChf: storedBanking,
-        protectionRate: storedProtection / price,
-        bankingRate: storedBanking / price,
-        finalPriceChf: price + storedProtection + storedBanking
-      };
-    }
-    return computeBuyerFees(price);
-  }, [order?.buyer_banking_fee_chf, order?.buyer_protection_chf, price]);
-  const shippingFee = useMemo(() => parseNumber(order?.shipping_fee_chf ?? null) ?? 0, [order?.shipping_fee_chf]);
-  const total = useMemo(
-    () => (buyerFees != null ? buyerFees.finalPriceChf + shippingFee : null),
-    [buyerFees, shippingFee]
+  const orderForTotals = useMemo(
+    () =>
+      order
+        ? { ...order, accepted_offer_amount_chf: acceptedOfferAmount }
+        : null,
+    [acceptedOfferAmount, order]
   );
 
-  const deliveryMode = String(order?.delivery_mode ?? '').toLowerCase();
-  const isShipping = deliveryMode === 'shipping';
+  const totals = useMemo(
+    () => (orderForTotals ? computeOrderBuyerTotals(orderForTotals) : null),
+    [orderForTotals]
+  );
+
+  const isAcceptedOffer = totals?.isAcceptedOffer ?? false;
+
+  const isShipping = !isOrderPickupDelivery(order?.delivery_mode);
 
   const statusLabel = useMemo(() => {
     const base = t('feed.orderConfirmation.statusBase');
@@ -145,10 +156,34 @@ export default function OrderConfirmationScreen() {
     return `${base}${payment}${orderStatus}`;
   }, [order?.payment_status, order?.status, t]);
 
+  const shippingAddressLine = useMemo(() => {
+    if (!order) return null;
+    const street = order.shipping_address?.trim();
+    const cityLine = `${order.shipping_postal_code ?? ''} ${order.shipping_city ?? ''}`.trim();
+    const country = order.shipping_country?.trim();
+    const parts = [street, cityLine, country].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : null;
+  }, [order]);
+
+  const handleHeaderBack = useCallback(() => {
+    if (fromMessagesThread) {
+      router.replace({
+        pathname: '/tabs/messages/[id]',
+        params: { id: fromMessagesThread, from_inbox: '1' }
+      });
+      return;
+    }
+    if (router.canGoBack?.()) {
+      router.back();
+      return;
+    }
+    router.replace('/tabs/feed');
+  }, [fromMessagesThread, router]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <HeaderBackButton onPress={() => router.back()} />
+        <HeaderBackButton onPress={handleHeaderBack} />
         <Text variant="body" style={styles.headerTitle}>
           {t('feed.orderConfirmation.title')}
         </Text>
@@ -157,19 +192,9 @@ export default function OrderConfirmationScreen() {
       <View style={styles.headerSeparator} />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 24 }
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: safeBottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text variant="h2" style={styles.title}>
-          {t('feed.orderConfirmation.paymentConfirmed')}
-        </Text>
-        <Text variant="body" color="textSecondary" style={styles.subtitle}>
-          {t('feed.orderConfirmation.subtitle')}
-        </Text>
-
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
@@ -200,6 +225,18 @@ export default function OrderConfirmationScreen() {
           </View>
         ) : (
           <>
+            <View style={styles.successHero}>
+              <View style={styles.successIconWrap}>
+                <Feather name="check" size={28} color={theme.colors.appleBlack} />
+              </View>
+              <Text variant="h2" style={styles.successTitle}>
+                {t('feed.orderConfirmation.paymentConfirmed')}
+              </Text>
+              <Text variant="body" color="textSecondary" style={styles.successSubtitle}>
+                {t('feed.orderConfirmation.subtitle')}
+              </Text>
+            </View>
+
             <View style={styles.card}>
               <View style={styles.itemRow}>
                 <View style={styles.coverWrap}>
@@ -210,65 +247,78 @@ export default function OrderConfirmationScreen() {
                   )}
                 </View>
                 <View style={styles.itemInfo}>
-                  <Text variant="body" style={styles.itemTitle} numberOfLines={2}>
+                  <Text variant="captionSm" color="textSecondary" style={styles.itemLabel}>
+                    {t('feed.orderConfirmation.yourItem')}
+                  </Text>
+                  <Text variant="body" style={styles.itemTitle} numberOfLines={3}>
                     {listingTitle}
                   </Text>
-
-                  <View style={styles.moneyBlock}>
-                    <View style={styles.moneyRow}>
-                      <Text variant="caption" color="textSecondary">
-                        {t('feed.orderConfirmation.itemPrice')}
-                      </Text>
-                      <Text variant="caption" style={styles.moneyValue}>
-                        {price != null ? formatChf(price) : '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.moneyRow}>
-                      <Text variant="caption" color="textSecondary">
-                        {t('feed.orderConfirmation.buyerProtection', {
-                          percent: buyerFees ? formatPercent(buyerFees.protectionRate) : 0
-                        })}
-                      </Text>
-                      <Text variant="caption" style={styles.moneyValue}>
-                        {buyerFees != null ? formatChf(buyerFees.protectionChf) : '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.moneyRow}>
-                      <Text variant="caption" color="textSecondary">
-                        {t('feed.orderConfirmation.bankingFee', {
-                          percent: buyerFees ? formatPercent(buyerFees.bankingRate) : 0
-                        })}
-                      </Text>
-                      <Text variant="caption" style={styles.moneyValue}>
-                        {buyerFees != null ? formatChf(buyerFees.bankingChf) : '—'}
-                      </Text>
-                    </View>
-                    {shippingFee > 0 ? (
-                      <View style={styles.moneyRow}>
-                        <Text variant="caption" color="textSecondary">
-                          {t('feed.checkout.shippingFee')}
-                        </Text>
-                        <Text variant="caption" style={styles.moneyValue}>
-                          {formatChf(shippingFee)}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <View style={[styles.moneyRow, styles.moneyRowTotal]}>
-                      <Text variant="body" style={styles.moneyTotalLabel}>
-                        {t('feed.orderConfirmation.totalPaid')}
-                      </Text>
-                      <Text variant="body" color="primary" style={styles.moneyTotalValue}>
-                        {total != null ? formatChf(total) : '—'}
-                      </Text>
-                    </View>
-                  </View>
                 </View>
               </View>
 
               <View style={styles.statusPill}>
+                <Feather name="shield" size={14} color={theme.colors.textPrimary} />
                 <Text variant="captionSm" style={styles.statusText}>
                   {statusLabel}
                 </Text>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <Text variant="h3" style={styles.sectionTitle}>
+                {t('feed.orderConfirmation.priceSummary')}
+              </Text>
+
+              <View style={styles.moneyBlock}>
+                <View style={styles.moneyRow}>
+                  <Text variant="body" color="textSecondary" style={styles.moneyLabel}>
+                    {isAcceptedOffer
+                      ? t('feed.orderConfirmation.acceptedOfferPrice')
+                      : t('feed.orderConfirmation.itemPrice')}
+                  </Text>
+                  <Text variant="body" style={styles.moneyValue}>
+                    {totals ? formatChf(totals.itemPriceChf) : '—'}
+                  </Text>
+                </View>
+
+                <View style={styles.moneyRow}>
+                  <Text variant="body" color="textSecondary" style={styles.moneyLabel}>
+                    {t('feed.orderConfirmation.bloomiFees')}
+                  </Text>
+                  <Text variant="body" style={styles.moneyValue}>
+                    {totals ? `+${formatFeeLineChf(totals.buyerFeesChf)}` : '—'}
+                  </Text>
+                </View>
+
+                {isShipping ? (
+                  <View style={styles.moneyRow}>
+                    <Text variant="body" color="textSecondary" style={styles.moneyLabel}>
+                      {t('feed.checkout.shippingFee')}
+                    </Text>
+                    <Text variant="body" style={styles.moneyValue}>
+                      {totals
+                        ? formatOrderShippingFeeValue(
+                            totals.shippingFeeChf,
+                            totals.isPromoShipping,
+                            formatChf,
+                            t('feed.listingDetail.shippingPromo'),
+                            t('profile.orders.promoShipping')
+                          )
+                        : '—'}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.moneyDivider} />
+
+                <View style={styles.moneyRow}>
+                  <Text variant="body" style={styles.totalLabel}>
+                    {t('feed.orderConfirmation.totalPaid')}
+                  </Text>
+                  <Text variant="h3" style={styles.totalValue}>
+                    {totals ? formatCatalogPriceChf(totals.totalPaidChf) : '—'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -284,14 +334,14 @@ export default function OrderConfirmationScreen() {
                   </Text>
 
                   <View style={styles.infoBox}>
-                    <Text variant="captionSm" color="textSecondary" style={styles.infoLabel}>
-                      {t('feed.orderConfirmation.shippingTo')}
-                    </Text>
+                    <View style={styles.infoBoxHeader}>
+                      <Feather name="map-pin" size={16} color={theme.colors.textSecondary} />
+                      <Text variant="captionSm" color="textSecondary" style={styles.infoLabel}>
+                        {t('feed.orderConfirmation.shippingTo')}
+                      </Text>
+                    </View>
                     <Text variant="body" style={styles.infoValue}>
-                      {order?.shipping_city || order?.shipping_postal_code || order?.shipping_country
-                        ? `${order?.shipping_postal_code ?? ''} ${order?.shipping_city ?? ''}`.trim() +
-                          (order?.shipping_country ? `, ${order.shipping_country}` : '')
-                        : t('feed.orderConfirmation.addressSaved')}
+                      {shippingAddressLine ?? t('feed.orderConfirmation.addressSaved')}
                     </Text>
                   </View>
                 </>
@@ -301,9 +351,12 @@ export default function OrderConfirmationScreen() {
                     {t('feed.orderConfirmation.pickupParagraph')}
                   </Text>
                   <View style={styles.infoBox}>
-                    <Text variant="captionSm" color="textSecondary" style={styles.infoLabel}>
-                      {t('feed.orderConfirmation.tip')}
-                    </Text>
+                    <View style={styles.infoBoxHeader}>
+                      <Feather name="info" size={16} color={theme.colors.textSecondary} />
+                      <Text variant="captionSm" color="textSecondary" style={styles.infoLabel}>
+                        {t('feed.orderConfirmation.tip')}
+                      </Text>
+                    </View>
                     <Text variant="body" style={styles.infoValue}>
                       {t('feed.orderConfirmation.checkBeforeConfirm')}
                     </Text>
@@ -319,8 +372,21 @@ export default function OrderConfirmationScreen() {
                 variant="primary"
               />
               <Button
-                title={t('feed.orderConfirmation.backToFeed')}
-                onPress={() => router.replace('/tabs/feed')}
+                title={
+                  fromMessagesThread
+                    ? t('feed.orderConfirmation.backToConversation')
+                    : t('feed.orderConfirmation.backToFeed')
+                }
+                onPress={() => {
+                  if (fromMessagesThread) {
+                    router.replace({
+                      pathname: '/tabs/messages/[id]',
+                      params: { id: fromMessagesThread, from_inbox: '1' }
+                    });
+                    return;
+                  }
+                  router.replace('/tabs/feed');
+                }}
                 variant="secondary"
                 style={styles.secondaryCta}
               />
@@ -335,7 +401,7 @@ export default function OrderConfirmationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background
+    backgroundColor: theme.colors.muted
   },
   header: {
     flexDirection: 'row',
@@ -343,7 +409,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.screenPaddingX,
     paddingTop: 12,
-    paddingBottom: 12
+    paddingBottom: 12,
+    backgroundColor: theme.colors.background
   },
   headerTitle: {
     flex: 1,
@@ -366,14 +433,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.screenPaddingX,
     paddingTop: theme.spacing.gapLg
   },
-  title: {
-    marginBottom: theme.spacing.gapSm
+  successHero: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.gapLg,
+    paddingHorizontal: 8
   },
-  subtitle: {
-    marginBottom: theme.spacing.gapLg
+  successIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14
+  },
+  successTitle: {
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  successSubtitle: {
+    textAlign: 'center',
+    lineHeight: 22
   },
   center: {
-    paddingVertical: 24,
+    paddingVertical: 48,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -382,101 +465,113 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.colors.googleWhite,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 12,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 12,
     ...theme.shadows.card
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12
+    gap: 14
   },
   coverWrap: {
-    width: 92,
-    height: 92,
-    borderRadius: 14,
+    width: 88,
+    height: 88,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: theme.colors.muted
   },
   cover: {
-    width: 92,
-    height: 92,
+    width: 88,
+    height: 88,
     resizeMode: 'cover'
   },
   coverPlaceholder: {
     backgroundColor: theme.colors.muted
   },
   itemInfo: {
-    flex: 1
+    flex: 1,
+    paddingTop: 2
+  },
+  itemLabel: {
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4
   },
   itemTitle: {
-    marginBottom: 10
+    fontFamily: theme.fontFamily.semiBold
+  },
+  statusPill: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F4FBE8',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12
+  },
+  statusText: {
+    flex: 1,
+    color: theme.colors.textPrimary
+  },
+  sectionTitle: {
+    marginBottom: 12
   },
   moneyBlock: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.card,
-    padding: 10,
-    backgroundColor: theme.colors.background
+    gap: 10
   },
   moneyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6
+    gap: 12
   },
-  moneyRowTotal: {
-    marginBottom: 0,
-    marginTop: 6,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border
+  moneyLabel: {
+    flex: 1
   },
   moneyValue: {
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.textPrimary
   },
-  moneyTotalLabel: {
+  moneyDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.border,
+    marginVertical: 4
+  },
+  totalLabel: {
+    fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.textPrimary
   },
-  moneyTotalValue: {
-    fontFamily: theme.fontFamily.semiBold
-  },
-  statusPill: {
-    marginTop: 10,
-    backgroundColor: '#F9FFE8',
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 999
-  },
-  statusText: {
+  totalValue: {
+    fontFamily: theme.fontFamily.bold,
     color: theme.colors.textPrimary
-  },
-  sectionTitle: {
-    marginBottom: theme.spacing.gapSm
   },
   paragraph: {
-    marginBottom: theme.spacing.gapMd
+    marginBottom: theme.spacing.gapMd,
+    lineHeight: 22
   },
   infoBox: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.card,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     backgroundColor: theme.colors.muted
   },
-  infoLabel: {
+  infoBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 6
   },
+  infoLabel: {
+    fontFamily: theme.fontFamily.medium
+  },
   infoValue: {
-    color: theme.colors.textPrimary
+    color: theme.colors.textPrimary,
+    lineHeight: 22
   },
   ctaBlock: {
-    marginTop: 4,
+    marginTop: 8,
     gap: 10
   },
   secondaryCta: {
@@ -492,4 +587,3 @@ const styles = StyleSheet.create({
     gap: 10
   }
 });
-

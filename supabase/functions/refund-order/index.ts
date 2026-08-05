@@ -4,6 +4,7 @@ import {
   fetchRecipientLanguage,
   orderCancelledPushText,
 } from "../_shared/pushNotificationI18n.ts";
+import { notifyUser } from "../_shared/notifyUser.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -20,30 +21,6 @@ function normalizeAuthHeader(req: Request): string | null {
   if (!h) return null;
   if (!h.toLowerCase().startsWith("bearer ")) return null;
   return h;
-}
-
-async function sendNotification(params: {
-  supabaseUrl: string;
-  supabaseServiceRoleKey: string;
-  user_id: string;
-  title: string;
-  body: string;
-  data?: unknown;
-}) {
-  const url = `${params.supabaseUrl.replace(/\/+$/, "")}/functions/v1/send-notification`;
-  await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.supabaseServiceRoleKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      user_id: params.user_id,
-      title: params.title,
-      body: params.body,
-      data: params.data ?? undefined,
-    }),
-  });
 }
 
 type OrderRow = {
@@ -332,16 +309,42 @@ Deno.serve(async (req) => {
   try {
     const buyerLang = await fetchRecipientLanguage(supabase, row.buyer_id);
     const cancelCopy = orderCancelledPushText(buyerLang);
-    await sendNotification({
+    await notifyUser({
+      supabaseAdmin: supabase,
       supabaseUrl,
       supabaseServiceRoleKey,
-      user_id: row.buyer_id,
-      title: cancelCopy.title,
-      body: cancelCopy.body,
-      data: { order_id: row.id, notification_type: "new_items" },
+      userId: row.buyer_id,
+      templateKey: "order_cancelled",
+      entityId: row.id,
+      variables: {
+        orderId: row.id,
+        refunded: shouldRefund,
+      },
+      push: {
+        title: cancelCopy.title,
+        body: cancelCopy.body,
+        data: { order_id: row.id, notification_type: "new_items" },
+      },
     });
   } catch (e) {
     console.warn("Erreur envoi notification acheteur:", e);
+  }
+
+  try {
+    await notifyUser({
+      supabaseAdmin: supabase,
+      supabaseUrl,
+      supabaseServiceRoleKey,
+      userId: row.seller_id,
+      templateKey: "seller_order_cancelled",
+      entityId: `${row.id}:cancelled`,
+      variables: {
+        orderId: row.id,
+      },
+      skipPush: true,
+    });
+  } catch (e) {
+    console.warn("Erreur envoi e-mail vendeur:", e);
   }
 
   // Message automatique dans le chat (si un thread existe)

@@ -144,3 +144,27 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/closet-share/deno.json"
 entrypoint = "./functions/closet-share/index.ts"
+
+[functions.notify-user]
+enabled = true
+verify_jwt = false
+import_map = "./functions/notify-user/deno.json"
+entrypoint = "./functions/notify-user/index.ts"
+
+[functions.notify-new-offer]
+enabled = true
+verify_jwt = false
+import_map = "./functions/notify-new-offer/deno.json"
+entrypoint = "./functions/notify-new-offer/index.ts"
+
+[functions.process-delayed-emails]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-delayed-emails/deno.json"
+entrypoint = "./functions/process-delayed-emails/index.ts"
+
+[functions.auto-confirm-orders]
+enabled = true
+verify_jwt = false
+import_map = "./functions/auto-confirm-orders/deno.json"
+entrypoint = "./functions/auto-confirm-orders/index.ts"

@@ -1,18 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
-  View
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import {
   cloneFeedListings,
+  getBlockedSellerIdsForCurrentUser,
   getFeedListings,
   getMyLikedListingIds,
   type FeedListing
@@ -23,23 +23,40 @@ import { HomeHero } from '../../../components/home/HomeHero';
 import { SectionHeader } from '../../../components/home/SectionHeader';
 import { Screen } from '../../../components/ui/Screen';
 import { Text } from '../../../components/ui/Text';
+import { Button } from '../../../components/ui/Button';
 import { ProductCard } from '../../../components/ProductCard';
 import { useFeedFiltersStore } from '../../../lib/store/feedFilters';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLikesStore } from '../../../stores/likesStore';
 import { useNotificationsBadgeStore } from '../../../stores/notificationsBadgeStore';
+import { refreshNotificationsBadge } from '../../../lib/notificationsBadge';
+import { guardedPush } from '../../../lib/navigation/guardedNav';
+import { openListingDetail } from '../../../lib/navigation/openListingDetail';
+import { fetchTrendingListings } from '../../../lib/trendingListings';
+import { fetchFeaturedInfluencers, type FeaturedInfluencer } from '../../../lib/featuredInfluencers';
+import {
+  InfluencerSpotlightCard,
+  influencerSpotlightCardSize
+} from '../../../components/feed/InfluencerSpotlightCard';
 import { FeedHeader } from '../../../components/feed/FeedHeader';
+import { FeedGridSkeleton } from '../../../components/feed/FeedGridSkeleton';
 import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
-import { getCardImagePriority, LIST_IMAGE_PERF_PROPS } from '../../../lib/cardImagePriority';
+import { getCardImagePriority, FEED_GRID_PERF_PROPS, LIST_IMAGE_PERF_PROPS } from '../../../lib/cardImagePriority';
 import { subscribeBlockedUsersRevision } from '../../../lib/store/blockedUsersSync';
 import { normalizeLanguage } from '../../../lib/i18n';
+import { getPublishedHomeHero, type HomeHeroContent } from '../../../lib/api/homeHero';
+import { authDebug, authDebugError } from '../../../lib/authDebugLog';
 import {
-  getDefaultHomeHero,
-  getPublishedHomeHero,
-  type HomeHeroContent
-} from '../../../lib/api/homeHero';
+  horizontalCardWidth,
+  horizontalCarouselMinHeight,
+  gridCardWidth,
+  GRID_GAP,
+  GRID_PADDING_X
+} from '../../../lib/cardLayout';
 
-const FEED_LISTINGS_LIMIT = 20;
+const FEED_PAGE_SIZE = 40;
+const FEED_PAGE_PROBE = FEED_PAGE_SIZE + 1;
+const HORIZONTAL_CARD_IMAGE_RATIO = 1.3;
 
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
@@ -53,24 +70,45 @@ export default function HomeScreen() {
   const [listings, setListings] = useState<FeedListing[]>([]);
   const [sponsoredListings, setSponsoredListings] = useState<FeedListing[]>([]);
   const [trendingListings, setTrendingListings] = useState<FeedListing[]>([]);
-  const [influencerListings, setInfluencerListings] = useState<FeedListing[]>([]);
+  const [featuredInfluencers, setFeaturedInfluencers] = useState<FeaturedInfluencer[]>([]);
   const unreadNotificationsCount = useNotificationsBadgeStore((s) => s.unreadCount);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const heroLanguage = normalizeLanguage(i18n.language);
-  const [homeHero, setHomeHero] = useState<HomeHeroContent>(() =>
-    getDefaultHomeHero(heroLanguage)
+  const [homeHero, setHomeHero] = useState<HomeHeroContent | null>(null);
+  const [hasMoreAllListings, setHasMoreAllListings] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const didLogFirstRenderRef = useRef(false);
+  const listingsCountRef = useRef(0);
+  const lastFetchAtRef = useRef(0);
+  const hasMoreRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  listingsCountRef.current = listings.length;
+  hasMoreRef.current = hasMoreAllListings;
+
+  /** Évite un re-fetch complet au retour depuis Results (onglet sibling). */
+  const FEED_FOCUS_REFRESH_MS = 2 * 60 * 1000;
+
+  useEffect(() => {
+    authDebug('feed:mount', { hasUser: Boolean(user?.id) });
+    if (user?.id) {
+      void getBlockedSellerIdsForCurrentUser(user.id);
+    }
+    return () => {
+      authDebug('feed:unmount');
+    };
+  }, [user?.id]);
+
+  const { width: screenWidth } = useWindowDimensions();
+  const feedHorizontalCardWidth = useMemo(() => horizontalCardWidth(screenWidth), [screenWidth]);
+  const feedGridCardWidth = useMemo(() => gridCardWidth(screenWidth), [screenWidth]);
+  const influencerSpotlightSize = useMemo(() => influencerSpotlightCardSize(screenWidth), [screenWidth]);
+  const feedHorizontalCarouselMinHeight = useMemo(
+    () => horizontalCarouselMinHeight(feedHorizontalCardWidth, HORIZONTAL_CARD_IMAGE_RATIO),
+    [feedHorizontalCardWidth]
   );
-
-  const notificationsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const notificationsBadgeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const screenWidth = Dimensions.get('window').width;
-  const gridPaddingX = 16;
-  const gridGap = 12;
-  const gridCardWidth = (screenWidth - gridPaddingX * 2 - gridGap) / 2;
   const fixedTabBarReserveSpace = getFixedTabBarHeight(insets.bottom);
 
   const submitSearch = useCallback(() => {
@@ -83,19 +121,13 @@ export default function HomeScreen() {
   }, [router, searchText]);
 
   const fetchFeed = useCallback(async () => {
+    authDebug('feed:fetch:start', {
+      hasUser: Boolean(user?.id),
+      filtersActive: Boolean(filters && Object.keys(filters).length > 0)
+    });
     try {
       setError(null);
-      const {
-        data: { user: authedUser }
-      } = await supabase.auth.getUser();
-      const blockedSellerIds: string[] = authedUser?.id
-        ? (
-            await supabase
-              .from('blocked_users')
-              .select('blocked_id')
-              .eq('blocker_id', authedUser.id)
-          ).data?.map((row: any) => String(row.blocked_id)).filter(Boolean) ?? []
-        : [];
+      const blockedSellerIds = await getBlockedSellerIdsForCurrentUser(user?.id);
 
       const filterBlocked = (rows: FeedListing[]) => {
         const filtered =
@@ -105,12 +137,16 @@ export default function HomeScreen() {
         return cloneFeedListings(filtered);
       };
 
-      const feedPromise = getFeedListings({
-        limit: FEED_LISTINGS_LIMIT,
-        offset: 0,
-        filters
+      void getPublishedHomeHero(normalizeLanguage(i18n.language)).then((heroConfig) => {
+        setHomeHero(heroConfig);
       });
-      const likedIdsPromise = user ? getMyLikedListingIds() : Promise.resolve({ data: [], error: null });
+
+      const feedPromise = getFeedListings({
+        limit: FEED_PAGE_PROBE,
+        offset: 0,
+        filters,
+        blockedSellerIds
+      });
 
       const sponsoredPromise = (async () => {
         try {
@@ -131,102 +167,43 @@ export default function HomeScreen() {
 
       const trendingPromise = (async () => {
         try {
-          const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-          // 1) Récupérer les annonces récentes + views_count depuis `listings`
-          const { data: recentListings, error: recentErr } = await supabase
-            .from('listings')
-            .select('id, views_count')
-            .eq('status', 'published')
-            .gte('created_at', from)
-            .order('created_at', { ascending: false })
-            .limit(80);
-          if (recentErr) throw recentErr;
-
-          const ids = (recentListings || []).map((r: any) => String(r.id)).filter(Boolean);
-          if (ids.length === 0) return [] as FeedListing[];
-
-          const viewsById: Record<string, number> = {};
-          for (const r of recentListings as any[]) {
-            const id = String(r.id);
-            const v = typeof r.views_count === 'number' ? r.views_count : Number(r.views_count ?? 0);
-            viewsById[id] = Number.isFinite(v) ? v : 0;
-          }
-
-          // 2) Récupérer les cartes via la view (inclut likes_count)
-          const { data: cards, error: cardsErr } = await supabase
-            .from('v_feed_listings')
-            .select('*')
-            .in('id', ids);
-          if (cardsErr) throw cardsErr;
-
-          const rows = (cards || []) as FeedListing[];
-          const scored = rows
-            .map((r) => {
-              const views = viewsById[r.id] ?? 0;
-              const likes = typeof (r as any).likes_count === 'number' ? (r as any).likes_count : 0;
-              return { r, score: views + likes * 2 };
-            })
-            // Ne pas afficher des tendances sans signaux
-            .filter((x) => x.score > 0)
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 10)
-            .map((x) => x.r);
-
-          return scored;
+          return await fetchTrendingListings({ limit: 10 });
         } catch {
           return [] as FeedListing[];
         }
       })();
 
-      const influencersPromise = (async () => {
-        try {
-          const { data: profs, error: pErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('is_influencer', true)
-            .limit(50);
-          if (pErr) throw pErr;
-          const ids = (profs || []).map((p: any) => String(p.id)).filter(Boolean);
-          if (ids.length === 0) return [] as FeedListing[];
+      const influencersPromise = fetchFeaturedInfluencers(blockedSellerIds);
 
-          const { data, error: iErr } = await supabase
-            .from('v_feed_listings')
-            .select('*')
-            .in('seller_id', ids)
-            .eq('status', 'published')
-            .order('created_at', { ascending: false })
-            .limit(10);
-          if (iErr) throw iErr;
-          return (data || []) as FeedListing[];
-        } catch {
-          return [] as FeedListing[];
-        }
-      })();
-
-      const [
-        { data, error: fetchError },
-        { data: likedIds, error: likedIdsError },
-        heroConfig
-      ] = await Promise.all([
-        feedPromise,
-        likedIdsPromise,
-        getPublishedHomeHero(normalizeLanguage(i18n.language))
-      ]);
-
-      setHomeHero(heroConfig);
+      const { data, error: fetchError } = await feedPromise;
 
       if (fetchError) {
+        authDebugError('feed:fetch:apiError', fetchError);
         setError(fetchError);
         setListings([]);
+        setHasMoreAllListings(false);
       } else {
-        setListings(filterBlocked(data));
+        const rows = cloneFeedListings(data ?? []);
+        const hasMore = rows.length > FEED_PAGE_SIZE;
+        const visibleRows = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
+        authDebug('feed:fetch:mainDone', {
+          count: visibleRows.length,
+          hasMore,
+          sponsoredPending: true
+        });
+        setListings(visibleRows);
+        setHasMoreAllListings(hasMore);
+        hasMoreRef.current = hasMore;
       }
 
-      // Hydrate store instantanément dès qu'on a l'info user-likes.
       if (!user) {
         clearLikes();
-      } else if (!likedIdsError && likedIds) {
-        setLikedIds(likedIds);
+      } else {
+        void getMyLikedListingIds().then(({ data: likedIds, error: likedIdsError }) => {
+          if (!likedIdsError && likedIds) {
+            setLikedIds(likedIds);
+          }
+        });
       }
 
       // Compteurs instantanés: viennent directement de v_feed_listings.likes_count
@@ -241,19 +218,29 @@ export default function HomeScreen() {
       // Les sections secondaires peuvent être lourdes: on les charge après avoir affiché le feed principal.
       void Promise.all([sponsoredPromise, trendingPromise, influencersPromise])
         .then(([sponsoredRes, trendingRes, influencersRes]) => {
+          authDebug('feed:fetch:sectionsDone', {
+            sponsored: sponsoredRes.length,
+            trending: trendingRes.length,
+            influencers: influencersRes.length
+          });
           setSponsoredListings(filterBlocked(sponsoredRes));
           setTrendingListings(filterBlocked(trendingRes));
-          setInfluencerListings(filterBlocked(influencersRes));
+          setFeaturedInfluencers(influencersRes);
         })
-        .catch(() => {
+        .catch((sectionErr) => {
+          authDebugError('feed:fetch:sectionsError', sectionErr);
           setSponsoredListings([]);
           setTrendingListings([]);
-          setInfluencerListings([]);
+          setFeaturedInfluencers([]);
         });
     } catch (err) {
+      authDebugError('feed:fetch:exception', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
       setListings([]);
+      setHasMoreAllListings(false);
     } finally {
+      authDebug('feed:fetch:finally', { loading: false });
+      lastFetchAtRef.current = Date.now();
       setLoading(false);
       setRefreshing(false);
     }
@@ -265,77 +252,25 @@ export default function HomeScreen() {
     });
   }, [fetchFeed]);
 
-  const loadUnreadNotificationsCount = useCallback(async () => {
-    const setUnread = useNotificationsBadgeStore.getState().setUnreadCount;
-    if (!user?.id) {
-      setUnread(0);
-      return;
-    }
-    try {
-      const { count, error: cErr } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .is('read_at', null);
-      if (cErr) throw cErr;
-      setUnread(count ?? 0);
-    } catch {
-      setUnread(0);
-    }
+  useEffect(() => {
+    void refreshNotificationsBadge(user?.id);
   }, [user?.id]);
-
-  const scheduleUnreadBadgeReload = useCallback(() => {
-    if (notificationsBadgeDebounceRef.current) {
-      clearTimeout(notificationsBadgeDebounceRef.current);
-    }
-    notificationsBadgeDebounceRef.current = setTimeout(() => {
-      notificationsBadgeDebounceRef.current = null;
-      void loadUnreadNotificationsCount();
-    }, 450);
-  }, [loadUnreadNotificationsCount]);
-
-  useEffect(() => {
-    void loadUnreadNotificationsCount();
-  }, [loadUnreadNotificationsCount]);
-
-  // Realtime: badge mis à jour sur nouvelles notifications
-  useEffect(() => {
-    // cleanup
-    if (notificationsChannelRef.current) {
-      void supabase.removeChannel(notificationsChannelRef.current);
-      notificationsChannelRef.current = null;
-    }
-
-    if (!user?.id) return;
-
-    const ch = supabase
-      .channel(`notifications:user:${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        () => {
-          scheduleUnreadBadgeReload();
-        }
-      )
-      .subscribe();
-
-    notificationsChannelRef.current = ch;
-
-    return () => {
-      void supabase.removeChannel(ch);
-      notificationsChannelRef.current = null;
-      if (notificationsBadgeDebounceRef.current) {
-        clearTimeout(notificationsBadgeDebounceRef.current);
-        notificationsBadgeDebounceRef.current = null;
-      }
-    };
-  }, [scheduleUnreadBadgeReload, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadUnreadNotificationsCount();
+      authDebug('feed:focus', { listingsCached: listingsCountRef.current });
+      void refreshNotificationsBadge(user?.id);
 
-      if (listings.length === 0) {
+      const hasCache = listingsCountRef.current > 0;
+      const cacheFresh = Date.now() - lastFetchAtRef.current < FEED_FOCUS_REFRESH_MS;
+
+      if (hasCache && cacheFresh) {
+        return () => {
+          authDebug('feed:blur');
+        };
+      }
+
+      if (!hasCache) {
         setLoading(true);
       } else {
         setRefreshing(true);
@@ -343,131 +278,178 @@ export default function HomeScreen() {
 
       void fetchFeed();
 
-      return () => {};
-    }, [fetchFeed, listings.length, loadUnreadNotificationsCount])
+      return () => {
+        authDebug('feed:blur');
+      };
+    }, [fetchFeed, user?.id])
   );
+
+  useEffect(() => {
+    if (loading || listings.length === 0 || didLogFirstRenderRef.current) return;
+    didLogFirstRenderRef.current = true;
+    authDebug('feed:renderListings', {
+      count: listings.length,
+      firstId: listings[0]?.id ?? null
+    });
+  }, [loading, listings]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     void fetchFeed();
   };
 
-  const handleListingPress = (item: FeedListing) => {
-    router.push(`/tabs/feed/${item.id}`);
-  };
+  const handleListingPress = useCallback(
+    (item: FeedListing, imageWidthDp?: number, imageHeightDp?: number) => {
+      openListingDetail(router, item.id, {
+        return_to: 'feed',
+        cover_photo: item.cover_photo_url,
+        detailPathBase: '/tabs/feed',
+        imageWidthDp,
+        imageHeightDp
+      });
+    },
+    [router]
+  );
 
-  const all = listings;
+  const loadMoreFeed = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMoreRef.current || loading) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const blockedSellerIds = await getBlockedSellerIdsForCurrentUser(user?.id);
+      const { data, error: fetchError } = await getFeedListings({
+        limit: FEED_PAGE_PROBE,
+        offset: listingsCountRef.current,
+        filters,
+        blockedSellerIds
+      });
+      if (fetchError || !data) return;
 
-  const chunk = <T,>(arr: T[], size: number): T[][] =>
-    Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-      arr.slice(i * size, i * size + size)
-    );
+      const rows = cloneFeedListings(data);
+      const filtered =
+        blockedSellerIds.length > 0
+          ? rows.filter((row) => !blockedSellerIds.includes(String(row.seller_id)))
+          : rows;
+      const hasMore = filtered.length > FEED_PAGE_SIZE;
+      const page = hasMore ? filtered.slice(0, FEED_PAGE_SIZE) : filtered;
+      hasMoreRef.current = hasMore;
+      setHasMoreAllListings(hasMore);
+      setListings((prev) => [...prev, ...page]);
+    } catch (err) {
+      authDebugError('feed:loadMore:exception', err);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [filters, loading]);
 
-  if (loading) {
-    return (
-      <Screen>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text variant="body" color="textSecondary" style={styles.loadingText}>
-            Loading feed...
-          </Text>
-        </View>
-      </Screen>
-    );
-  }
+  const handleInfluencerPress = useCallback(
+    (influencerId: string) => {
+      guardedPush(router, {
+        pathname: '/tabs/public-profile' as any,
+        params: { user_id: influencerId }
+      });
+    },
+    [router]
+  );
 
-  if (error) {
-    return (
-      <Screen scroll noHorizontalPadding>
-        <View style={styles.centerContent}>
-          <Text variant="h2" style={styles.errorTitle}>
-            Loading error
-          </Text>
-          <Text variant="body" color="textSecondary" style={styles.errorMessage}>
-            {error.message}
-          </Text>
-          <Text
-            variant="body"
-            color="primary"
-            style={styles.retryText}
-            onPress={fetchFeed}
-          >
-            {t('common.retry')}
-          </Text>
-        </View>
-      </Screen>
-    );
-  }
+  const navigateToAllResults = useCallback(() => {
+    guardedPush(router, {
+      pathname: '/tabs/results' as any,
+      params: { section: 'all', title: t('feed.tabs.allItems') }
+    });
+  }, [router, t]);
 
-  return (
-    <View style={styles.root}>
-      <Screen scroll={false} noHorizontalPadding>
-        {/* Sticky search bar (not scrolling) */}
-        <FeedHeader
-          searchText={searchText}
-          onSearchTextChange={setSearchText}
-          onSubmitSearch={submitSearch}
-          unreadNotificationsCount={unreadNotificationsCount}
+  const horizontalCardImageHeight = useMemo(
+    () => Math.round(feedHorizontalCardWidth * HORIZONTAL_CARD_IMAGE_RATIO),
+    [feedHorizontalCardWidth]
+  );
+  const gridCardImageHeight = useMemo(
+    () => Math.round(feedGridCardWidth * HORIZONTAL_CARD_IMAGE_RATIO),
+    [feedGridCardWidth]
+  );
+
+  const renderGridListing = useCallback(
+    ({ item, index }: { item: FeedListing; index: number }) => (
+      <View style={styles.gridCardCell}>
+        <ProductCard
+          listingId={item.id}
+          sellerId={item.seller_id}
+          sellerName={item.seller_display_name}
+          sellerIsInfluencer={Boolean(item.seller_is_influencer)}
+          title={item.title}
+          price={item.price}
+          currency="CHF"
+          brand={item.brand ?? undefined}
+          size={(item as any).size ?? undefined}
+          condition={item.condition ?? undefined}
+          imageUrl={item.cover_photo_url}
+          onPress={() =>
+            handleListingPress(item, feedGridCardWidth, gridCardImageHeight)
+          }
+          cardWidth={feedGridCardWidth}
+          imageRatio={HORIZONTAL_CARD_IMAGE_RATIO}
+          imagePriority={getCardImagePriority(index)}
         />
+      </View>
+    ),
+    [feedGridCardWidth, gridCardImageHeight, handleListingPress]
+  );
 
-        {/* Scroll only below */}
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: fixedTabBarReserveSpace + theme.spacing.gapMd }
-          ]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        >
-          {/* 12px gap below sticky bar */}
-          <View style={{ height: 12 }} />
+  const feedListHeader = useMemo(
+    () => (
+      <>
+        <View style={{ height: 12 }} />
 
+        {homeHero ? (
           <HomeHero config={homeHero} unreadNotificationsCount={unreadNotificationsCount} />
+        ) : null}
 
-          {sponsoredListings.length > 0 ? (
-            <View style={styles.section}>
-              <SectionHeader
-                title={t('feed.tabs.sponsored')}
-                titleColor="#000000"
-                onPressSeeAll={() => {
-                  router.push({
-                    pathname: '/tabs/results' as any,
-                    params: { section: 'sponsored', title: t('feed.tabs.sponsored') }
-                  });
-                }}
-              />
-              <FlatList
-                data={sponsoredListings}
-                keyExtractor={(item) => `sponsored-${item.id}`}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalList}
-                ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
-                {...LIST_IMAGE_PERF_PROPS}
-                renderItem={({ item, index }) => (
-                  <ProductCard
-                    listingId={item.id}
-                    sellerId={item.seller_id}
-                    sellerName={item.seller_display_name}
-                    sellerIsInfluencer={Boolean(item.seller_is_influencer)}
-                    title={item.title}
-                    price={item.price}
-                    currency="CHF"
-                    brand={item.brand ?? undefined}
-                    size={(item as any).size ?? undefined}
-                    condition={item.condition ?? undefined}
-                    imageUrl={item.cover_photo_url}
-                    onPress={() => handleListingPress(item)}
-                    cardWidth={167}
-                    imageRatio={1.3}
-                    imagePriority={getCardImagePriority(index)}
-                    style={styles.horizontalCard}
-                  />
-                )}
-              />
-            </View>
-          ) : null}
+        {sponsoredListings.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title={t('feed.tabs.sponsored')}
+              titleColor="#000000"
+              onPressSeeAll={() => {
+                router.push({
+                  pathname: '/tabs/results' as any,
+                  params: { section: 'sponsored', title: t('feed.tabs.sponsored') }
+                });
+              }}
+            />
+            <FlatList
+              data={sponsoredListings}
+              keyExtractor={(item) => `sponsored-${item.id}`}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[styles.horizontalCarousel, { minHeight: feedHorizontalCarouselMinHeight }]}
+              contentContainerStyle={styles.horizontalList}
+              ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
+              {...LIST_IMAGE_PERF_PROPS}
+              renderItem={({ item, index }) => (
+                <ProductCard
+                  listingId={item.id}
+                  sellerId={item.seller_id}
+                  sellerName={item.seller_display_name}
+                  sellerIsInfluencer={Boolean(item.seller_is_influencer)}
+                  title={item.title}
+                  price={item.price}
+                  currency="CHF"
+                  brand={item.brand ?? undefined}
+                  size={(item as any).size ?? undefined}
+                  condition={item.condition ?? undefined}
+                  imageUrl={item.cover_photo_url}
+                  onPress={() =>
+                    handleListingPress(item, feedHorizontalCardWidth, horizontalCardImageHeight)
+                  }
+                  cardWidth={feedHorizontalCardWidth}
+                  imageRatio={HORIZONTAL_CARD_IMAGE_RATIO}
+                  imagePriority={getCardImagePriority(index)}
+                />
+              )}
+            />
+          </View>
+        ) : null}
 
         {trendingListings.length > 0 ? (
           <View style={styles.section}>
@@ -486,6 +468,7 @@ export default function HomeScreen() {
               keyExtractor={(item) => `trending-${item.id}`}
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={[styles.horizontalCarousel, { minHeight: feedHorizontalCarouselMinHeight }]}
               contentContainerStyle={styles.horizontalList}
               ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
               {...LIST_IMAGE_PERF_PROPS}
@@ -502,55 +485,40 @@ export default function HomeScreen() {
                   size={(item as any).size ?? undefined}
                   condition={item.condition ?? undefined}
                   imageUrl={item.cover_photo_url}
-                  onPress={() => handleListingPress(item)}
-                  cardWidth={167}
-                  imageRatio={1.3}
+                  onPress={() =>
+                    handleListingPress(item, feedHorizontalCardWidth, horizontalCardImageHeight)
+                  }
+                  cardWidth={feedHorizontalCardWidth}
+                  imageRatio={HORIZONTAL_CARD_IMAGE_RATIO}
                   imagePriority={getCardImagePriority(index)}
-                  style={styles.horizontalCard}
                 />
               )}
             />
           </View>
         ) : null}
 
-        {influencerListings.length > 0 ? (
+        {featuredInfluencers.length > 0 ? (
           <View style={styles.section}>
-            <SectionHeader
-              title={t('feed.tabs.influencers')}
-              titleColor="#000000"
-              onPressSeeAll={() => {
-                router.push({
-                  pathname: '/tabs/results' as any,
-                  params: { section: 'influencer', title: t('feed.tabs.influencers') }
-                });
-              }}
-            />
+            <SectionHeader title={t('feed.tabs.influencers')} titleColor="#000000" />
             <FlatList
-              data={influencerListings}
-              keyExtractor={(item) => `influencers-${item.id}`}
+              data={featuredInfluencers}
+              keyExtractor={(item) => `influencer-spotlight-${item.id}`}
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={[
+                styles.horizontalCarousel,
+                { minHeight: influencerSpotlightSize.height + theme.spacing.gapMd }
+              ]}
               contentContainerStyle={styles.horizontalList}
               ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
               {...LIST_IMAGE_PERF_PROPS}
               renderItem={({ item, index }) => (
-                <ProductCard
-                  listingId={item.id}
-                  sellerId={item.seller_id}
-                  sellerName={item.seller_display_name}
-                  sellerIsInfluencer={Boolean(item.seller_is_influencer)}
-                  title={item.title}
-                  price={item.price}
-                  currency="CHF"
-                  brand={item.brand ?? undefined}
-                  size={(item as any).size ?? undefined}
-                  condition={item.condition ?? undefined}
-                  imageUrl={item.cover_photo_url}
-                  onPress={() => handleListingPress(item)}
-                  cardWidth={167}
-                  imageRatio={1.3}
+                <InfluencerSpotlightCard
+                  influencer={item}
+                  cardWidth={influencerSpotlightSize.width}
+                  cardHeight={influencerSpotlightSize.height}
+                  onPress={() => handleInfluencerPress(item.id)}
                   imagePriority={getCardImagePriority(index)}
-                  style={styles.horizontalCard}
                 />
               )}
             />
@@ -561,63 +529,135 @@ export default function HomeScreen() {
           <SectionHeader
             title={t('feed.tabs.allItems')}
             titleColor="#000000"
-            onPressSeeAll={() => {
-              router.push({
-                pathname: '/tabs/results' as any,
-                params: { section: 'all', title: t('feed.tabs.allItems') }
-              });
-            }}
+            onPressSeeAll={listings.length > 0 ? navigateToAllResults : undefined}
           />
           {listings.length === 0 && !loading ? (
             <View style={styles.emptyInlineContainer}>
               <Text variant="body" color="textSecondary">
-                No listings yet
+                {t('feed.emptyListings')}
               </Text>
             </View>
-          ) : (
-            <View style={styles.gridContent}>
-              {chunk(all, 2).map((pair, rowIndex) => (
-                <View
-                  // eslint-disable-next-line react/no-array-index-key
-                  key={rowIndex}
-                  style={{
-                    flexDirection: 'row',
-                    gap: 12,
-                    paddingHorizontal: 16,
-                    marginBottom: 12
-                  }}
-                >
-                  {pair.map((item, colIndex) => {
-                    const flatIndex = rowIndex * 2 + colIndex;
-                    return (
-                      <View key={item.id} style={{ flex: 1 }}>
-                        <ProductCard
-                          listingId={item.id}
-                          sellerId={item.seller_id}
-                          sellerName={item.seller_display_name}
-                          sellerIsInfluencer={Boolean(item.seller_is_influencer)}
-                          title={item.title}
-                          price={item.price}
-                          currency="CHF"
-                          brand={item.brand ?? undefined}
-                          size={(item as any).size ?? undefined}
-                          condition={item.condition ?? undefined}
-                          imageUrl={item.cover_photo_url}
-                          onPress={() => handleListingPress(item)}
-                          cardWidth={gridCardWidth}
-                          imageRatio={1.3}
-                          imagePriority={getCardImagePriority(flatIndex)}
-                        />
-                      </View>
-                    );
-                  })}
-                  {pair.length === 1 && <View style={{ flex: 1 }} />}
-                </View>
-              ))}
-            </View>
-          )}
+          ) : null}
         </View>
-        </ScrollView>
+      </>
+    ),
+    [
+      featuredInfluencers,
+      feedHorizontalCardWidth,
+      feedHorizontalCarouselMinHeight,
+      handleInfluencerPress,
+      handleListingPress,
+      homeHero,
+      horizontalCardImageHeight,
+      influencerSpotlightSize.height,
+      influencerSpotlightSize.width,
+      listings.length,
+      loading,
+      navigateToAllResults,
+      router,
+      sponsoredListings,
+      t,
+      trendingListings,
+      unreadNotificationsCount
+    ]
+  );
+
+  const feedListFooter = useMemo(
+    () => (
+      <View style={styles.seeAllFooter}>
+        {loadingMore ? (
+          <ActivityIndicator size="small" color={theme.colors.primary} style={styles.loadMoreSpinner} />
+        ) : null}
+        {listings.length > 0 ? (
+          <>
+            <Button
+              title={t('common.seeAll')}
+              variant="secondary"
+              onPress={navigateToAllResults}
+              style={styles.seeAllButton}
+            />
+            {hasMoreAllListings ? (
+              <Text variant="captionSm" color="textSecondary" style={styles.seeAllHint}>
+                {t('feed.allItemsMoreAvailable')}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </View>
+    ),
+    [hasMoreAllListings, listings.length, loadingMore, navigateToAllResults, t]
+  );
+
+  const showInitialLoading = loading && listings.length === 0;
+
+  const feedListEmpty = useMemo(() => {
+    if (showInitialLoading) {
+      return <FeedGridSkeleton cardWidth={feedGridCardWidth} />;
+    }
+    if (!loading && listings.length === 0) {
+      return (
+        <View style={styles.emptyInlineContainer}>
+          <Text variant="body" color="textSecondary">
+            {t('feed.emptyListings')}
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  }, [feedGridCardWidth, listings.length, loading, showInitialLoading, t]);
+
+  return (
+    <View style={styles.root}>
+      <Screen scroll={false} noHorizontalPadding edges={['left', 'right']}>
+        <FeedHeader
+          searchText={searchText}
+          onSearchTextChange={setSearchText}
+          onSubmitSearch={submitSearch}
+          unreadNotificationsCount={unreadNotificationsCount}
+        />
+
+        {error && listings.length === 0 && !loading ? (
+          <View style={styles.centerContent}>
+            <Text variant="h2" style={styles.errorTitle}>
+              {t('feed.loadError')}
+            </Text>
+            <Text variant="body" color="textSecondary" style={styles.errorMessage}>
+              {error.message}
+            </Text>
+            <Text
+              variant="body"
+              color="primary"
+              style={styles.retryText}
+              onPress={fetchFeed}
+            >
+              {t('common.retry')}
+            </Text>
+          </View>
+        ) : (
+        <FlatList
+          data={listings}
+          key="feed-all-items-grid"
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            listings.length === 0 ? styles.scrollContentEmpty : null,
+            { paddingBottom: fixedTabBarReserveSpace + theme.spacing.gapMd }
+          ]}
+          columnWrapperStyle={listings.length > 0 ? styles.gridRow : undefined}
+          ListHeaderComponent={feedListHeader}
+          ListFooterComponent={feedListFooter}
+          ListEmptyComponent={feedListEmpty}
+          renderItem={renderGridListing}
+          onEndReached={() => void loadMoreFeed()}
+          onEndReachedThreshold={0.4}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+          {...FEED_GRID_PERF_PROPS}
+        />
+        )}
       </Screen>
     </View>
   );
@@ -633,6 +673,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: theme.spacing.gapLg
+  },
+  scrollContentEmpty: {
+    flexGrow: 1
   },
   centerContent: {
     flex: 1,
@@ -667,22 +710,39 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.gapMd,
     paddingBottom: theme.spacing.gapSm
   },
+  horizontalCarousel: {
+    flexGrow: 0
+  },
   horizontalSeparator: {
     width: 12
-  },
-  horizontalCard: {
-    width: 167
   },
   emptyInlineContainer: {
     alignItems: 'center',
     paddingVertical: 40
   },
-  gridContent: {
-    paddingTop: theme.spacing.gapMd,
-    paddingBottom: 120
+  gridCardCell: {
+    flex: 1,
+    marginBottom: GRID_GAP
   },
   gridRow: {
-    columnGap: theme.spacing.gapMd
+    paddingHorizontal: GRID_PADDING_X,
+    gap: GRID_GAP
+  },
+  seeAllFooter: {
+    paddingHorizontal: theme.spacing.screenPaddingX,
+    paddingTop: theme.spacing.gapSm,
+    paddingBottom: 120,
+    alignItems: 'center',
+    gap: 8
+  },
+  seeAllButton: {
+    alignSelf: 'stretch'
+  },
+  seeAllHint: {
+    textAlign: 'center'
+  },
+  loadMoreSpinner: {
+    marginBottom: theme.spacing.gapSm
   },
   section: {
     // pas de padding horizontal ici pour que les carrousels restent flush avec les bords;

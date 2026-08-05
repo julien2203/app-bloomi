@@ -19,8 +19,9 @@ import {
 import { useTranslation } from 'react-i18next';
 
 type StripeOnboardingStatus =
+  | { type: 'checking' }
   | { type: 'idle'; message: string }
-  | { type: 'success'; message: string }
+  | { type: 'success'; message: string; pendingReview?: boolean }
   | { type: 'error'; message: string };
 
 export default function ActivateSellerAccountScreen() {
@@ -36,7 +37,7 @@ export default function ActivateSellerAccountScreen() {
   const checkStripeOnboarding = useCallback(async () => {
     if (!userId) return;
 
-    setStatus({ type: 'idle', message: t('profile.activateSeller.checking') });
+    setStatus({ type: 'checking' });
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
@@ -66,15 +67,23 @@ export default function ActivateSellerAccountScreen() {
       }
 
       const completed = Boolean((data as any)?.completed);
+      const pendingReview = Boolean((data as any)?.pending_stripe_review);
       if (completed) {
         setStatus({
           type: 'success',
-          message: t('profile.activateSeller.activated')
+          message: pendingReview
+            ? t('profile.activateSeller.pendingReview')
+            : t('profile.activateSeller.activated'),
+          pendingReview
         });
       } else {
+        const currentlyDue = (data as { currently_due?: string[] })?.currently_due ?? [];
         setStatus({
           type: 'idle',
-          message: t('profile.activateSeller.notActivated')
+          message:
+            currentlyDue.length > 0
+              ? t('profile.activateSeller.incompleteOnboarding')
+              : t('profile.activateSeller.notActivated')
         });
       }
     } catch {
@@ -192,7 +201,9 @@ export default function ActivateSellerAccountScreen() {
               {t('profile.activateSeller.activatedTitle')}
             </Text>
             <Text variant="body" color="textSecondary" style={styles.successSubtitle}>
-              {t('profile.activateSeller.activatedSubtitle')}
+              {status.pendingReview
+                ? t('profile.activateSeller.pendingReviewSubtitle')
+                : t('profile.activateSeller.activatedSubtitle')}
             </Text>
 
             <View style={styles.successActions}>
@@ -226,19 +237,35 @@ export default function ActivateSellerAccountScreen() {
 
             {status ? (
               <View style={styles.statusContainer}>
-                {status.type === 'idle' ? (
+                {status.type === 'checking' ? (
                   <ActivityIndicator size="small" color={theme.colors.textSecondary} />
                 ) : null}
-                <Text
-                  variant="body"
-                  style={[
-                    styles.statusText,
-                    status.type === 'success' && { color: theme.colors.primary },
-                    status.type === 'error' && { color: theme.colors.danger }
-                  ]}
-                >
-                  {status.message}
-                </Text>
+                {status.type !== 'checking' ? (
+                  <Text
+                    variant="body"
+                    style={[
+                      styles.statusText,
+                      status.type === 'error' && { color: theme.colors.danger }
+                    ]}
+                  >
+                    {status.message}
+                  </Text>
+                ) : (
+                  <Text variant="body" color="textSecondary" style={styles.statusText}>
+                    {t('profile.activateSeller.checking')}
+                  </Text>
+                )}
+              </View>
+            ) : null}
+
+            {status?.type === 'idle' ? (
+              <View style={styles.retryContainer}>
+                <Button
+                  title={t('profile.activateSeller.retryCheck')}
+                  onPress={() => void checkStripeOnboarding()}
+                  variant="secondary"
+                  disabled={loading}
+                />
               </View>
             ) : null}
           </>
@@ -294,6 +321,9 @@ const styles = StyleSheet.create({
   },
   statusText: {
     flex: 1
+  },
+  retryContainer: {
+    marginTop: theme.spacing.gapMd
   },
   successWrap: {
     flex: 1,
