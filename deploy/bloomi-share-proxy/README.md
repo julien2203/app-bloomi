@@ -118,6 +118,7 @@ Force les balises Open Graph (`og:url`) à pointer vers `bloomi.ch`.
 |---|---|
 | `https://bloomi.ch/listing/{uuid}` | `listing-share?id={uuid}` |
 | `https://bloomi.ch/dressing/{uuid}` | `closet-share?id={uuid}` |
+| `https://bloomi.ch/open/{path}` | `app-open/{path}` (CTA e-mails) |
 
 ## Côté app (déjà en place)
 

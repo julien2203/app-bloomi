@@ -16,6 +16,7 @@ type NotificationPrefs = {
   favoriteItems: boolean;
   newFollowers: boolean;
   newItems: boolean;
+  marketingEmails: boolean;
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
@@ -24,10 +25,11 @@ const DEFAULT_PREFS: NotificationPrefs = {
   newFeedback: true,
   favoriteItems: true,
   newFollowers: true,
-  newItems: true
+  newItems: true,
+  marketingEmails: false
 };
 
-function normalizePrefs(value: unknown): NotificationPrefs {
+function normalizePrefs(value: unknown, marketingOptIn?: boolean | null): NotificationPrefs {
   const raw = (value ?? {}) as Partial<NotificationPrefs>;
   return {
     enabled: raw.enabled ?? DEFAULT_PREFS.enabled,
@@ -35,7 +37,11 @@ function normalizePrefs(value: unknown): NotificationPrefs {
     newFeedback: raw.newFeedback ?? DEFAULT_PREFS.newFeedback,
     favoriteItems: raw.favoriteItems ?? DEFAULT_PREFS.favoriteItems,
     newFollowers: raw.newFollowers ?? DEFAULT_PREFS.newFollowers,
-    newItems: raw.newItems ?? DEFAULT_PREFS.newItems
+    newItems: raw.newItems ?? DEFAULT_PREFS.newItems,
+    marketingEmails:
+      typeof raw.marketingEmails === 'boolean'
+        ? raw.marketingEmails
+        : Boolean(marketingOptIn)
   };
 }
 
@@ -61,13 +67,14 @@ export default function NotificationSettingsScreen() {
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('push_notification_settings')
+          .select('push_notification_settings, marketing_opt_in')
           .eq('id', userId)
           .maybeSingle();
         if (error) throw error;
         if (!mounted) return;
         const profilePrefs = (data as any)?.push_notification_settings;
-        setPrefs(normalizePrefs(profilePrefs));
+        const marketingOptIn = Boolean((data as any)?.marketing_opt_in);
+        setPrefs(normalizePrefs(profilePrefs, marketingOptIn));
       } catch {
         if (mounted) setPrefs(DEFAULT_PREFS);
       } finally {
@@ -84,9 +91,14 @@ export default function NotificationSettingsScreen() {
     if (!userId) return;
     setSaving(true);
     try {
+      const { marketingEmails, ...pushSettings } = next;
       await supabase
         .from('profiles')
-        .update({ push_notification_settings: next as any })
+        .update({
+          push_notification_settings: pushSettings as any,
+          marketing_opt_in: marketingEmails,
+          marketing_opt_in_at: new Date().toISOString()
+        })
         .eq('id', userId);
     } catch {
       // no-op: UI keeps latest state in memory
@@ -104,7 +116,13 @@ export default function NotificationSettingsScreen() {
   };
 
   const toggleItem = (
-    key: 'newMessage' | 'newFeedback' | 'favoriteItems' | 'newFollowers' | 'newItems',
+    key:
+      | 'newMessage'
+      | 'newFeedback'
+      | 'favoriteItems'
+      | 'newFollowers'
+      | 'newItems'
+      | 'marketingEmails',
     value: boolean
   ) => {
     const next: NotificationPrefs = {
@@ -229,6 +247,26 @@ export default function NotificationSettingsScreen() {
                 thumbColor="#FFFFFF"
                 ios_backgroundColor="#E8E8E8"
                 disabled={!prefs.enabled || saving}
+              />
+            </View>
+            <View style={styles.rowSeparator} />
+
+            <View style={styles.row}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="body" style={styles.rowLabel}>
+                  {t('profile.notificationSettings.marketingEmails')}
+                </Text>
+                <Text variant="captionSm" color="textSecondary" style={{ marginTop: 4 }}>
+                  {t('profile.notificationSettings.marketingEmailsHint')}
+                </Text>
+              </View>
+              <Switch
+                value={prefs.marketingEmails}
+                onValueChange={(v) => toggleItem('marketingEmails', v)}
+                trackColor={{ false: '#E8E8E8', true: '#C3EA4F' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor="#E8E8E8"
+                disabled={saving}
               />
             </View>
             <View style={styles.groupBottomSeparator} />

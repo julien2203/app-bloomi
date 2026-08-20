@@ -56,7 +56,8 @@ export default function EditListingSizeScreen() {
         const categoryId = values.category?.id;
 
         const data = await getSizes(gender, type, {
-          categoryIdForCounts: categoryId != null ? String(categoryId) : null
+          categoryIdForCounts: categoryId != null ? String(categoryId) : null,
+          requireGender: true
         });
 
         const bySectionTitle: Record<string, SizeRow[]> = {};

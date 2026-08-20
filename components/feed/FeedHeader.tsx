@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Image, StyleSheet, TextInput, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,7 +9,7 @@ import CoeurIcon from '../../assets/icons/heart2.svg';
 import SearchIcon from '../../assets/icons/search2.svg';
 import { IconBox } from '../ui/IconBox';
 import { theme } from '../../lib/theme';
-import { HIT_SLOP_EXTRA, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
+import { HIT_SLOP_EXTRA, HIT_SLOP_COMFORTABLE, HEADER_ICON_TOUCH_CONTAINER } from '../../lib/touchTargets';
 import { useFeedFiltersStore } from '../../lib/store/feedFilters';
 import { useAuthStore } from '../../stores/authStore';
 import { openGuestAuthPrompt } from '../../lib/guestAuthPrompt';
@@ -20,6 +20,10 @@ type FeedHeaderProps = {
   searchText: string;
   onSearchTextChange: (text: string) => void;
   onSubmitSearch: () => void;
+  onSearchFocus?: () => void;
+  searchActive?: boolean;
+  onClearSearch?: () => void;
+  onDismissSearch?: () => void;
   unreadNotificationsCount: number;
 };
 
@@ -27,12 +31,22 @@ export function FeedHeader({
   searchText,
   onSearchTextChange,
   onSubmitSearch,
+  onSearchFocus,
+  searchActive = false,
+  onClearSearch,
+  onDismissSearch,
   unreadNotificationsCount
 }: FeedHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const session = useAuthStore((s) => s.session);
+  const searchInputRef = useRef<TextInput>(null);
+
+  const handleDismissSearch = () => {
+    searchInputRef.current?.blur();
+    onDismissSearch?.();
+  };
 
   const requireAccount = (go: () => void) => {
     if (!session?.user) {
@@ -106,47 +120,76 @@ export function FeedHeader({
         </View>
       </View>
       <View style={styles.searchBar}>
-        <View style={styles.searchInputWrap}>
+        <View
+          style={[styles.searchInputWrap, searchActive && styles.searchInputWrapFocused]}
+        >
           <View style={styles.searchIconSlot}>
             <IconBox Svg={SearchIcon} boxSize={16} color="#000000" />
           </View>
           <TextInput
+            ref={searchInputRef}
             placeholder={t('feed.header.searchPlaceholder')}
             placeholderTextColor="#AAAAAA"
             style={styles.searchInput}
             value={searchText}
             onChangeText={onSearchTextChange}
+            onFocus={onSearchFocus}
             returnKeyType="search"
             onSubmitEditing={onSubmitSearch}
             allowFontScaling={false}
             maxFontSizeMultiplier={1}
           />
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.filterButton}
-            onPress={() =>
-              {
-                // Sécurité: le feed ne doit jamais rester filtré par ce bouton.
-                useFeedFiltersStore.getState().resetFilters();
-                // Filtres au niveau onglets (pas la pile Search) : évite un modal
-                // slide_from_bottom qui reste sur l’onglet Search et se referme au tap Search.
-                router.push({
-                  pathname: '/tabs/filters' as any,
-                  params: {
-                    returnTo: 'search',
-                    scope: 'search',
-                    from: 'feed-search-filters',
-                    resultsSection: 'search'
-                  }
-                });
+          {searchText.length > 0 && onClearSearch ? (
+            <TouchableOpacity
+              onPress={onClearSearch}
+              hitSlop={HIT_SLOP_COMFORTABLE}
+              style={styles.clearButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('filters.clearSearch')}
+            >
+              <Text style={styles.clearText}>×</Text>
+            </TouchableOpacity>
+          ) : null}
+          {!searchActive ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.filterButton}
+              onPress={() =>
+                {
+                  // Sécurité: le feed ne doit jamais rester filtré par ce bouton.
+                  useFeedFiltersStore.getState().resetFilters();
+                  // Filtres au niveau onglets (pas la pile Search) : évite un modal
+                  // slide_from_bottom qui reste sur l’onglet Search et se referme au tap Search.
+                  router.push({
+                    pathname: '/tabs/filters' as any,
+                    params: {
+                      returnTo: 'search',
+                      scope: 'search',
+                      from: 'feed-search-filters',
+                      resultsSection: 'search'
+                    }
+                  });
+                }
               }
-            }
-            accessibilityRole="button"
-            accessibilityLabel={t('feed.header.openFilters')}
-          >
-            <Feather name="menu" size={18} color="#000000" />
-          </TouchableOpacity>
+              accessibilityRole="button"
+              accessibilityLabel={t('feed.header.openFilters')}
+            >
+              <Feather name="menu" size={18} color="#000000" />
+            </TouchableOpacity>
+          ) : null}
         </View>
+        {searchActive && onDismissSearch ? (
+          <TouchableOpacity
+            onPress={handleDismissSearch}
+            activeOpacity={0.7}
+            style={styles.cancelButton}
+            hitSlop={HIT_SLOP_COMFORTABLE}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}
+          >
+            <Text style={styles.cancelText}>{t('common.cancel')}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -180,7 +223,8 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44
+    minHeight: 44,
+    gap: 8
   },
   searchInputWrap: {
     flex: 1,
@@ -189,8 +233,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F8F8F6',
     borderRadius: 24,
-    borderWidth: 0,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     paddingRight: 4
+  },
+  searchInputWrapFocused: {
+    borderColor: theme.colors.appleBlack
   },
   searchIconSlot: {
     paddingLeft: 14,
@@ -205,6 +253,18 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     paddingRight: 8
   },
+  clearButton: {
+    width: 28,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  clearText: {
+    fontSize: 22,
+    lineHeight: 24,
+    color: theme.colors.sectionLabel,
+    fontWeight: '400'
+  },
   filterButton: {
     width: 44,
     height: 44,
@@ -212,6 +272,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  cancelButton: {
+    minHeight: 44,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: theme.colors.appleBlack
   },
   headerIconHit: {
     ...HEADER_ICON_TOUCH_CONTAINER,

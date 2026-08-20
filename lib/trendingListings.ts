@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { FeedListing } from './api';
+import { FEED_LISTING_SELECT, type FeedListing } from './api';
 import type { FeedFilters } from './store/feedFilters';
 import { expandConditionFilterValues } from './conditionI18n';
 
@@ -34,7 +34,7 @@ export async function fetchTrendingListings(options?: { limit?: number }): Promi
 
   const { data: cards, error: cardsErr } = await supabase
     .from('v_feed_listings')
-    .select('*')
+    .select(FEED_LISTING_SELECT)
     .in('id', ids);
   if (cardsErr) throw cardsErr;
 

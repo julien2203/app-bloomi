@@ -12,10 +12,7 @@ import { mergeAuthCallback } from '../../lib/auth/authCallbackUrl';
 import { authDebug, authDebugError } from '../../lib/authDebugLog';
 import { ensureProfileExists } from '../../lib/profile';
 import { applyPendingSellerProfile } from '../../lib/pendingSellerProfile';
-import {
-  needsAuthPhoneVerification,
-  postAuthDestination
-} from '../../lib/auth/needsPhoneVerification';
+import { postAuthDestination } from '../../lib/auth/needsPhoneVerification';
 import {
   buildEmailPkceCallbackUrl,
   exchangePkceCallbackOnce,
@@ -65,7 +62,7 @@ export default function AuthCallbackScreen() {
       router.replace('/auth/login');
     }, 20000);
 
-    const finish = (path: '/auth/login' | '/auth/reset-password' | '/auth/verify-phone' | '/tabs/feed') => {
+    const finish = (path: '/auth/login' | '/auth/reset-password' | '/tabs/feed') => {
       if (cancelled) return;
       clearTimeout(safetyTimer);
       router.replace(path);
@@ -120,11 +117,7 @@ export default function AuthCallbackScreen() {
           });
         }
 
-        const phonePendingVerification = needsAuthPhoneVerification(session.user);
-        authDebug('callback:goAfterSession', {
-          phonePendingVerification,
-          isRecovery
-        });
+        authDebug('callback:goAfterSession', { isRecovery });
         if (isRecovery) {
           finish('/auth/reset-password');
           return;
@@ -276,8 +269,8 @@ export default function AuthCallbackScreen() {
           return;
         }
         const { data } = await supabase.auth.getSession();
-        if (data.session && needsAuthPhoneVerification(data.session.user)) {
-          finish('/auth/verify-phone');
+        if (data.session) {
+          finish(postAuthDestination(data.session.user));
           return;
         }
         finish('/auth/login');

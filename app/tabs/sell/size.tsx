@@ -67,7 +67,7 @@ export default function SellSizeScreen() {
         const gender = values.categoryGender ?? values.category?.gender;
         const type = values.categoryType;
 
-        const data = await getSizes(gender, type);
+        const data = await getSizes(gender, type, { requireGender: true });
 
         const bySectionTitle: Record<string, SizeRow[]> = {};
 

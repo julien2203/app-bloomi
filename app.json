@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bloomi",
     "slug": "bloomi-app",
-    "version": "1.1.11",
+    "version": "1.1.12",
     "scheme": "bloomi",
     "platforms": [
       "ios",
@@ -75,7 +75,7 @@
     "owner": "jupouch",
     "android": {
       "package": "com.jupouch.bloomiapp",
-      "versionCode": 33,
+      "versionCode": 35,
       "softwareKeyboardLayoutMode": "pan",
       "splash": {
         "backgroundColor": "#C3EA4F",
@@ -192,7 +192,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.jupouch.bloomiapp",
-      "buildNumber": "97",
+      "buildNumber": "102",
       "associatedDomains": [
         "applinks:bloomi.ch",
         "applinks:www.bloomi.ch"

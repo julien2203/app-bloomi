@@ -25,7 +25,7 @@ export default function TabsLayout() {
         headerShown: false,
         animation: 'none',
         detachInactiveScreens: false,
-        freezeOnBlur: false,
+        freezeOnBlur: true,
         sceneStyle: {
           backgroundColor: '#FFFFFF'
         },

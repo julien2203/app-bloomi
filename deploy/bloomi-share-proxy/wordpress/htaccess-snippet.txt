@@ -19,6 +19,7 @@ RewriteRule ^\.well-known/assetlinks\.json$ /bloomi-share/well-known/assetlinks.
 # Pages de partage — proxy PHP (pas de 302)
 RewriteRule ^listing/([0-9a-fA-F-]{36})/?$ /bloomi-share/share-proxy.php?type=listing&id=$1 [L,QSA]
 RewriteRule ^dressing/([0-9a-fA-F-]{36})/?$ /bloomi-share/share-proxy.php?type=dressing&id=$1 [L,QSA]
+RewriteRule ^open/(.+)$ /bloomi-share/share-proxy.php?type=open&path=$1 [L,QSA]
 </IfModule>
 
 # Content-Type correct pour apple-app-site-association (sans extension)

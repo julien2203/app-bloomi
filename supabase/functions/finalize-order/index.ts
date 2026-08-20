@@ -316,6 +316,11 @@ Deno.serve(async (req) => {
         shipping_first_name: metaShipFirstName,
         shipping_last_name: metaShipLastName,
         shipping_fee_chf: (Number.isFinite(shippingFeeCents) ? shippingFeeCents : 0) / 100,
+        promo_discount_chf:
+          feeSnapshot?.promoDiscountChf ??
+          (Number.isFinite(Number(pi.metadata?.promo_discount_cents))
+            ? Number(pi.metadata?.promo_discount_cents) / 100
+            : 0),
         is_promo_shipping: isPromoShipping,
         parcel_size: parcelSize,
       })

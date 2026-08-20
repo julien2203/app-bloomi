@@ -145,6 +145,12 @@ verify_jwt = false
 import_map = "./functions/closet-share/deno.json"
 entrypoint = "./functions/closet-share/index.ts"
 
+[functions.app-open]
+enabled = true
+verify_jwt = false
+import_map = "./functions/app-open/deno.json"
+entrypoint = "./functions/app-open/index.ts"
+
 [functions.notify-user]
 enabled = true
 verify_jwt = false
@@ -168,3 +174,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/auto-confirm-orders/deno.json"
 entrypoint = "./functions/auto-confirm-orders/index.ts"
+
+[functions.track-shipment]
+enabled = true
+verify_jwt = false
+import_map = "./functions/track-shipment/deno.json"
+entrypoint = "./functions/track-shipment/index.ts"

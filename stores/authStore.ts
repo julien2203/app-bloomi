@@ -7,6 +7,7 @@ import { applyPendingSellerProfile } from '../lib/pendingSellerProfile';
 import { useNotificationsBadgeStore } from './notificationsBadgeStore';
 import { useUnreadMessagesStore } from './unreadMessagesStore';
 import { authDebug, authDebugError } from '../lib/authDebugLog';
+import { restoreAuthSession } from '../lib/authSessionRefresh';
 import { invalidateBlockedSellerIdsCache } from '../lib/blockedSellerIdsCache';
 
 export const GUEST_BROWSE_STORAGE_KEY = 'bloomi_guest_browse_v1';

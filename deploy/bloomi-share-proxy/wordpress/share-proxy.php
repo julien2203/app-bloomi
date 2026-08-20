@@ -8,6 +8,7 @@
  * Usage (via .htaccess) :
  *   /listing/{uuid}  → share-proxy.php?type=listing&id={uuid}
  *   /dressing/{uuid} → share-proxy.php?type=dressing&id={uuid}
+ *   /open/{path}     → share-proxy.php?type=open&path={path}
  */
 
 declare(strict_types=1);
@@ -20,21 +21,35 @@ const BLOOMI_UUID_RE =
 
 $type = strtolower(trim((string) ($_GET['type'] ?? '')));
 $id = trim((string) ($_GET['id'] ?? ''));
+$path = trim((string) ($_GET['path'] ?? ''));
 
 $functionMap = [
     'listing' => 'listing-share',
     'dressing' => 'closet-share',
+    'open' => 'app-open',
 ];
 
-if (!isset($functionMap[$type]) || $id === '' || !preg_match(BLOOMI_UUID_RE, $id)) {
-    bloomi_share_error(400, 'Requête invalide');
-}
+if ($type === 'open') {
+    if ($path === '') {
+        bloomi_share_error(400, 'Requête invalide');
+    }
 
-$upstream = BLOOMI_SUPABASE_FUNCTIONS_BASE
-    . '/'
-    . $functionMap[$type]
-    . '?id='
-    . rawurlencode($id);
+    if (!preg_match('#^[a-z0-9/_-]+$#i', $path)) {
+        bloomi_share_error(400, 'Chemin invalide');
+    }
+
+    $upstream = BLOOMI_SUPABASE_FUNCTIONS_BASE
+        . '/app-open/'
+        . str_replace('%2F', '/', rawurlencode($path));
+} elseif (!isset($functionMap[$type]) || $id === '' || !preg_match(BLOOMI_UUID_RE, $id)) {
+    bloomi_share_error(400, 'Requête invalide');
+} else {
+    $upstream = BLOOMI_SUPABASE_FUNCTIONS_BASE
+        . '/'
+        . $functionMap[$type]
+        . '?id='
+        . rawurlencode($id);
+}
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 if ($method !== 'GET' && $method !== 'HEAD') {

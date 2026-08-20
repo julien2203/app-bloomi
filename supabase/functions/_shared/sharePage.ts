@@ -268,7 +268,7 @@ export function renderSharePage(params: SharePageParams): string {
         <h1>${safeTitle}</h1>
         <p class="description">${escapeHtml(bodyText)}</p>
         <p class="description">${safeDescription}</p>
-        <a class="cta" id="open-app" href="${escapeHtml(deepLink)}">${safeCta}</a>
+        <a class="cta" id="open-app" href="${escapeHtml(canonicalUrl)}">${safeCta}</a>
         <div class="stores">
           <a href="${escapeHtml(IOS_APP_STORE)}">Télécharger sur l'App Store</a>
           <a href="${escapeHtml(ANDROID_PLAY_STORE)}">Disponible sur Google Play</a>

@@ -16,7 +16,9 @@ function hrefForFilterReturn(
 ): Href {
   if (returnTo === 'search') {
     const query = resultsParams?.query?.trim();
-    return query ? { pathname: '/tabs/search', params: { query } } : '/tabs/search';
+    const params: Record<string, string> = { commit: '1' };
+    if (query) params.query = query;
+    return { pathname: '/tabs/search', params };
   }
 
   const params: Record<string, string> = {};

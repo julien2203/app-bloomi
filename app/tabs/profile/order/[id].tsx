@@ -41,6 +41,7 @@ type OrderDetailRow = {
   buyer_protection_chf?: number | string | null;
   buyer_banking_fee_chf?: number | string | null;
   shipping_fee_chf?: number | string | null;
+  promo_discount_chf?: number | string | null;
   parcel_size?: string | null;
   is_promo_shipping?: boolean | null;
   shipping_city?: string | null;
@@ -121,6 +122,7 @@ export default function OrderDetailScreen() {
             buyer_protection_chf,
             buyer_banking_fee_chf,
             shipping_fee_chf,
+            promo_discount_chf,
             parcel_size,
             is_promo_shipping,
             shipping_city,
@@ -400,6 +402,15 @@ export default function OrderDetailScreen() {
                       </Text>
                     </View>
                   ) : null}
+                  {totals && totals.promoDiscountChf > 0 ? (
+                    <View style={styles.moneyRow}>
+                      <Text variant="body" style={styles.promoDiscountLabel}>
+                        {t('feed.checkout.promoDiscount', {
+                          amount: `-${formatChf(totals.promoDiscountChf)}`
+                        })}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View style={[styles.moneyRow, styles.totalRow]}>
                     <Text variant="body" style={styles.totalLabel}>
                       {t('feed.orderConfirmation.totalPaid')}
@@ -650,6 +661,11 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontFamily: theme.fontFamily.bold
+  },
+  promoDiscountLabel: {
+    color: '#C3EA4F',
+    fontFamily: theme.fontFamily.semiBold,
+    flex: 1
   },
   totalValue: {
     fontFamily: theme.fontFamily.bold

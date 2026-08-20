@@ -69,6 +69,54 @@ export function buildListingDetailParams(
 
 type ListingDetailPathBase = '/tabs/feed' | '/tabs/search' | '/tabs/results' | '/tabs/public-profile';
 
+export type ListingStackToken = 'feed' | 'search' | 'results' | 'public-profile';
+
+/** Base de pile pour fiche / checkout / make-offer (y compris Messages). */
+export type ListingFlowStackBase = ListingDetailPathBase | '/tabs/messages';
+
+export function listingStackTokenFromPathBase(base: ListingDetailPathBase): ListingStackToken {
+  switch (base) {
+    case '/tabs/search':
+      return 'search';
+    case '/tabs/results':
+      return 'results';
+    case '/tabs/public-profile':
+      return 'public-profile';
+    default:
+      return 'feed';
+  }
+}
+
+export function listingDetailPathBaseFromStackToken(
+  token?: string | null
+): ListingDetailPathBase | undefined {
+  switch (token) {
+    case 'search':
+      return '/tabs/search';
+    case 'results':
+      return '/tabs/results';
+    case 'public-profile':
+      return '/tabs/public-profile';
+    case 'feed':
+      return '/tabs/feed';
+    default:
+      return undefined;
+  }
+}
+
+export function impliedReturnToFromPathBase(base: ListingDetailPathBase): ListingReturnTo {
+  switch (base) {
+    case '/tabs/search':
+      return 'search';
+    case '/tabs/results':
+      return 'results';
+    case '/tabs/public-profile':
+      return 'public-profile';
+    default:
+      return 'feed';
+  }
+}
+
 export function resolveListingDetailPathBase(
   returnTo?: string,
   pathname?: string
@@ -88,9 +136,22 @@ export function resolveListingDetailPathBase(
   }
 }
 
+/** Résout la pile courante depuis le pathname (checkout, confirmation, etc.). */
+export function resolveListingFlowStackBase(pathname?: string | null): ListingFlowStackBase {
+  if (pathname?.includes('/tabs/messages')) return '/tabs/messages';
+  if (pathname?.includes('/tabs/public-profile')) return '/tabs/public-profile';
+  if (pathname?.includes('/tabs/results')) return '/tabs/results';
+  if (pathname?.includes('/tabs/search')) return '/tabs/search';
+  return '/tabs/feed';
+}
+
 export function listingDetailHref(
   listingId: string,
-  opts?: ListingReturnParams & { cover_photo?: string; detailPathBase?: ListingDetailPathBase }
+  opts?: ListingReturnParams & {
+    cover_photo?: string;
+    detailPathBase?: ListingDetailPathBase;
+    extra?: Record<string, string>;
+  }
 ): Href {
   const params = buildListingDetailParams(listingId, opts);
   if (opts?.cover_photo) params.cover_photo = opts.cover_photo;
@@ -177,6 +238,9 @@ export function navigateBackFromListingDetail(router: Router, ctx: ListingBackCo
     return;
   }
   if (ctx.from_offer_chat === '1') {
+    // Reconstruct depuis Messages : ne pas router.back() (ça sort vers le Feed).
+    // Respecter return_to (Search, Results, profil public, Feed).
+    if (navigateToReturnHref(router, ctx)) return;
     router.replace('/tabs/feed');
     return;
   }

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { translateCategoryLabel } from './categoryI18n';
+import { translateCategoryLabel, formatCategoryWithGender } from './categoryI18n';
 import { translateColorName } from './colorI18n';
 import { normalizeConditionFilterSelection, translateConditionLabel } from './conditionI18n';
 import { translateSizeLabel } from './sizeI18n';
+import { getCategoryFilterContext, summarizeSelectedCategoryIds } from './api/filters';
+import { translateFilterGenderDb } from './filterGenderParams';
 import { supabase } from './supabase';
 import type { FeedFilters } from './store/feedFilters';
 
@@ -11,6 +13,21 @@ function truncateJoined(values: string[], maxLen = 24): string {
   const joined = values.join(', ');
   if (joined.length <= maxLen) return joined;
   return `${joined.slice(0, maxLen - 1)}…`;
+}
+
+function allGenderItemsI18nKey(gender: string): string | null {
+  switch (gender) {
+    case 'femme':
+      return 'filters.allGenderItems.woman';
+    case 'homme':
+      return 'filters.allGenderItems.men';
+    case 'enfant':
+      return 'filters.allGenderItems.kids';
+    case 'bebe':
+      return 'filters.allGenderItems.baby';
+    default:
+      return null;
+  }
 }
 
 export function useFilterSummaryLabels(filters: FeedFilters) {
@@ -26,24 +43,62 @@ export function useFilterSummaryLabels(filters: FeedFilters) {
       setCategoryLabel(undefined);
       return;
     }
-    if (ids.length > 1) {
-      setCategoryLabel(t('filters.categoriesCount', { count: ids.length }));
-      return;
-    }
 
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from('categories')
-        .select('name, slug')
-        .eq('id', ids[0])
-        .maybeSingle();
+      if (ids.length > 1) {
+        const summary = await summarizeSelectedCategoryIds(ids);
+        if (cancelled) return;
+        if (summary.kind === 'all_gender') {
+          const key = allGenderItemsI18nKey(summary.gender);
+          setCategoryLabel(key ? t(key) : translateFilterGenderDb(summary.gender, t));
+          return;
+        }
+        if (summary.kind === 'luxury') {
+          setCategoryLabel(t('filters.sheetLuxury'));
+          return;
+        }
+        if (summary.kind === 'all_parent') {
+          const leaf = translateCategoryLabel({ name: summary.name, slug: summary.slug }, t);
+          setCategoryLabel(formatCategoryWithGender(leaf, summary.gender, t) || leaf);
+          return;
+        }
+        if (summary.kind === 'names') {
+          const names = summary.items.map((item) =>
+            translateCategoryLabel({ name: item.name, slug: item.slug }, t)
+          );
+          setCategoryLabel(
+            formatCategoryWithGender(truncateJoined(names, 28), summary.gender, t) ||
+              truncateJoined(names, 28)
+          );
+          return;
+        }
+        if (summary.kind === 'gender') {
+          setCategoryLabel(translateFilterGenderDb(summary.gender, t));
+          return;
+        }
+        setCategoryLabel(t('filters.categoriesCount', { count: summary.count }));
+        return;
+      }
+
+      const categoryId = ids[0]!;
+      const [{ data }, ctx] = await Promise.all([
+        supabase
+          .from('categories')
+          .select('name, slug')
+          .eq('id', categoryId)
+          .maybeSingle(),
+        getCategoryFilterContext(String(categoryId))
+      ]);
       if (cancelled) return;
       const row = data as { name?: string; slug?: string | null } | null;
       const name = row?.name?.trim();
-      setCategoryLabel(
-        name ? translateCategoryLabel({ name, slug: row?.slug }, t) : ids[0]
-      );
+      if (!name) {
+        setCategoryLabel(categoryId);
+        return;
+      }
+      const leaf = translateCategoryLabel({ name, slug: row?.slug }, t);
+      setCategoryLabel(formatCategoryWithGender(leaf, ctx?.gender, t) || leaf);
     })();
     return () => {
       cancelled = true;
@@ -144,5 +199,14 @@ export function useFilterSummaryLabels(filters: FeedFilters) {
     return truncateJoined(labels);
   }, [filters.conditionIds, t]);
 
-  return { categoryLabel, brandLabel, sizeLabel, colorLabel, conditionLabel };
+  const priceLabel = useMemo(() => {
+    const min = filters.priceMin;
+    const max = filters.priceMax;
+    if (min == null && max == null) return undefined;
+    if (min != null && max != null) return `${min}–${max} CHF`;
+    if (min != null) return t('filters.fromChf', { value: min });
+    return t('filters.upToChf', { value: max });
+  }, [filters.priceMin, filters.priceMax, t]);
+
+  return { categoryLabel, brandLabel, sizeLabel, colorLabel, conditionLabel, priceLabel };
 }

@@ -43,7 +43,7 @@ import {
   temporaryListingPhotoOrderIndex
 } from '../../../../lib/listingPhotoUtils';
 import { useEditListingFormStore } from '../../../../lib/store/editListingForm';
-import { getCategoryFilterContext } from '../../../../lib/api/filters';
+import { getCategoryFilterContext, isSizeCompatibleWithCategoryGender } from '../../../../lib/api/filters';
 import type { ParcelSizeValue, SellCategoryType } from '../../../../lib/store/sellForm';
 import {
   normalizeEditBrand,
@@ -57,7 +57,7 @@ import { useAuthStore } from '../../../../stores/authStore';
 import { useTranslation } from 'react-i18next';
 import { useStripe } from '@stripe/stripe-react-native';
 import { translateConditionLabel } from '../../../../lib/conditionI18n';
-import { translateCategoryLabel } from '../../../../lib/categoryI18n';
+import { translateCategoryLabel, formatCategoryWithGender } from '../../../../lib/categoryI18n';
 import { translateColorName } from '../../../../lib/colorI18n';
 import { translateSizeLabel } from '../../../../lib/sizeI18n';
 import { formatBrandDisplayLabel, isBlockedBrandName } from '../../../../lib/brandConstants';
@@ -187,14 +187,29 @@ export default function EditListingScreen() {
   const selectedCategoryLabel = useMemo(() => {
     const raw = formValues.category?.name || listing?.category || null;
     if (!raw) return null;
-    return translateCategoryLabel(
+    const leaf = translateCategoryLabel(
       {
         name: raw,
         slug: formValues.category?.slug ?? listing?.category_slug
       },
       t
     );
-  }, [formValues.category, listing?.category, listing?.category_slug, t]);
+    return formatCategoryWithGender(
+      leaf,
+      formValues.categoryGender ??
+        formValues.category?.gender ??
+        listing?.category_gender ??
+        null,
+      t
+    );
+  }, [
+    formValues.category,
+    formValues.categoryGender,
+    listing?.category,
+    listing?.category_slug,
+    listing?.category_gender,
+    t
+  ]);
   const selectedBrandLabel = formValues.brand?.name || listing?.brand || null;
   const selectedSizeLabel = formValues.size?.label || listing?.size || null;
   const displaySizeLabel = selectedSizeLabel
@@ -574,6 +589,22 @@ export default function EditListingScreen() {
 
     if (formValues.brand?.name && isBlockedBrandName(formValues.brand.name)) {
       Alert.alert(t('common.error'), t('sell.blockedBrand'));
+      return;
+    }
+
+    const categoryGenderForSize =
+      formValues.categoryGender ?? formValues.category?.gender ?? null;
+    const sizeLabelForCheck =
+      formValues.size?.label?.trim() ||
+      (typeof listingBase.size === 'string' ? listingBase.size.trim() : '') ||
+      null;
+    const sizeCompatible = await isSizeCompatibleWithCategoryGender({
+      sizeId: formValues.size?.id ?? null,
+      sizeLabel: sizeLabelForCheck,
+      categoryGender: categoryGenderForSize
+    });
+    if (!sizeCompatible) {
+      Alert.alert(t('sell.incompleteForm'), t('sell.sizeIncompatibleWithCategory'));
       return;
     }
 

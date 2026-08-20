@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   fetchRecipientLanguage,
   orderCancelledPushText,
+  sellerOrderCancelledPushText,
 } from "../_shared/pushNotificationI18n.ts";
 import { notifyUser } from "../_shared/notifyUser.ts";
 
@@ -331,6 +332,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const sellerLang = await fetchRecipientLanguage(supabase, row.seller_id);
+    const sellerCancelCopy = sellerOrderCancelledPushText(sellerLang);
     await notifyUser({
       supabaseAdmin: supabase,
       supabaseUrl,
@@ -341,7 +344,11 @@ Deno.serve(async (req) => {
       variables: {
         orderId: row.id,
       },
-      skipPush: true,
+      push: {
+        title: sellerCancelCopy.title,
+        body: sellerCancelCopy.body,
+        data: { order_id: row.id, notification_type: "new_items" },
+      },
     });
   } catch (e) {
     console.warn("Erreur envoi e-mail vendeur:", e);

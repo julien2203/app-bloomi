@@ -63,7 +63,7 @@ import {
 } from '../../../lib/reports';
 import { translateColorList } from '../../../lib/colorI18n';
 import { translateConditionLabel } from '../../../lib/conditionI18n';
-import { translateCategoryLabel } from '../../../lib/categoryI18n';
+import { translateCategoryLabel, formatCategoryWithGender } from '../../../lib/categoryI18n';
 import { translateSizeLabel } from '../../../lib/sizeI18n';
 import { BuyerFinalPriceRow } from '../../../components/pricing/BuyerFinalPriceRow';
 import { ListingPickupAddresses } from '../../../components/listing/ListingPickupAddresses';
@@ -71,6 +71,8 @@ import { LetterAplusLabelNote } from '../../../components/listing/LetterAplusLab
 import { formatBuyerFinalPrice } from '../../../lib/formatBuyerPrice';
 import { getListingShareUrl, shareListing } from '../../../lib/listingShare';
 import {
+  impliedReturnToFromPathBase,
+  listingStackTokenFromPathBase,
   navigateBackFromListingDetail,
   pickListingReturnParams,
   publicProfileHref,
@@ -133,13 +135,22 @@ export default function ListingDetailScreen() {
     from_notifications_origin?: string;
     return_to?: string;
     return_user_id?: string;
+    return_query?: string;
+    return_search_tab?: string;
+    profile_return_to?: string;
   }>();
   const { id, cover_photo, from_offer_chat, from_notifications, from_notifications_origin } =
     routeParams;
-  const listingReturnParams = useMemo(() => pickListingReturnParams(routeParams), [
-    routeParams.return_to,
-    routeParams.return_user_id
-  ]);
+  const listingReturnParams = useMemo(
+    () => pickListingReturnParams(routeParams),
+    [
+      routeParams.return_to,
+      routeParams.return_user_id,
+      routeParams.return_query,
+      routeParams.return_search_tab,
+      routeParams.profile_return_to
+    ]
+  );
 
   const listingDetailPathBase = useMemo(
     () => resolveListingDetailPathBase(listingReturnParams.return_to, pathname),
@@ -484,11 +495,14 @@ export default function ListingDetailScreen() {
 
   const categoryLabel = useMemo(() => {
     if (!listing?.category) return '—';
-    return translateCategoryLabel(
+    const leaf = translateCategoryLabel(
       { name: listing.category, slug: listing.category_slug },
       t
     );
-  }, [listing?.category, listing?.category_slug, t]);
+    return (
+      formatCategoryWithGender(leaf, listing.category_gender, t) || '—'
+    );
+  }, [listing?.category, listing?.category_slug, listing?.category_gender, t]);
 
   const sizeLabel = useMemo(() => {
     if (!listing?.size) return undefined;
@@ -664,6 +678,26 @@ export default function ListingDetailScreen() {
     }
     if (user.id === listing.seller_id) return;
 
+    const returnTo =
+      listingReturnParams.return_to ?? impliedReturnToFromPathBase(listingDetailPathBase);
+    const chatParams: Record<string, string> = {
+      from_listing_id: listing.id,
+      from_listing_stack: listingStackTokenFromPathBase(listingDetailPathBase),
+      return_to: returnTo
+    };
+    if (listingReturnParams.return_user_id) {
+      chatParams.return_user_id = listingReturnParams.return_user_id;
+    }
+    if (listingReturnParams.profile_return_to) {
+      chatParams.profile_return_to = listingReturnParams.profile_return_to;
+    }
+    if (listingReturnParams.return_query) {
+      chatParams.return_query = listingReturnParams.return_query;
+    }
+    if (listingReturnParams.return_search_tab) {
+      chatParams.return_search_tab = listingReturnParams.return_search_tab;
+    }
+
     void (async () => {
       const { data: existing, error } = await getExistingThreadForListing(listing.id);
       if (error) {
@@ -674,7 +708,7 @@ export default function ListingDetailScreen() {
       if (existing?.id) {
         router.push({
           pathname: '/tabs/messages/[id]',
-          params: { id: existing.id, from_listing_id: listing.id }
+          params: { id: existing.id, ...chatParams }
         });
         return;
       }
@@ -685,7 +719,7 @@ export default function ListingDetailScreen() {
           id: 'draft',
           listing_id: listing.id,
           seller_id: listing.seller_id,
-          from_listing_id: listing.id
+          ...chatParams
         }
       });
     })();
@@ -767,7 +801,7 @@ export default function ListingDetailScreen() {
     }
 
     router.push({
-      pathname: '/tabs/feed/make-offer',
+      pathname: `${listingDetailPathBase}/make-offer` as any,
       params: { id: listing.id }
     });
   };
@@ -795,7 +829,7 @@ export default function ListingDetailScreen() {
     const coverPhoto = photos?.[0]?.url;
 
     router.push({
-      pathname: '/tabs/feed/listing/checkout' as any,
+      pathname: `${listingDetailPathBase}/listing/checkout` as any,
       params: {
         listing_id: listing.id,
         seller_id: listing.seller_id,
@@ -1464,41 +1498,31 @@ export default function ListingDetailScreen() {
               variant="google"
               style={styles.bottomButtonOwnerFull}
             />
+          ) : isPurchaseDisabled ? (
+            <Button
+              title={
+                sellerVacationMode
+                  ? t('feed.listingDetail.sellerOnVacation')
+                  : t('feed.listingDetail.reserved')
+              }
+              onPress={() => {}}
+              variant="secondary"
+              style={styles.bottomButtonSecondaryDisabled}
+              disabled
+            />
           ) : (
             <>
               <Button
-                title={
-                  sellerVacationMode
-                    ? t('feed.listingDetail.sellerOnVacation')
-                    : isListingReservedOrUnavailable
-                    ? t('feed.listingDetail.reserved')
-                    : t('feed.listingDetail.makeOffer')
-                }
+                title={t('feed.listingDetail.makeOffer')}
                 onPress={handleMakeOffer}
                 variant="secondary"
-                style={
-                  isPurchaseDisabled
-                    ? styles.bottomButtonSecondaryDisabled
-                    : styles.bottomButtonSecondary
-                }
-                disabled={isPurchaseDisabled}
+                style={styles.bottomButtonSecondary}
               />
               <Button
-                title={
-                  sellerVacationMode
-                    ? t('feed.listingDetail.sellerOnVacation')
-                    : isListingReservedOrUnavailable
-                    ? t('feed.listingDetail.reserved')
-                    : t('feed.listingDetail.buyNow')
-                }
+                title={t('feed.listingDetail.buyNow')}
                 onPress={handleBuyNow}
                 variant="google"
-                style={
-                  isPurchaseDisabled
-                    ? styles.bottomButtonDisabled
-                    : styles.bottomButtonBuyNow
-                }
-                disabled={isPurchaseDisabled}
+                style={styles.bottomButtonBuyNow}
               />
             </>
           )}
@@ -2125,9 +2149,6 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     backgroundColor: '#F0F0F0'
-  },
-  bottomButtonDisabled: {
-    opacity: 0.45
   },
   modalContainer: {
     flex: 1,

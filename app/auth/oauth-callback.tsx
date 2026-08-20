@@ -53,7 +53,7 @@ export default function OAuthCallbackScreen() {
       router.replace('/auth/login');
     }, 25000);
 
-    const finish = (path: '/auth/login' | '/auth/verify-phone' | '/tabs/feed') => {
+    const finish = (path: '/auth/login' | '/tabs/feed') => {
       if (cancelled) return;
       clearTimeout(safetyTimer);
       router.replace(path);

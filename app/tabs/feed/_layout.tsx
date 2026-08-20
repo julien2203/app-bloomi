@@ -30,6 +30,11 @@ export default function FeedStackLayout() {
           animation: 'slide_from_bottom'
         }}
       />
+      <Stack.Screen name="listing/checkout" options={{ headerShown: false, gestureEnabled: true }} />
+      <Stack.Screen
+        name="listing/order-confirmation"
+        options={{ headerShown: false, gestureEnabled: true }}
+      />
       <Stack.Screen name="favorites" options={{ headerShown: false, gestureEnabled: true }} />
       <Stack.Screen name="notifications" options={{ headerShown: false, gestureEnabled: true }} />
       <Stack.Screen name="orders" options={{ headerShown: false, gestureEnabled: true }} />

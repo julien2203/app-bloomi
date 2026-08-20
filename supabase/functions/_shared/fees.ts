@@ -55,6 +55,13 @@ export const SELLER_FEE_RATES: Record<PriceTier, number> = {
 
 export const BANKING_FEE_RATE = 0.03;
 
+export const PROMO_THRESHOLD_CHF = 30;
+export const PROMO_DISCOUNT_CHF = 5;
+
+export function getPromoDiscount(priceChf: number): number {
+  return priceChf >= PROMO_THRESHOLD_CHF ? PROMO_DISCOUNT_CHF : 0;
+}
+
 export const BOOST_OPTIONS: readonly BoostOption[] = [
   { sponsorType: 'listing', durationDays: 3, priceChf: 3, priceCents: 300 },
   { sponsorType: 'listing', durationDays: 7, priceChf: 5, priceCents: 500 },
@@ -219,6 +226,7 @@ export type OrderFeeSnapshot = {
   sellerProfileType: SellerProfileType;
   sellerPayoutChf: number;
   shippingFeeChf: number;
+  promoDiscountChf: number;
   totalPaidChf: number;
 };
 
@@ -231,6 +239,7 @@ export type PaymentIntentFeeMetadata = {
   sellerFeeRate: number;
   sellerProfileType: SellerProfileType;
   shippingFeeCents: number;
+  promoDiscountCents: number;
   roundingAdjustmentCents: number;
   platformRetentionCents: number;
   totalCents: number;
@@ -264,13 +273,15 @@ export function buildPaymentIntentFeeBreakdown(params: {
     roundChfToInteger(centsToChf(buyerSubtotalCentsRaw))
   );
   const roundingAdjustmentCents = buyerSubtotalCentsRounded - buyerSubtotalCentsRaw;
+  const promoDiscountCents = chfToCents(getPromoDiscount(itemPriceChf));
   const platformRetentionCents =
     buyerProtectionCents +
     buyerBankingFeeCents +
     shippingFeeCents +
     sellerCommissionCents +
-    roundingAdjustmentCents;
-  const totalCents = buyerSubtotalCentsRounded + shippingFeeCents;
+    roundingAdjustmentCents -
+    promoDiscountCents;
+  const totalCents = Math.max(0, buyerSubtotalCentsRounded + shippingFeeCents - promoDiscountCents);
 
   return {
     itemAmountCents,
@@ -281,6 +292,7 @@ export function buildPaymentIntentFeeBreakdown(params: {
     sellerFeeRate: sellerFees.feeRate,
     sellerProfileType: sellerFees.profileType,
     shippingFeeCents,
+    promoDiscountCents,
     roundingAdjustmentCents,
     platformRetentionCents,
     totalCents
@@ -299,6 +311,7 @@ export function paymentIntentFeeMetadataToStrings(
     seller_fee_rate: String(fees.sellerFeeRate),
     seller_profile_type: fees.sellerProfileType,
     shipping_fee_cents: String(fees.shippingFeeCents),
+    promo_discount_cents: String(fees.promoDiscountCents),
     rounding_adjustment_cents: String(fees.roundingAdjustmentCents),
     platform_retention_cents: String(fees.platformRetentionCents),
     commission_cents: String(fees.platformRetentionCents)
@@ -323,6 +336,9 @@ export function parsePaymentIntentFeeMetadata(
   const buyerBankingFeeCents = Number(metadata.buyer_banking_fee_cents ?? '0');
   const sellerCommissionCents = Number(metadata.seller_commission_cents ?? '0');
   const shippingFeeCents = Number(metadata.shipping_fee_cents ?? '0');
+  const promoDiscountCentsRaw = Number(metadata.promo_discount_cents ?? '0');
+  const promoDiscountCents =
+    Number.isFinite(promoDiscountCentsRaw) && promoDiscountCentsRaw > 0 ? promoDiscountCentsRaw : 0;
   const roundingAdjustmentCents = Number(metadata.rounding_adjustment_cents ?? '0');
   const platformRetentionCents = Number(
     metadata.platform_retention_cents ?? metadata.commission_cents ?? '0'
@@ -335,7 +351,7 @@ export function parsePaymentIntentFeeMetadata(
     roundingAdjustmentCents !== 0
       ? buyerSubtotalCentsRaw + roundingAdjustmentCents
       : chfToCents(roundChfToInteger(centsToChf(buyerSubtotalCentsRaw)));
-  const totalCents = buyerSubtotalCentsRounded + shippingFeeCents;
+  const totalCents = Math.max(0, buyerSubtotalCentsRounded + shippingFeeCents - promoDiscountCents);
 
   return {
     itemAmountCents,
@@ -346,6 +362,7 @@ export function parsePaymentIntentFeeMetadata(
     sellerFeeRate,
     sellerProfileType,
     shippingFeeCents,
+    promoDiscountCents,
     roundingAdjustmentCents,
     platformRetentionCents,
     totalCents
@@ -364,6 +381,7 @@ export function paymentIntentFeesToOrderSnapshot(
     sellerProfileType: fees.sellerProfileType,
     sellerPayoutChf: centsToChf(fees.sellerPayoutCents),
     shippingFeeChf: centsToChf(fees.shippingFeeCents),
+    promoDiscountChf: centsToChf(fees.promoDiscountCents),
     totalPaidChf: centsToChf(fees.totalCents)
   };
 }

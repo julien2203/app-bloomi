@@ -38,7 +38,9 @@ import type {
 } from './types';
 import type { FeedFilters } from './store/feedFilters';
 import { expandConditionFilterValues } from './conditionI18n';
+import { getCategoryFilterContext } from './api/filters';
 import { sendPushNotificationWithUserJwt } from './pushNotifications';
+import { notifyListingAudience } from './notifyListingAudience';
 import { SUPABASE_URL } from './env';
 import { getBuyerListingOfferGate } from './listingOffers';
 import {
@@ -109,6 +111,8 @@ export type FeedListing = {
   category_id?: number | null;
   condition: string | null;
   brand?: string | null;
+  size?: string | null;
+  color?: string | null;
   delivery_mode: string;
   city: string | null;
   country_code: string | null;
@@ -123,7 +127,13 @@ export type FeedListing = {
   seller_is_influencer?: boolean | null;
   listing_city: string;
   listing_country: string;
+  is_sponsored?: boolean | null;
+  sponsored_until?: string | null;
 };
+
+/** Colonnes feed/results — évite `select('*')` (payload plus léger). */
+export const FEED_LISTING_SELECT =
+  'id,seller_id,title,description,price,likes_count,status,category,category_id,condition,brand,size,color,delivery_mode,city,country_code,created_at,published_at,updated_at,cover_photo_url,cover_photo_order,seller_display_name,seller_avatar_url,seller_is_influencer,listing_city,listing_country,is_sponsored,sponsored_until';
 
 function applyFeedListingFilters(
   query: any,
@@ -159,6 +169,7 @@ export type MemberSearchRow = {
   avatar_url: string | null;
   company_name: string | null;
   is_influencer: boolean | null;
+  seller_type?: 'individual' | 'pro' | 'sole_proprietorship' | null;
 };
 
 const MEMBER_SEARCH_PAGE_SIZE = 20;
@@ -185,7 +196,7 @@ export async function searchMemberProfiles(params: {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, avatar_url, company_name, is_influencer')
+    .select('id, display_name, avatar_url, company_name, is_influencer, seller_type')
     .or(orFilter)
     .order('display_name', { ascending: true, nullsFirst: false })
     .range(offset, offset + limit - 1);
@@ -378,7 +389,7 @@ export async function getFeedListings(params?: {
       if (!user?.id) {
         let baseQuery = supabase
           .from('v_feed_listings')
-          .select('*')
+          .select(FEED_LISTING_SELECT)
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
         baseQuery = applyFeedListingFilters(
@@ -405,7 +416,7 @@ export async function getFeedListings(params?: {
       if (likesErr) {
         let baseQuery = supabase
           .from('v_feed_listings')
-          .select('*')
+          .select(FEED_LISTING_SELECT)
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
         baseQuery = applyFeedListingFilters(
@@ -429,7 +440,7 @@ export async function getFeedListings(params?: {
       if (likedIds.length === 0) {
         let baseQuery = supabase
           .from('v_feed_listings')
-          .select('*')
+          .select(FEED_LISTING_SELECT)
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
         baseQuery = applyFeedListingFilters(baseQuery, filters, { brandLabels, sizeLabels, colorLabels });
@@ -444,7 +455,7 @@ export async function getFeedListings(params?: {
       }
 
       // Liked items matching current filters
-      let likedQ = supabase.from('v_feed_listings').select('*').in('id', likedIds);
+      let likedQ = supabase.from('v_feed_listings').select(FEED_LISTING_SELECT).in('id', likedIds);
       likedQ = applyFeedListingFilters(likedQ, filters, { brandLabels, sizeLabels, colorLabels });
 
       const { data: likedData, error: likedErr } = await likedQ;
@@ -470,7 +481,7 @@ export async function getFeedListings(params?: {
       const restOffset = Math.max(0, offset - likedLen);
       let restQ = supabase
         .from('v_feed_listings')
-        .select('*')
+        .select(FEED_LISTING_SELECT)
         .order('created_at', { ascending: false })
         .range(restOffset, restOffset + remaining - 1);
       restQ = applyFeedListingFilters(restQ, filters, { brandLabels, sizeLabels, colorLabels });
@@ -510,7 +521,7 @@ export async function getFeedListings(params?: {
 
     let query = supabase
       .from('v_feed_listings')
-      .select('*')
+      .select(FEED_LISTING_SELECT)
       .order(orderColumn, { ascending })
       .range(offset, offset + limit - 1);
     query = applyFeedListingFilters(query, filters, { brandLabels, sizeLabels, colorLabels });
@@ -530,6 +541,36 @@ export async function getFeedListings(params?: {
   } catch (err) {
     return {
       data: [],
+      error: err instanceof Error ? err : new Error('Unknown error')
+    };
+  }
+}
+
+/** Compte exact d’annonces feed pour le CTA filtres (même builder que le listing). */
+export async function getFeedListingsCount(filters?: FeedFilters): Promise<{
+  count: number | null;
+  error: Error | null;
+}> {
+  try {
+    const { brandLabels, sizeLabels, colorLabels, includeOtherBrand } =
+      await resolveFilterLabels(filters);
+    let query = supabase
+      .from('v_feed_listings')
+      .select('id', { count: 'exact', head: true });
+    query = applyFeedListingFilters(query, filters, {
+      brandLabels,
+      sizeLabels,
+      colorLabels,
+      includeOtherBrand
+    });
+    const { count, error } = await query;
+    if (error) {
+      return { count: null, error: new Error(error.message) };
+    }
+    return { count: typeof count === 'number' ? count : 0, error: null };
+  } catch (err) {
+    return {
+      count: null,
       error: err instanceof Error ? err : new Error('Unknown error')
     };
   }
@@ -693,6 +734,8 @@ export type ListingDetail = {
   category: string | null;
   category_id?: number | null;
   category_slug?: string | null;
+  /** Genre catalogue de la catégorie (`femme` / `homme` / `enfant` / `bebe`) */
+  category_gender?: string | null;
   condition: string | null;
   delivery_mode: string;
   latitude: number | null;
@@ -805,13 +848,14 @@ export async function getListingById(id: string): Promise<{ data: ListingDetail 
       listingRow?.category_id != null ? Number(listingRow.category_id) : null;
 
     let categorySlug: string | null = null;
+    let categoryGender: string | null = null;
     if (categoryId != null) {
-      const { data: categoryRow } = await supabase
-        .from('categories')
-        .select('slug')
-        .eq('id', categoryId)
-        .maybeSingle();
+      const [{ data: categoryRow }, categoryCtx] = await Promise.all([
+        supabase.from('categories').select('slug').eq('id', categoryId).maybeSingle(),
+        getCategoryFilterContext(String(categoryId))
+      ]);
       categorySlug = categoryRow?.slug ? String(categoryRow.slug) : null;
+      categoryGender = categoryCtx?.gender ? String(categoryCtx.gender).trim() : null;
     }
 
     const listing = data as ListingDetail;
@@ -822,6 +866,7 @@ export async function getListingById(id: string): Promise<{ data: ListingDetail 
       price: coerceListingPrice(listing.price),
       category_id: categoryId ?? listing.category_id ?? null,
       category_slug: categorySlug,
+      category_gender: categoryGender,
       parcel_size: coerceParcelSize(listingRow?.parcel_size ?? listing.parcel_size),
       // Fiche publique : jamais de rue / NPA (confidentialité)
       pickup_primary_street: null,
@@ -1244,7 +1289,7 @@ export async function getMyListingsFeed(): Promise<ApiResponse<FeedListing[]>> {
 
   const { data, error } = await supabase
     .from('v_feed_listings')
-    .select('*')
+    .select(FEED_LISTING_SELECT)
     .eq('seller_id', user.id)
     .order('created_at', { ascending: false });
 
@@ -1267,7 +1312,7 @@ export async function getSellerClosetListings(
 
   const { data, error } = await supabase
     .from('v_feed_listings')
-    .select('*')
+    .select(FEED_LISTING_SELECT)
     .eq('seller_id', sellerId)
     .order('published_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
@@ -1348,6 +1393,22 @@ export async function updateListing(
     }
   }
 
+  let previousPrice: number | null = null;
+  let previousStatus: string | null = null;
+  if (normalizedPayload.price != null) {
+    const { data: prevRow } = await supabase
+      .from('listings')
+      .select('price, status')
+      .eq('id', id)
+      .eq('seller_id', user.id)
+      .maybeSingle();
+    previousPrice =
+      prevRow?.price != null && Number.isFinite(Number(prevRow.price))
+        ? Number(prevRow.price)
+        : null;
+    previousStatus = String((prevRow as { status?: string } | null)?.status ?? '').toLowerCase();
+  }
+
   const { data, error } = await supabase
     .from('listings')
     .update(normalizedPayload as any)
@@ -1360,7 +1421,28 @@ export async function updateListing(
     return { data: null, error: error.message };
   }
 
-  return { data: data as Listing, error: null };
+  const listing = data as Listing;
+  const nextPrice =
+    listing?.price != null && Number.isFinite(Number(listing.price))
+      ? Number(listing.price)
+      : null;
+  const nextStatus = String((listing as { status?: string } | null)?.status ?? '').toLowerCase();
+
+  if (
+    previousPrice != null &&
+    nextPrice != null &&
+    nextPrice < previousPrice - 0.009 &&
+    (nextStatus === 'published' || previousStatus === 'published')
+  ) {
+    void notifyListingAudience({
+      event: 'price_drop',
+      listingId: id,
+      oldPrice: previousPrice,
+      newPrice: nextPrice
+    });
+  }
+
+  return { data: listing, error: null };
 }
 
 async function resolveCategoryIdByLabel(categoryLabel: string): Promise<number | null> {

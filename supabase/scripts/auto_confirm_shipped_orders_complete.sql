@@ -64,6 +64,9 @@ BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'invoke-auto-confirm-orders') THEN
     PERFORM cron.unschedule('invoke-auto-confirm-orders');
   END IF;
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'invoke-track-shipment') THEN
+    PERFORM cron.unschedule('invoke-track-shipment');
+  END IF;
 EXCEPTION
   WHEN undefined_table THEN NULL;
   WHEN undefined_object THEN NULL;
@@ -71,7 +74,28 @@ END;
 $$;
 
 -- -----------------------------------------------------------------------------
--- 4. Job cron : marquage SQL quotidien (8h00 UTC)
+-- 4. Job cron : suivi La Poste (shipped → completed si livré) — 07:55 UTC
+--    ⚠️ Remplacer SERVICE_ROLE_KEY (et PROJECT_REF si besoin)
+-- -----------------------------------------------------------------------------
+/*
+SELECT cron.schedule(
+  'invoke-track-shipment',
+  '55 7 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://uzkrxkoussjnlyyykkul.supabase.co/functions/v1/track-shipment',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer VOTRE_SERVICE_ROLE_KEY'
+    ),
+    body := '{"mode":"cron"}'::jsonb
+  ) AS request_id;
+  $$
+);
+*/
+
+-- -----------------------------------------------------------------------------
+-- 5. Job cron : marquage SQL quotidien (8h00 UTC)
 -- -----------------------------------------------------------------------------
 SELECT cron.schedule(
   'auto-confirm-shipped-orders',
@@ -80,7 +104,8 @@ SELECT cron.schedule(
 );
 
 -- -----------------------------------------------------------------------------
--- 5. Job cron : transferts Stripe via Edge Function (8h05 UTC)
+-- 6. Job cron : transferts Stripe via Edge Function (8h05 UTC)
+--    (auto-confirm-orders appelle aussi track-shipment en tête)
 --    ⚠️ REMPLACER les deux valeurs ci-dessous avant d'exécuter cette section
 -- -----------------------------------------------------------------------------
 /*

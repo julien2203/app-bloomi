@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Image,
   PanResponder,
   type PanResponderGestureState,
   Platform,
@@ -11,6 +10,9 @@ import {
   type GestureResponderEvent,
   type NativeTouchEvent
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+
+const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
 
 function getTouchDistance(evt: GestureResponderEvent): number | null {
   const touches = evt.nativeEvent.touches;
@@ -127,7 +129,13 @@ function IosZoomableImage({
       onScrollEndDrag={handleZoomScroll}
       onMomentumScrollEnd={handleZoomScroll}
     >
-      <Image source={{ uri }} style={{ width, height }} resizeMode="contain" />
+      <ExpoImage
+        source={uri}
+        style={{ width, height }}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
+      />
     </ScrollView>
   );
 }
@@ -425,15 +433,17 @@ function AndroidZoomableImage({
       onTouchEnd={handleTouchEnd}
       {...panResponder.panHandlers}
     >
-      <Animated.Image
-        source={{ uri }}
+      <AnimatedExpoImage
+        source={uri}
         style={[
           { width, height },
           {
             transform: [{ translateX }, { translateY }, { scale }]
           }
         ]}
-        resizeMode="contain"
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
         pointerEvents="none"
       />
     </View>

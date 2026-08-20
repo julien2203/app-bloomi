@@ -5,12 +5,15 @@ import { useTranslation } from 'react-i18next';
 
 export default function SearchScreen() {
   const { t } = useTranslation();
-  const { query, search_tab } = useLocalSearchParams<{
+  const { query, search_tab, commit } = useLocalSearchParams<{
     query?: string;
     search_tab?: string;
+    commit?: string;
   }>();
   const initialSearchTab =
     search_tab === 'members' || search_tab === 'listings' ? search_tab : undefined;
+  const initialCommit =
+    commit === '1' || commit === 'true' || commit === 'True';
 
   return (
     <UniversalResultsScreen
@@ -18,6 +21,7 @@ export default function SearchScreen() {
       title={t('navigation.search')}
       initialQuery={typeof query === 'string' ? query : undefined}
       initialSearchTab={initialSearchTab}
+      initialCommit={initialCommit}
       showBack={false}
       standaloneSearch
     />

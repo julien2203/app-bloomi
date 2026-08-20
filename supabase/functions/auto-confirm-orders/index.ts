@@ -59,12 +59,52 @@ Deno.serve(async (req) => {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
   try {
+    // 1) Suivi La Poste : shipped + tracking → completed si livré
+    let trackingSummary: {
+      processed?: number;
+      delivered_count?: number;
+      updated_count?: number;
+      error?: string;
+    } | null = null;
+    try {
+      const trackResp = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/functions/v1/track-shipment`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${supabaseServiceRoleKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mode: "cron" }),
+      });
+      const trackJson = (await trackResp.json().catch(() => null)) as Record<string, unknown> | null;
+      if (trackResp.ok) {
+        trackingSummary = {
+          processed: typeof trackJson?.processed === "number" ? trackJson.processed : undefined,
+          delivered_count:
+            typeof trackJson?.delivered_count === "number" ? trackJson.delivered_count : undefined,
+          updated_count:
+            typeof trackJson?.updated_count === "number" ? trackJson.updated_count : undefined,
+        };
+      } else {
+        trackingSummary = {
+          error:
+            (typeof trackJson?.error === "string" && trackJson.error) ||
+            `track-shipment HTTP ${trackResp.status}`,
+        };
+      }
+    } catch (e) {
+      trackingSummary = {
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+
+    // 2) Fallback 7 jours (SQL) si toujours shipped
     const { error: markErr } = await supabaseAdmin.rpc("auto_confirm_shipped_orders");
     if (markErr) {
       return jsonResponse(
         {
           error: "auto_confirm_shipped_orders a échoué",
           details: markErr.message,
+          tracking: trackingSummary,
         },
         { status: 500 },
       );
@@ -177,6 +217,7 @@ Deno.serve(async (req) => {
     return jsonResponse({
       success: failed === 0,
       marked_by_sql: true,
+      tracking: trackingSummary,
       processed: results.length,
       succeeded,
       failed,

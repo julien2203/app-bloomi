@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStripe } from '@stripe/stripe-react-native';
 import { getSafeBottomInset } from '../../../../lib/safeArea';
@@ -24,8 +24,8 @@ import { Text } from '../../../../components/ui/Text';
 import { HeaderBackButton } from '../../../../components/ui/HeaderBackButton';
 import { useAuthStore } from '../../../../stores/authStore';
 import { openGuestAuthPrompt } from '../../../../lib/guestAuthPrompt';
-import { computeBuyerFees, type BuyerFeesBreakdown } from '../../../../lib/fees';
-import { formatCatalogPriceChf } from '../../../../lib/formatBuyerPrice';
+import { computeBuyerFees, getPromoDiscount, type BuyerFeesBreakdown } from '../../../../lib/fees';
+import { formatCatalogPriceChf, formatChf } from '../../../../lib/formatBuyerPrice';
 import {
   BuyerPriceBreakdownSheet,
   BuyerPriceInfoButton
@@ -45,6 +45,7 @@ import {
   promptCompleteProfileAddress,
   type ProfileShippingAddress
 } from '../../../../lib/profileShippingAddress';
+import { resolveListingFlowStackBase } from '../../../../lib/navigation/listingDetailNav';
 
 type CheckoutParams = {
   listing_id: string;
@@ -63,6 +64,8 @@ export default function CheckoutScreen() {
   const { t } = useTranslation();
   const shippingCountryLabel = t('feed.checkout.countryCH');
   const router = useRouter();
+  const pathname = usePathname();
+  const stackBase = useMemo(() => resolveListingFlowStackBase(pathname), [pathname]);
   const insets = useSafeAreaInsets();
   const safeBottom = getSafeBottomInset(insets.bottom);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -99,8 +102,15 @@ export default function CheckoutScreen() {
       });
       return;
     }
-    router.replace('/tabs/feed');
-  }, [fromMessagesThread, router]);
+    if (listingId) {
+      router.replace({
+        pathname: `${stackBase}/[id]` as any,
+        params: { id: listingId }
+      });
+      return;
+    }
+    router.replace(stackBase === '/tabs/feed' ? '/tabs/feed' : (stackBase as any));
+  }, [fromMessagesThread, listingId, router, stackBase]);
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('pickup');
 
@@ -237,9 +247,10 @@ export default function CheckoutScreen() {
     if (deliveryMode !== 'shipping' || shippingFeeCents == null) return 0;
     return shippingFeeCents / 100;
   }, [deliveryMode, shippingFeeCents]);
+  const promoDiscountChf = useMemo(() => getPromoDiscount(amountNum), [amountNum]);
   const total = useMemo(
-    () => buyerFees.finalPriceChf + shippingFeeChf,
-    [buyerFees.finalPriceChf, shippingFeeChf]
+    () => Math.max(0, buyerFees.finalPriceChf + shippingFeeChf - promoDiscountChf),
+    [buyerFees.finalPriceChf, promoDiscountChf, shippingFeeChf]
   );
   const twintMaxChf = 100;
   const isTwintEligible = total <= twintMaxChf + 1e-9;
@@ -459,9 +470,7 @@ export default function CheckoutScreen() {
       if (!orderId) throw new Error('Missing order_id');
 
       router.replace({
-        pathname: fromMessagesThread
-          ? '/tabs/messages/listing/order-confirmation'
-          : '/tabs/feed/listing/order-confirmation',
+        pathname: `${stackBase}/listing/order-confirmation` as any,
         params: {
           order_id: orderId,
           ...(fromMessagesThread ? { from_messages_thread: fromMessagesThread } : {})
@@ -523,6 +532,15 @@ export default function CheckoutScreen() {
                   {formattedFinalPrice}
                 </Text>
               </View>
+              {promoDiscountChf > 0 ? (
+                <View style={styles.moneyRow}>
+                  <Text variant="body" style={styles.promoDiscountLabel}>
+                    {t('feed.checkout.promoDiscount', {
+                      amount: `-${formatChf(promoDiscountChf)}`
+                    })}
+                  </Text>
+                </View>
+              ) : null}
               {deliveryMode === 'shipping' ? (
                 <View style={[styles.moneyRow, styles.moneyRowTotal]}>
                   <Text variant="body" color="textSecondary">
@@ -841,6 +859,11 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.textPrimary
+  },
+  promoDiscountLabel: {
+    color: '#C3EA4F',
+    fontFamily: theme.fontFamily.semiBold,
+    flex: 1
   },
   section: {
     borderWidth: 1,

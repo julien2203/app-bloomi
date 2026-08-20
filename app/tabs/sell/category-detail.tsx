@@ -41,7 +41,7 @@ export default function SellCategoryDetailScreen() {
     ) || t('sell.category');
   const gender = typeof params.gender === 'string' ? params.gender : undefined;
 
-  const { setField } = useSellFormStore();
+  const { values, setField } = useSellFormStore();
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -84,6 +84,11 @@ export default function SellCategoryDetailScreen() {
     const cat = categories.find((c) => c.id === selectedId);
     if (!cat) return;
 
+    const previousCategoryId = values.category?.id ?? null;
+    const previousGender = values.categoryGender ?? values.category?.gender ?? null;
+    const categoryOrGenderChanged =
+      previousCategoryId !== cat.id || previousGender !== gender;
+
     setField('category', {
       id: cat.id,
       name: cat.name,
@@ -93,6 +98,12 @@ export default function SellCategoryDetailScreen() {
 
     setField('categoryGender', gender);
     setField('categoryType', inferTypeFromParentSlug(parentSlug));
+
+    // Comme en édition : éviter catégorie homme + taille enfant (ou marque hors genre).
+    if (categoryOrGenderChanged) {
+      setField('brand', null);
+      setField('size', null);
+    }
 
     router.back();
     router.back();

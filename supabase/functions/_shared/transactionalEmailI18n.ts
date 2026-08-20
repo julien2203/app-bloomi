@@ -5,6 +5,8 @@ import {
   profileHomeDeepLink,
   sellDeepLink,
   walletDeepLink,
+  listingDeepLink,
+  feedDeepLink,
 } from "./emailDeepLinks.ts";
 
 export type EmailLang = "en" | "fr" | "de" | "it";
@@ -77,7 +79,7 @@ export function welcomeEmailContent(
 
   if (lang === "fr") {
     return {
-      subject: "Bienvenue sur Bloomi",
+      subject: "Bienvenue sur Bloomi — −5 CHF dès 30 CHF",
       html: wrapEmailHtml(`
 <p>Bonjour ${escapeHtml(name)},</p>
 <p>Bienvenue sur Bloomi ! Voici comment bien démarrer :</p>
@@ -87,6 +89,7 @@ export function welcomeEmailContent(
   <li>Activez votre compte vendeur pour recevoir vos paiements</li>
   <li>Consultez vos notifications pour ne rien manquer</li>
 </ol>
+<p><strong>Offre de bienvenue :</strong> −5 CHF dès 30 CHF d'achat, appliquée automatiquement au paiement (pas de code à saisir).</p>
 ${emailButton(cta, "Ouvrir Bloomi")}
 <p style="color:#666;font-size:14px;">Des questions ? Répondez à cet e-mail ou écrivez-nous à contact@bloomi.ch</p>
 `, lang),
@@ -95,7 +98,7 @@ ${emailButton(cta, "Ouvrir Bloomi")}
 
   if (lang === "de") {
     return {
-      subject: "Willkommen bei Bloomi",
+      subject: "Willkommen bei Bloomi — −5 CHF ab 30 CHF",
       html: wrapEmailHtml(`
 <p>Hallo ${escapeHtml(name)},</p>
 <p>Willkommen bei Bloomi! So startest du richtig:</p>
@@ -105,6 +108,7 @@ ${emailButton(cta, "Ouvrir Bloomi")}
   <li>Aktiviere dein Verkäuferkonto für Auszahlungen</li>
   <li>Behalte deine Benachrichtigungen im Blick</li>
 </ol>
+<p><strong>Willkommensangebot:</strong> −5 CHF ab 30 CHF Einkauf — automatisch beim Checkout (kein Code nötig).</p>
 ${emailButton(cta, "Bloomi öffnen")}
 `, lang),
     };
@@ -112,32 +116,34 @@ ${emailButton(cta, "Bloomi öffnen")}
 
   if (lang === "it") {
     return {
-      subject: "Benvenuto su Bloomi",
+      subject: "Benvenuto su Bloomi — −5 CHF da 30 CHF",
       html: wrapEmailHtml(`
 <p>Ciao ${escapeHtml(name)},</p>
 <p>Benvenuto su Bloomi! Ecco come iniziare:</p>
 <ol>
   <li>Completa il tuo profilo</li>
   <li>Pubblica il tuo primo articolo</li>
-  <li>Attiva il conto venditore per i pagamenti</li>
-  <li>Controlla le notifiche per non perdere nulla</li>
+  <li>Attiva il conto venditore per ricevere i pagamenti</li>
+  <li>Controlla le notifiche per non perderti nulla</li>
 </ol>
+<p><strong>Offerta di benvenuto:</strong> −5 CHF da 30 CHF di acquisto, applicata automaticamente al pagamento (nessun codice).</p>
 ${emailButton(cta, "Apri Bloomi")}
 `, lang),
     };
   }
 
   return {
-    subject: "Welcome to Bloomi",
+    subject: "Welcome to Bloomi — −5 CHF from 30 CHF",
     html: wrapEmailHtml(`
 <p>Hi ${escapeHtml(name)},</p>
 <p>Welcome to Bloomi! Here's how to get started:</p>
 <ol>
   <li>Complete your profile</li>
-  <li>List your first item</li>
-  <li>Activate your seller account to get paid</li>
-  <li>Keep an eye on notifications so you don't miss anything</li>
+  <li>Publish your first item</li>
+  <li>Activate your seller account to receive payouts</li>
+  <li>Check your notifications so you don't miss a thing</li>
 </ol>
+<p><strong>Welcome offer:</strong> −5 CHF from 30 CHF purchase, applied automatically at checkout (no code needed).</p>
 ${emailButton(cta, "Open Bloomi")}
 `, lang),
   };
@@ -158,7 +164,7 @@ export function itemSoldEmailContent(
 <p>Bonjour ${escapeHtml(name)},</p>
 <p>Bonne nouvelle : <strong>${escapeHtml(title)}</strong> vient d'être vendu.</p>
 <p>${params.pickup
-        ? "L'acheteur a choisi la remise en main propre. Contactez-le via la messagerie pour organiser le rendez-vous."
+        ? "L'acheteur a payé pour la remise en main propre. Échangez vos coordonnées via la messagerie Bloomi pour organiser le rendez-vous, puis attendez sa confirmation de réception."
         : "Préparez et expédiez le colis dès que possible depuis vos commandes."}</p>
 ${emailButton(cta, params.pickup ? "Voir la commande" : "Préparer l'expédition")}
 `, lang),
@@ -193,7 +199,7 @@ ${emailButton(cta, "Vedi ordine")}
 <p>Hi ${escapeHtml(name)},</p>
 <p>Great news: <strong>${escapeHtml(title)}</strong> has just sold.</p>
 <p>${params.pickup
-      ? "The buyer chose local pickup. Message them to arrange the handoff."
+      ? "The buyer paid for local pickup. Share contact details via Bloomi messages to arrange the handoff, then wait for their receipt confirmation."
       : "Prepare and ship the parcel as soon as you can."}</p>
 ${emailButton(cta, params.pickup ? "View order" : "Prepare shipment")}
 `, lang),
@@ -601,3 +607,211 @@ ${emailButton(cta, "Activate account")}
 }
 
 export { sellDeepLink, walletDeepLink, ordersDeepLink };
+
+export function priceDropEmailContent(
+  lang: EmailLang,
+  params: {
+    displayName: string;
+    listingTitle: string;
+    oldPrice: string;
+    newPrice: string;
+    listingId: string;
+  },
+): TransactionalEmailContent {
+  const name = params.displayName.trim() || (lang === "fr" ? "Bonjour" : "Hello");
+  const title = params.listingTitle.trim() || (lang === "fr" ? "votre favori" : "your favorite");
+  const cta = listingDeepLink(params.listingId);
+
+  if (lang === "fr") {
+    return {
+      subject: `Prix baissé — ${title}`,
+      html: wrapEmailHtml(`
+<p>Bonjour ${escapeHtml(name)},</p>
+<p>Bonne nouvelle : <strong>${escapeHtml(title)}</strong> est passé de ${escapeHtml(params.oldPrice)} CHF à <strong>${escapeHtml(params.newPrice)} CHF</strong>.</p>
+${emailButton(cta, "Voir l'article")}
+`, lang),
+    };
+  }
+  if (lang === "de") {
+    return {
+      subject: `Preis gesenkt — ${title}`,
+      html: wrapEmailHtml(`
+<p>Hallo ${escapeHtml(name)},</p>
+<p><strong>${escapeHtml(title)}</strong> ist von ${escapeHtml(params.oldPrice)} CHF auf <strong>${escapeHtml(params.newPrice)} CHF</strong> gesunken.</p>
+${emailButton(cta, "Artikel ansehen")}
+`, lang),
+    };
+  }
+  if (lang === "it") {
+    return {
+      subject: `Prezzo abbassato — ${title}`,
+      html: wrapEmailHtml(`
+<p>Ciao ${escapeHtml(name)},</p>
+<p><strong>${escapeHtml(title)}</strong> è passato da ${escapeHtml(params.oldPrice)} CHF a <strong>${escapeHtml(params.newPrice)} CHF</strong>.</p>
+${emailButton(cta, "Vedi articolo")}
+`, lang),
+    };
+  }
+  return {
+    subject: `Price drop — ${title}`,
+    html: wrapEmailHtml(`
+<p>Hi ${escapeHtml(name)},</p>
+<p>Good news: <strong>${escapeHtml(title)}</strong> dropped from ${escapeHtml(params.oldPrice)} CHF to <strong>${escapeHtml(params.newPrice)} CHF</strong>.</p>
+${emailButton(cta, "View item")}
+`, lang),
+  };
+}
+
+export function followedSellerNewListingEmailContent(
+  lang: EmailLang,
+  params: {
+    displayName: string;
+    sellerName: string;
+    listingTitle: string;
+    listingId: string;
+  },
+): TransactionalEmailContent {
+  const name = params.displayName.trim() || (lang === "fr" ? "Bonjour" : "Hello");
+  const seller = params.sellerName.trim() || (lang === "fr" ? "Un vendeur" : "A seller");
+  const title = params.listingTitle.trim() || (lang === "fr" ? "un nouvel article" : "a new item");
+  const cta = listingDeepLink(params.listingId);
+
+  if (lang === "fr") {
+    return {
+      subject: `${seller} a publié un article`,
+      html: wrapEmailHtml(`
+<p>Bonjour ${escapeHtml(name)},</p>
+<p><strong>${escapeHtml(seller)}</strong> que vous suivez a publié : <strong>${escapeHtml(title)}</strong>.</p>
+${emailButton(cta, "Découvrir")}
+`, lang),
+    };
+  }
+  if (lang === "de") {
+    return {
+      subject: `${seller} hat einen Artikel veröffentlicht`,
+      html: wrapEmailHtml(`
+<p>Hallo ${escapeHtml(name)},</p>
+<p><strong>${escapeHtml(seller)}</strong>, dem du folgst, hat veröffentlicht: <strong>${escapeHtml(title)}</strong>.</p>
+${emailButton(cta, "Entdecken")}
+`, lang),
+    };
+  }
+  if (lang === "it") {
+    return {
+      subject: `${seller} ha pubblicato un articolo`,
+      html: wrapEmailHtml(`
+<p>Ciao ${escapeHtml(name)},</p>
+<p><strong>${escapeHtml(seller)}</strong> che segui ha pubblicato: <strong>${escapeHtml(title)}</strong>.</p>
+${emailButton(cta, "Scopri")}
+`, lang),
+    };
+  }
+  return {
+    subject: `${seller} listed a new item`,
+    html: wrapEmailHtml(`
+<p>Hi ${escapeHtml(name)},</p>
+<p><strong>${escapeHtml(seller)}</strong> you follow just listed: <strong>${escapeHtml(title)}</strong>.</p>
+${emailButton(cta, "Discover")}
+`, lang),
+  };
+}
+
+export function noPurchaseNudgeEmailContent(
+  lang: EmailLang,
+  displayName: string,
+): TransactionalEmailContent {
+  const name = displayName.trim() || (lang === "fr" ? "Bonjour" : "Hello");
+  const cta = feedDeepLink();
+
+  if (lang === "fr") {
+    return {
+      subject: "Votre offre −5 CHF vous attend sur Bloomi",
+      html: wrapEmailHtml(`
+<p>Bonjour ${escapeHtml(name)},</p>
+<p>Cela fait quelques jours que vous êtes sur Bloomi. Pour votre première commande, <strong>−5 CHF dès 30 CHF d'achat</strong> est appliqué automatiquement au paiement.</p>
+<p>Parcourez les annonces et trouvez votre prochaine pièce préférée.</p>
+${emailButton(cta, "Explorer Bloomi")}
+`, lang),
+    };
+  }
+  if (lang === "de") {
+    return {
+      subject: "Dein −5 CHF Angebot wartet auf Bloomi",
+      html: wrapEmailHtml(`
+<p>Hallo ${escapeHtml(name)},</p>
+<p>Du bist seit ein paar Tagen auf Bloomi. Für deinen ersten Einkauf gilt <strong>−5 CHF ab 30 CHF</strong> automatisch beim Checkout.</p>
+${emailButton(cta, "Bloomi entdecken")}
+`, lang),
+    };
+  }
+  if (lang === "it") {
+    return {
+      subject: "La tua offerta −5 CHF ti aspetta su Bloomi",
+      html: wrapEmailHtml(`
+<p>Ciao ${escapeHtml(name)},</p>
+<p>Sono passati alcuni giorni da quando sei su Bloomi. Per il tuo acquisto, <strong>−5 CHF da 30 CHF</strong> è applicato automaticamente al pagamento.</p>
+${emailButton(cta, "Esplora Bloomi")}
+`, lang),
+    };
+  }
+  return {
+    subject: "Your −5 CHF offer is waiting on Bloomi",
+    html: wrapEmailHtml(`
+<p>Hi ${escapeHtml(name)},</p>
+<p>It's been a few days since you joined Bloomi. <strong>−5 CHF from 30 CHF</strong> is applied automatically at checkout.</p>
+${emailButton(cta, "Explore Bloomi")}
+`, lang),
+  };
+}
+
+export function sellerNoSaleTipsEmailContent(
+  lang: EmailLang,
+  params: { displayName: string; listingTitle: string; tip: string; listingId: string },
+): TransactionalEmailContent {
+  const name = params.displayName.trim() || (lang === "fr" ? "Bonjour" : "Hello");
+  const title = params.listingTitle.trim() || (lang === "fr" ? "votre annonce" : "your listing");
+  const cta = listingDeepLink(params.listingId);
+
+  if (lang === "fr") {
+    return {
+      subject: `Boostez « ${title} »`,
+      html: wrapEmailHtml(`
+<p>Bonjour ${escapeHtml(name)},</p>
+<p>Votre annonce <strong>${escapeHtml(title)}</strong> est en ligne depuis un moment sans vente.</p>
+<p><strong>Conseil :</strong> ${escapeHtml(params.tip)}</p>
+${emailButton(cta, "Améliorer mon annonce")}
+`, lang),
+    };
+  }
+  if (lang === "de") {
+    return {
+      subject: `Booste « ${title} »`,
+      html: wrapEmailHtml(`
+<p>Hallo ${escapeHtml(name)},</p>
+<p>Dein Inserat <strong>${escapeHtml(title)}</strong> ist seit einer Weile online ohne Verkauf.</p>
+<p><strong>Tipp:</strong> ${escapeHtml(params.tip)}</p>
+${emailButton(cta, "Inserat verbessern")}
+`, lang),
+    };
+  }
+  if (lang === "it") {
+    return {
+      subject: `Potenzia « ${title} »`,
+      html: wrapEmailHtml(`
+<p>Ciao ${escapeHtml(name)},</p>
+<p>Il tuo annuncio <strong>${escapeHtml(title)}</strong> è online da un po' senza vendite.</p>
+<p><strong>Consiglio:</strong> ${escapeHtml(params.tip)}</p>
+${emailButton(cta, "Migliora annuncio")}
+`, lang),
+    };
+  }
+  return {
+    subject: `Boost “${title}”`,
+    html: wrapEmailHtml(`
+<p>Hi ${escapeHtml(name)},</p>
+<p>Your listing <strong>${escapeHtml(title)}</strong> has been live for a while without a sale.</p>
+<p><strong>Tip:</strong> ${escapeHtml(params.tip)}</p>
+${emailButton(cta, "Improve my listing")}
+`, lang),
+  };
+}

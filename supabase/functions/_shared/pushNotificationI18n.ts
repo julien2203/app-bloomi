@@ -181,10 +181,10 @@ export function itemSoldPushText(
     }),
     body: pickup
       ? pick(lang, {
-        fr: "Un acheteur a choisi la remise en main propre. Organisez le rendez-vous via la messagerie.",
-        en: "A buyer chose local pickup. Arrange the handoff via messages.",
-        de: "Ein Käufer hat Abholung vor Ort gewählt. Vereinbart den Übergabetermin per Chat.",
-        it: "Un acquirente ha scelto il ritiro di persona. Organizza l'incontro via messaggi.",
+        fr: "Un acheteur a payé pour la remise en main propre. Échangez vos coordonnées via la messagerie pour organiser le rendez-vous.",
+        en: "A buyer paid for local pickup. Share contact details via messages to arrange the handoff.",
+        de: "Ein Käufer hat für die Abholung vor Ort bezahlt. Tauscht Kontaktdaten im Chat aus, um den Termin zu vereinbaren.",
+        it: "Un acquirente ha pagato per il ritiro di persona. Scambiate i dati di contatto via messaggi per organizzare l'incontro.",
       })
       : pick(lang, {
         fr: "Un acheteur vient de commander. Prépare ton colis !",
@@ -204,10 +204,10 @@ export function pickupReminderPushText(lang: NotifLang): { title: string; body: 
       it: "🤝 Organizza il ritiro di persona",
     }),
     body: pick(lang, {
-      fr: "Contacte ton acheteur via la messagerie pour convenir d'un rendez-vous.",
-      en: "Message your buyer to set up a meet-up.",
-      de: "Schreibe deinem Käufer im Chat, um einen Termin zu vereinbaren.",
-      it: "Scrivi all'acquirente in chat per fissare un appuntamento.",
+      fr: "Échangez vos coordonnées via la messagerie pour convenir d'un rendez-vous (paiement déjà sécurisé).",
+      en: "Share contact details via messages to set up a meet-up (payment already secured).",
+      de: "Tauscht Kontaktdaten im Chat aus, um einen Termin zu vereinbaren (Zahlung bereits gesichert).",
+      it: "Scambiate i dati di contatto via messaggi per fissare un incontro (pagamento già protetto).",
     }),
   };
 }
@@ -215,10 +215,10 @@ export function pickupReminderPushText(lang: NotifLang): { title: string; body: 
 export function orderPlacedSystemMessage(lang: NotifLang, pickup: boolean): string {
   if (pickup) {
     return pick(lang, {
-      fr: "🛍️ Commande passée — Le paiement est sécurisé. Organisez la remise en main propre via la messagerie.",
-      en: "🛍️ Order placed — Payment is secure. Arrange the local handoff via messages.",
-      de: "🛍️ Bestellung aufgegeben — Die Zahlung ist gesichert. Vereinbart die Abholung vor Ort per Chat.",
-      it: "🛍️ Ordine effettuato — Il pagamento è sicuro. Organizza il ritiro di persona via messaggi.",
+      fr: "🛍️ Commande passée — Le paiement est sécurisé. Vous pouvez échanger vos coordonnées pour organiser la remise en main propre.",
+      en: "🛍️ Order placed — Payment is secure. You can share contact details to arrange local pickup.",
+      de: "🛍️ Bestellung aufgegeben — Die Zahlung ist gesichert. Ihr könnt Kontaktdaten austauschen, um die Abholung zu organisieren.",
+      it: "🛍️ Ordine effettuato — Il pagamento è sicuro. Potete scambiare i dati di contatto per organizzare il ritiro.",
     });
   }
   return pick(lang, {
@@ -323,6 +323,104 @@ export function orderCancelledPushText(lang: NotifLang): { title: string; body: 
       en: "Your order has been cancelled and you will be refunded.",
       de: "Deine Bestellung wurde storniert und du erhältst eine Rückerstattung.",
       it: "Il tuo ordine è stato annullato e riceverai un rimborso.",
+    }),
+  };
+}
+
+export function sellerOrderCancelledPushText(lang: NotifLang): { title: string; body: string } {
+  return {
+    title: pick(lang, {
+      fr: "Commande annulée",
+      en: "Order cancelled",
+      de: "Bestellung storniert",
+      it: "Ordine annullato",
+    }),
+    body: pick(lang, {
+      fr: "Une commande a été annulée. Votre article est de nouveau en vente.",
+      en: "An order was cancelled. Your item is listed again.",
+      de: "Eine Bestellung wurde storniert. Dein Artikel ist wieder zum Verkauf.",
+      it: "Un ordine è stato annullato. Il tuo articolo è di nuovo in vendita.",
+    }),
+  };
+}
+
+export function priceDropPushText(
+  lang: NotifLang,
+  params: { title: string; oldPrice: string; newPrice: string },
+): { title: string; body: string } {
+  const item = params.title.trim() || pick(lang, { fr: "Un favori", en: "A favorite", de: "Ein Favorit", it: "Un preferito" });
+  return {
+    title: pick(lang, {
+      fr: "📉 Prix baissé",
+      en: "📉 Price drop",
+      de: "📉 Preis gesenkt",
+      it: "📉 Prezzo abbassato",
+    }),
+    body: pick(lang, {
+      fr: `${item} : ${params.oldPrice} → ${params.newPrice} CHF`,
+      en: `${item}: ${params.oldPrice} → ${params.newPrice} CHF`,
+      de: `${item}: ${params.oldPrice} → ${params.newPrice} CHF`,
+      it: `${item}: ${params.oldPrice} → ${params.newPrice} CHF`,
+    }),
+  };
+}
+
+export function followedSellerNewListingPushText(
+  lang: NotifLang,
+  params: { sellerName: string; listingTitle: string },
+): { title: string; body: string } {
+  const seller = params.sellerName.trim() || pick(lang, { fr: "Un vendeur", en: "A seller", de: "Ein Verkäufer", it: "Un venditore" });
+  const title = params.listingTitle.trim() || pick(lang, { fr: "un nouvel article", en: "a new item", de: "einen neuen Artikel", it: "un nuovo articolo" });
+  return {
+    title: pick(lang, {
+      fr: "✨ Nouvel article",
+      en: "✨ New listing",
+      de: "✨ Neues Inserat",
+      it: "✨ Nuovo annuncio",
+    }),
+    body: pick(lang, {
+      fr: `${seller} a publié : ${title}`,
+      en: `${seller} listed: ${title}`,
+      de: `${seller} hat veröffentlicht: ${title}`,
+      it: `${seller} ha pubblicato: ${title}`,
+    }),
+  };
+}
+
+export function noPurchaseNudgePushText(lang: NotifLang): { title: string; body: string } {
+  return {
+    title: pick(lang, {
+      fr: "−5 CHF dès 30 CHF 🎁",
+      en: "−5 CHF from 30 CHF 🎁",
+      de: "−5 CHF ab 30 CHF 🎁",
+      it: "−5 CHF da 30 CHF 🎁",
+    }),
+    body: pick(lang, {
+      fr: "Votre offre de bienvenue est toujours active. Explorez Bloomi !",
+      en: "Your welcome offer is still active. Explore Bloomi!",
+      de: "Dein Willkommensangebot ist noch aktiv. Entdecke Bloomi!",
+      it: "La tua offerta di benvenuto è ancora attiva. Esplora Bloomi!",
+    }),
+  };
+}
+
+export function sellerNoSaleTipsPushText(
+  lang: NotifLang,
+  params: { listingTitle: string; tip: string },
+): { title: string; body: string } {
+  const title = params.listingTitle.trim() || pick(lang, { fr: "Votre annonce", en: "Your listing", de: "Dein Inserat", it: "Il tuo annuncio" });
+  return {
+    title: pick(lang, {
+      fr: "💡 Conseil vendeur",
+      en: "💡 Seller tip",
+      de: "💡 Verkäufer-Tipp",
+      it: "💡 Consiglio venditore",
+    }),
+    body: pick(lang, {
+      fr: `${title} — ${params.tip}`,
+      en: `${title} — ${params.tip}`,
+      de: `${title} — ${params.tip}`,
+      it: `${title} — ${params.tip}`,
     }),
   };
 }

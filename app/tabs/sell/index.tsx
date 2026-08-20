@@ -32,17 +32,19 @@ import { getSafeBottomInset } from '../../../lib/safeArea';
 import { theme } from '../../../lib/theme';
 import { useAuthStore } from '../../../stores/authStore';
 import { createListing, deleteListing, uploadAndAttachListingPhotos } from '../../../lib/api';
+import { isSizeCompatibleWithCategoryGender } from '../../../lib/api/filters';
 import { supabase } from '../../../lib/supabase';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../../../lib/env';
 import { buildStripePaymentSheetParams } from '../../../lib/stripePaymentSheet';
 import { ensureProfileExists } from '../../../lib/profile';
+import { notifyListingAudience } from '../../../lib/notifyListingAudience';
 import type { ListingInsert } from '../../../lib/types';
 import { useSellFormStore } from '../../../lib/store/sellForm';
 import * as Location from 'expo-location';
 import { translateColorName } from '../../../lib/colorI18n';
 import { translateConditionLabel } from '../../../lib/conditionI18n';
 import { translateSizeLabel } from '../../../lib/sizeI18n';
-import { translateCategoryLabel } from '../../../lib/categoryI18n';
+import { translateCategoryLabel, formatCategoryWithGender } from '../../../lib/categoryI18n';
 import { BOOST_OPTIONS, type BoostSponsorType } from '../../../lib/fees';
 import { ParcelSizeSelector } from '../../../components/listing/ParcelSizeSelector';
 import { DeliveryModeSelector } from '../../../components/listing/DeliveryModeSelector';
@@ -134,6 +136,8 @@ export default function SellScreen() {
     parcel_size?: string;
     pickup_primary?: string;
     brand?: string;
+    category?: string;
+    size?: string;
   }>({});
   const [pickupPrimaryComplete, setPickupPrimaryComplete] = useState(false);
   const [showPublishSheet, setShowPublishSheet] = useState(false);
@@ -147,11 +151,16 @@ export default function SellScreen() {
 
   const selectedCategoryLabel = useMemo(() => {
     if (!sellValues.category) return null;
-    return translateCategoryLabel(
+    const leaf = translateCategoryLabel(
       { name: sellValues.category.name, slug: sellValues.category.slug },
       t
     );
-  }, [sellValues.category, t]);
+    return formatCategoryWithGender(
+      leaf,
+      sellValues.categoryGender ?? sellValues.category.gender,
+      t
+    );
+  }, [sellValues.category, sellValues.categoryGender, t]);
 
   const navigateSellField = (path: string) => {
     Keyboard.dismiss();
@@ -376,6 +385,10 @@ export default function SellScreen() {
       newErrors.brand = t('sell.blockedBrand');
     }
 
+    if (!sellValues.category) {
+      newErrors.category = t('sell.categoryRequired');
+    }
+
     setErrors(newErrors);
     const hasErrors = Object.keys(newErrors).length > 0;
 
@@ -387,6 +400,7 @@ export default function SellScreen() {
         newErrors.parcel_size ||
         newErrors.pickup_primary ||
         newErrors.brand ||
+        newErrors.category ||
         t('sell.incompleteForm');
 
       Alert.alert(t('sell.incompleteForm'), firstError);
@@ -416,6 +430,18 @@ export default function SellScreen() {
     titleRef.current = title;
 
     if (!validate()) {
+      return;
+    }
+
+    const categoryGender =
+      sellValues.categoryGender ?? sellValues.category?.gender ?? null;
+    const sizeCompatible = await isSizeCompatibleWithCategoryGender({
+      sizeId: sellValues.size?.id ?? null,
+      sizeLabel: sellValues.size?.label ?? null,
+      categoryGender
+    });
+    if (!sizeCompatible) {
+      Alert.alert(t('sell.incompleteForm'), t('sell.sizeIncompatibleWithCategory'));
       return;
     }
 
@@ -783,7 +809,13 @@ export default function SellScreen() {
             <TouchableOpacity
               style={styles.listRow}
               activeOpacity={0.7}
-              onPress={() => navigateSellField('/tabs/sell/size')}
+              onPress={() => {
+                if (!sellValues.category) {
+                  Alert.alert(t('sell.incompleteForm'), t('sell.categoryRequired'));
+                  return;
+                }
+                navigateSellField('/tabs/sell/size');
+              }}
             >
               <Text style={styles.listRowLabel}>{t('sell.size')}</Text>
               <View style={styles.listRowRight}>
@@ -1130,6 +1162,11 @@ export default function SellScreen() {
                     if (publishErr) {
                       throw new Error(publishErr.message);
                     }
+
+                    void notifyListingAudience({
+                      event: 'published',
+                      listingId: lastPublishedListingId
+                    });
                   };
 
                   // Dressing : publier d'abord pour inclure la nouvelle annonce dans le boost.
@@ -1197,6 +1234,11 @@ export default function SellScreen() {
                   if (publishErr) {
                     throw new Error(publishErr.message);
                   }
+
+                  void notifyListingAudience({
+                    event: 'published',
+                    listingId: lastPublishedListingId
+                  });
 
                   resetForm();
                   setTitle('');

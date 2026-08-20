@@ -60,6 +60,153 @@ function buildCategoryById(rows: CategoryTreeRow[]): Map<string, CategoryTreeRow
   return map;
 }
 
+function isCategoryRoot(row: CategoryTreeRow): boolean {
+  const pid = row.parent_id;
+  return pid == null || String(pid).trim() === '';
+}
+
+function buildChildrenByParent(rows: CategoryTreeRow[]): Map<string, string[]> {
+  const childrenByParent = new Map<string, string[]>();
+  for (const row of rows) {
+    const parentKey = categoryIdKey(row.parent_id);
+    const childKey = categoryIdKey(row.id);
+    if (!parentKey || !childKey) continue;
+    const list = childrenByParent.get(parentKey) ?? [];
+    list.push(childKey);
+    childrenByParent.set(parentKey, list);
+  }
+  return childrenByParent;
+}
+
+function descendantIdSet(
+  rootIds: string[],
+  childrenByParent: Map<string, string[]>
+): Set<string> {
+  const visited = new Set<string>();
+  const queue = [...rootIds.filter(Boolean)];
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+    for (const childId of childrenByParent.get(currentId) ?? []) {
+      if (!visited.has(childId)) queue.push(childId);
+    }
+  }
+  return visited;
+}
+
+function stringSetsEqual(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size || a.size === 0) return false;
+  for (const id of a) {
+    if (!b.has(id)) return false;
+  }
+  return true;
+}
+
+export type SelectedCategorySummary =
+  | { kind: 'all_gender'; gender: string }
+  | { kind: 'luxury' }
+  | { kind: 'all_parent'; gender: string | null; name: string; slug: string | null }
+  | {
+      kind: 'names';
+      gender: string | null;
+      items: { name: string; slug: string | null }[];
+    }
+  | { kind: 'gender'; gender: string }
+  | { kind: 'count'; count: number };
+
+const CATALOG_GENDER_ORDER = ['femme', 'homme', 'enfant', 'bebe'] as const;
+
+/**
+ * Résume une sélection multi-catégories pour l’UI (pastille),
+ * ex. tout l’arbre hommes → « tous les articles homme » plutôt que « 47 catégories ».
+ */
+export async function summarizeSelectedCategoryIds(
+  categoryIds: Array<string | number>
+): Promise<SelectedCategorySummary> {
+  const selected = new Set(
+    categoryIds.map((id) => String(id).trim()).filter(Boolean)
+  );
+  if (selected.size === 0) {
+    return { kind: 'count', count: 0 };
+  }
+
+  const rows = await getAllCategoriesCached();
+  const byId = buildCategoryById(rows);
+  const childrenByParent = buildChildrenByParent(rows);
+
+  for (const gender of CATALOG_GENDER_ORDER) {
+    const roots = rows
+      .filter((row) => isCategoryRoot(row) && String(row.gender ?? '').trim() === gender)
+      .map((row) => categoryIdKey(row.id))
+      .filter(Boolean);
+    const tree = descendantIdSet(roots, childrenByParent);
+    if (stringSetsEqual(selected, tree)) {
+      return { kind: 'all_gender', gender };
+    }
+  }
+
+  const luxuryIds = await getLuxuryCategoryTreeIds();
+  if (stringSetsEqual(selected, new Set(luxuryIds))) {
+    return { kind: 'luxury' };
+  }
+
+  const selectedRows = [...selected]
+    .map((id) => byId.get(id))
+    .filter((row): row is CategoryTreeRow => Boolean(row));
+
+  const topLevel = selectedRows.filter((row) => {
+    const parentKey = categoryIdKey(row.parent_id);
+    return !parentKey || !selected.has(parentKey);
+  });
+
+  if (topLevel.length === 1) {
+    const parent = topLevel[0]!;
+    const tree = descendantIdSet([categoryIdKey(parent.id)], childrenByParent);
+    if (stringSetsEqual(selected, tree)) {
+      return {
+        kind: 'all_parent',
+        gender: rowGender(parent),
+        name: String(parent.name ?? '').trim() || categoryIdKey(parent.id),
+        slug: parent.slug != null ? String(parent.slug).trim() : null
+      };
+    }
+  }
+
+  const genders = new Set(
+    selectedRows.map((row) => rowGender(row)).filter((g): g is string => Boolean(g))
+  );
+  const gender = genders.size === 1 ? [...genders][0]! : null;
+  const labelSource =
+    topLevel.length > 0 && topLevel.length <= 3
+      ? topLevel
+      : selectedRows.length <= 3
+        ? selectedRows
+        : [];
+
+  if (labelSource.length > 0) {
+    return {
+      kind: 'names',
+      gender,
+      items: labelSource.map((row) => ({
+        name: String(row.name ?? '').trim() || categoryIdKey(row.id),
+        slug: row.slug != null ? String(row.slug).trim() : null
+      }))
+    };
+  }
+
+  if (gender) {
+    return { kind: 'gender', gender };
+  }
+
+  return { kind: 'count', count: selected.size };
+}
+
+function rowGender(row: CategoryTreeRow): string | null {
+  const g = row.gender != null ? String(row.gender).trim() : '';
+  return g || null;
+}
+
 function getCategoryFilterContextFromRows(
   categoryId: string,
   byId: Map<string, CategoryTreeRow>
@@ -362,28 +509,44 @@ export async function getDescendantCategoryIds(
   if (roots.length === 0) return [];
 
   const rows = await getAllCategoriesCached();
-  const childrenByParent = new Map<string, string[]>();
-  for (const row of rows) {
-    const parentKey = categoryIdKey(row.parent_id);
-    const childKey = categoryIdKey(row.id);
-    if (!parentKey || !childKey) continue;
-    const list = childrenByParent.get(parentKey) ?? [];
-    list.push(childKey);
-    childrenByParent.set(parentKey, list);
-  }
+  return Array.from(descendantIdSet(roots, buildChildrenByParent(rows)));
+}
 
-  const visited = new Set<string>();
-  const queue = [...roots];
-  while (queue.length > 0) {
-    const currentId = queue.shift()!;
-    if (visited.has(currentId)) continue;
-    visited.add(currentId);
-    for (const childId of childrenByParent.get(currentId) ?? []) {
-      if (!visited.has(childId)) queue.push(childId);
-    }
-  }
+/** IDs catégorie (racine + descendants) pour un slug catalogue (ex. designer_and_luxury). */
+export async function getCategoryTreeIdsBySlug(slug: string): Promise<string[]> {
+  const needle = String(slug ?? '').trim().toLowerCase();
+  if (!needle) return [];
+  const rows = await getAllCategoriesCached();
+  const roots = rows.filter((row) => String(row.slug ?? '').trim().toLowerCase() === needle);
+  if (roots.length === 0) return [];
+  return getDescendantCategoryIds(roots.map((r) => r.id));
+}
 
-  return Array.from(visited);
+/**
+ * Arbre « Luxe / Designer & Luxury » : en BDD les nœuds sont typiquement
+ * `femme-luxe` / `homme-luxe` (pas le slug i18n `designer_and_luxury`).
+ */
+export async function getLuxuryCategoryTreeIds(): Promise<string[]> {
+  const bySlug = await getCategoryTreeIdsBySlug('designer_and_luxury');
+  if (bySlug.length > 0) return bySlug;
+  const byLegacy = await getCategoryTreeIdsBySlug('luxe_et_createurs');
+  if (byLegacy.length > 0) return byLegacy;
+
+  const rows = await getAllCategoriesCached();
+  const roots = rows.filter((row) => {
+    const slug = String(row.slug ?? '')
+      .trim()
+      .toLowerCase();
+    const name = String(row.name ?? '')
+      .trim()
+      .toLowerCase();
+    if (slug.endsWith('-luxe') || slug.includes('luxury')) return true;
+    if (name.includes('luxury') || name.includes('luxe')) return true;
+    if (name.includes('designer') && name.includes('luxury')) return true;
+    return false;
+  });
+  if (roots.length === 0) return [];
+  return getDescendantCategoryIds(roots.map((r) => r.id));
 }
 
 const BRANDS_PAGE_SIZE = 1000;
@@ -468,14 +631,24 @@ export async function getBrands(
 
 /**
  * Tailles avec compteur d'articles (via listings.size texte = sizes.label).
+ * `requireGender: true` (vente / édition) → catalogue vide si aucun genre catégorie.
+ * Sans ce flag (filtres discovery), le catalogue complet reste autorisé.
  */
 export async function getSizes(
   gender?: string,
   type?: string,
-  opts?: { categoryIdForCounts?: string | null; categoryIdsForCounts?: string[] | null }
+  opts?: {
+    categoryIdForCounts?: string | null;
+    categoryIdsForCounts?: string[] | null;
+    requireGender?: boolean;
+  }
 ) {
-  let sizesQuery = supabase.from('sizes').select('*').order('sort_order');
   const catalogGender = toCatalogGender(gender);
+  if (opts?.requireGender && !catalogGender) {
+    return [];
+  }
+
+  let sizesQuery = supabase.from('sizes').select('*').order('sort_order');
   if (catalogGender) {
     // Toujours inclure les tailles globales (gender = 'all')
     sizesQuery = sizesQuery.in('gender', [catalogGender, 'all']);
@@ -495,6 +668,62 @@ export async function getSizes(
     ...s,
     items_count: countsBySizeLabel[(s.label as string) ?? ''] ?? 0
   }));
+}
+
+/**
+ * Vérifie qu'une taille catalogue est compatible avec le genre de la catégorie.
+ * Sans taille → ok. Taille hors catalogue → ok (non vérifiable).
+ */
+export async function isSizeCompatibleWithCategoryGender(opts: {
+  sizeId?: number | null;
+  sizeLabel?: string | null;
+  categoryGender?: string | null;
+}): Promise<boolean> {
+  const label = opts.sizeLabel?.trim() ?? '';
+  const sizeId =
+    typeof opts.sizeId === 'number' && Number.isFinite(opts.sizeId) && opts.sizeId > 0
+      ? opts.sizeId
+      : null;
+
+  if (!sizeId && !label) return true;
+
+  const catalogGender = toCatalogGender(opts.categoryGender);
+  if (!catalogGender) return false;
+
+  const isCompatible = (rawGender: unknown) => {
+    const g = String(rawGender ?? '')
+      .trim()
+      .toLowerCase();
+    return g === catalogGender || g === 'all';
+  };
+
+  if (sizeId != null) {
+    const { data, error } = await supabase
+      .from('sizes')
+      .select('id, gender')
+      .eq('id', sizeId)
+      .maybeSingle();
+    if (error || !data) {
+      // id inconnu : basculer sur le label si possible
+    } else {
+      return isCompatible((data as { gender?: string | null }).gender);
+    }
+  }
+
+  if (!label) return false;
+
+  const { data: rows, error: labelError } = await supabase
+    .from('sizes')
+    .select('id, label, gender')
+    .eq('label', label);
+
+  if (labelError) return false;
+  const matches = (rows ?? []) as Array<{ label?: string | null; gender?: string | null }>;
+  if (matches.length === 0) {
+    // Label libre / hors catalogue : on ne bloque pas
+    return true;
+  }
+  return matches.some((row) => isCompatible(row.gender));
 }
 
 /**

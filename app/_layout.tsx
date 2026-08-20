@@ -30,7 +30,6 @@ import Constants from 'expo-constants';
 import { STRIPE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/env';
 import { isAuthCallbackUrl, authCallbackRouteParams } from '../lib/auth/authCallbackUrl';
 import { shouldSkipOAuthDeepLinkNavigation } from '../lib/auth/oauthExchangeGuard';
-import { needsAuthPhoneVerification } from '../lib/auth/needsPhoneVerification';
 import {
   isStripeConnectReturnUrl,
   consumeStripeConnectReturnPending,
@@ -185,9 +184,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         segments[1] === 'verify-phone' ||
         segments[1] === 'verify-phone-info' ||
         segments[1] === 'verify-phone-code');
-    // SMS obligatoire tant que auth.users.phone_confirmed_at est vide
-    // (signup email sans numéro, ou OTP phone_change non validé).
-    const needsPhoneVerification = !!session && needsAuthPhoneVerification(user);
     const normalizedPath = (pathname ?? '').replace(/\/+$/, '') || '/';
 
     // Lien dressing partagé : ne pas écraser par onboarding / verify-phone / feed.
@@ -231,20 +227,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Si connecté mais que le numéro de téléphone n'est pas encore vérifié,
-    // forcer le passage par le flow de vérification téléphone.
-    if (session && needsPhoneVerification && !isVerificationRoute) {
-      authDebug('authGate:redirect:verifyPhone', {
-        path: normalizedPath,
-        userId: user?.id ?? null
-      });
-      router.replace('/auth/verify-phone');
-      return;
-    }
-
-    // Si connecté (et profil complet) et sur un écran auth/onboarding,
-    // rediriger vers le feed sauf pour les écrans de vérification (email / téléphone)
-    if (session && !needsPhoneVerification && isPublicRoute && !isVerificationRoute) {
+    // Si connecté et sur un écran auth/onboarding, rediriger vers le feed
+    // (sauf écrans de vérification email / callback encore en cours).
+    if (session && isPublicRoute && !isVerificationRoute) {
       authDebug('authGate:redirect:feed', { path: normalizedPath, userId: user?.id ?? null });
       navigateInTabs('/tabs/feed');
     }
@@ -254,17 +239,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!initialized || isLoading || !session || !termsAccepted) return;
 
-    if (needsAuthPhoneVerification(user)) return;
-
     flushPendingNotificationNav(router);
-  }, [
-    initialized,
-    isLoading,
-    session,
-    termsAccepted,
-    user?.phone_confirmed_at,
-    router
-  ]);
+  }, [initialized, isLoading, session, termsAccepted, router]);
 
   // Dressing partagé : flush dès que l'app est prête (session optionnelle — lien public).
   useEffect(() => {
@@ -502,13 +478,8 @@ export default function RootLayout() {
       }
 
       // Si la session est déjà prête (app chaude), naviguer tout de suite.
-      const { session, initialized, isLoading, user } = useAuthStore.getState();
-      if (
-        initialized &&
-        !isLoading &&
-        session &&
-        !needsAuthPhoneVerification(user)
-      ) {
+      const { session, initialized, isLoading } = useAuthStore.getState();
+      if (initialized && !isLoading && session) {
         flushPendingNotificationNav(routerRef.current);
       }
     };

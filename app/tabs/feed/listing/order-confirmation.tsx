@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { getSafeBottomInset } from '../../../../lib/safeArea';
@@ -14,6 +14,7 @@ import { formatCatalogPriceChf, formatChf, formatFeeLineChf } from '../../../../
 import { fetchAcceptedOfferAmountForOrder } from '../../../../lib/fetchOrderAcceptedOfferAmount';
 import { computeOrderBuyerTotals, formatOrderShippingFeeValue } from '../../../../lib/orderTotals';
 import { isOrderPickupDelivery } from '../../../../lib/deliveryMode';
+import { resolveListingFlowStackBase } from '../../../../lib/navigation/listingDetailNav';
 
 type OrderRow = {
   id: string;
@@ -28,6 +29,7 @@ type OrderRow = {
   buyer_protection_chf?: number | string | null;
   buyer_banking_fee_chf?: number | string | null;
   shipping_fee_chf?: number | string | null;
+  promo_discount_chf?: number | string | null;
   parcel_size?: string | null;
   is_promo_shipping?: boolean | null;
   shipping_city?: string | null;
@@ -46,6 +48,8 @@ function normalizePhotoUrl(rawUrl: string) {
 export default function OrderConfirmationScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
+  const stackBase = useMemo(() => resolveListingFlowStackBase(pathname), [pathname]);
   const insets = useSafeAreaInsets();
   const safeBottom = getSafeBottomInset(insets.bottom);
   const params = useLocalSearchParams<{ order_id?: string; from_messages_thread?: string }>();
@@ -87,6 +91,7 @@ export default function OrderConfirmationScreen() {
             buyer_protection_chf,
             buyer_banking_fee_chf,
             shipping_fee_chf,
+            promo_discount_chf,
             parcel_size,
             is_promo_shipping,
             shipping_city,
@@ -177,8 +182,8 @@ export default function OrderConfirmationScreen() {
       router.back();
       return;
     }
-    router.replace('/tabs/feed');
-  }, [fromMessagesThread, router]);
+    router.replace(stackBase === '/tabs/feed' ? '/tabs/feed' : (stackBase as any));
+  }, [fromMessagesThread, router, stackBase]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -305,6 +310,16 @@ export default function OrderConfirmationScreen() {
                             t('profile.orders.promoShipping')
                           )
                         : '—'}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {totals && totals.promoDiscountChf > 0 ? (
+                  <View style={styles.moneyRow}>
+                    <Text variant="body" style={styles.promoDiscountLabel}>
+                      {t('feed.checkout.promoDiscount', {
+                        amount: `-${formatChf(totals.promoDiscountChf)}`
+                      })}
                     </Text>
                   </View>
                 ) : null}
@@ -529,6 +544,11 @@ const styles = StyleSheet.create({
     gap: 12
   },
   moneyLabel: {
+    flex: 1
+  },
+  promoDiscountLabel: {
+    color: '#C3EA4F',
+    fontFamily: theme.fontFamily.semiBold,
     flex: 1
   },
   moneyValue: {

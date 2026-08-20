@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
+  Keyboard,
   RefreshControl,
   StyleSheet,
   View,
@@ -12,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import {
   cloneFeedListings,
+  FEED_LISTING_SELECT,
   getBlockedSellerIdsForCurrentUser,
   getFeedListings,
   getMyLikedListingIds,
@@ -40,12 +43,20 @@ import {
 } from '../../../components/feed/InfluencerSpotlightCard';
 import { FeedHeader } from '../../../components/feed/FeedHeader';
 import { FeedGridSkeleton } from '../../../components/feed/FeedGridSkeleton';
+import { SearchActivePanel } from '../../../components/search/SearchActivePanel';
 import { getFixedTabBarHeight } from '../../../components/navigation/FloatingTabBar';
 import { getCardImagePriority, FEED_GRID_PERF_PROPS, LIST_IMAGE_PERF_PROPS } from '../../../lib/cardImagePriority';
 import { subscribeBlockedUsersRevision } from '../../../lib/store/blockedUsersSync';
 import { normalizeLanguage } from '../../../lib/i18n';
 import { getPublishedHomeHero, type HomeHeroContent } from '../../../lib/api/homeHero';
 import { authDebug, authDebugError } from '../../../lib/authDebugLog';
+import {
+  handleDiscoveryCollectionPress,
+  handleDiscoverySuggestionNavigate,
+  navigateSearchWithQuery
+} from '../../../lib/search/commitFromDiscovery';
+import type { SearchSuggestion } from '../../../lib/search/activeSuggestions';
+import type { SearchCollection } from '../../../lib/search/collections';
 import {
   horizontalCardWidth,
   horizontalCarouselMinHeight,
@@ -54,7 +65,7 @@ import {
   GRID_PADDING_X
 } from '../../../lib/cardLayout';
 
-const FEED_PAGE_SIZE = 40;
+const FEED_PAGE_SIZE = 24;
 const FEED_PAGE_PROBE = FEED_PAGE_SIZE + 1;
 const HORIZONTAL_CARD_IMAGE_RATIO = 1.3;
 
@@ -76,6 +87,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [searchActive, setSearchActive] = useState(false);
   const [homeHero, setHomeHero] = useState<HomeHeroContent | null>(null);
   const [hasMoreAllListings, setHasMoreAllListings] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -114,11 +126,55 @@ export default function HomeScreen() {
   const submitSearch = useCallback(() => {
     const q = searchText.trim();
     if (!q) return;
-    router.push({
-      pathname: '/tabs/search' as any,
-      params: { query: q }
-    });
+    setSearchActive(false);
+    navigateSearchWithQuery(router, q);
   }, [router, searchText]);
+
+  const dismissSearchOverlay = useCallback(() => {
+    setSearchActive(false);
+    Keyboard.dismiss();
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    setSearchActive(true);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchText('');
+  }, []);
+
+  const handleSuggestionPress = useCallback(
+    (suggestion: SearchSuggestion) => {
+      setSearchActive(false);
+      void handleDiscoverySuggestionNavigate(router, suggestion, searchText, t);
+    },
+    [router, searchText, t]
+  );
+
+  const handleCollectionPress = useCallback(
+    (collection: SearchCollection) => {
+      setSearchActive(false);
+      handleDiscoveryCollectionPress(router, collection, t);
+    },
+    [router, t]
+  );
+
+  const handleRecentPress = useCallback(
+    (recentQuery: string) => {
+      setSearchActive(false);
+      navigateSearchWithQuery(router, recentQuery);
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    if (!searchActive) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      dismissSearchOverlay();
+      return true;
+    });
+    return () => sub.remove();
+  }, [dismissSearchOverlay, searchActive]);
 
   const fetchFeed = useCallback(async () => {
     authDebug('feed:fetch:start', {
@@ -153,7 +209,7 @@ export default function HomeScreen() {
           const nowIso = new Date().toISOString();
           const { data, error: sErr } = await supabase
             .from('v_feed_listings')
-            .select('*')
+            .select(FEED_LISTING_SELECT)
             .eq('is_sponsored', true)
             .gt('sponsored_until', nowIso)
             .order('sponsored_until', { ascending: false })
@@ -267,6 +323,8 @@ export default function HomeScreen() {
       if (hasCache && cacheFresh) {
         return () => {
           authDebug('feed:blur');
+          setSearchActive(false);
+          Keyboard.dismiss();
         };
       }
 
@@ -280,6 +338,8 @@ export default function HomeScreen() {
 
       return () => {
         authDebug('feed:blur');
+        setSearchActive(false);
+        Keyboard.dismiss();
       };
     }, [fetchFeed, user?.id])
   );
@@ -613,10 +673,24 @@ export default function HomeScreen() {
           searchText={searchText}
           onSearchTextChange={setSearchText}
           onSubmitSearch={submitSearch}
+          onSearchFocus={handleSearchFocus}
+          searchActive={searchActive}
+          onClearSearch={handleClearSearch}
+          onDismissSearch={dismissSearchOverlay}
           unreadNotificationsCount={unreadNotificationsCount}
         />
 
-        {error && listings.length === 0 && !loading ? (
+        {searchActive ? (
+          <View style={styles.searchOverlay}>
+            <SearchActivePanel
+              query={searchText}
+              onSuggestionPress={handleSuggestionPress}
+              onCollectionPress={handleCollectionPress}
+              onRecentPress={handleRecentPress}
+              bottomInset={fixedTabBarReserveSpace}
+            />
+          </View>
+        ) : error && listings.length === 0 && !loading ? (
           <View style={styles.centerContent}>
             <Text variant="h2" style={styles.errorTitle}>
               {t('feed.loadError')}
@@ -665,6 +739,10 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   root: {
+    flex: 1,
+    backgroundColor: theme.colors.background
+  },
+  searchOverlay: {
     flex: 1,
     backgroundColor: theme.colors.background
   },

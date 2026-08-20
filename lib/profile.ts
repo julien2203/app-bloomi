@@ -75,19 +75,34 @@ export async function ensureProfileExists(
     (userMeta.full_name as string | undefined) ||
     null;
 
+  const marketingOptInRaw = userMeta.marketing_optin;
+  const marketingOptIn =
+    marketingOptInRaw === true ||
+    marketingOptInRaw === 'true' ||
+    marketingOptInRaw === 1 ||
+    marketingOptInRaw === '1';
+
   if (!phone) {
     // On ne bloque pas la connexion si le téléphone n'est pas disponible,
     // on se contente de ne pas créer de profil complet.
     // Par contre, si on a déjà un profil existant, on peut juste mettre à jour le display_name.
-    if (displayName) {
+    if (displayName || isNewProfile) {
       const initialLanguage = await languageForNewProfile(userId);
       const { data, error } = await supabase
         .from('profiles')
         .upsert(
           {
             id: userId,
-            display_name: displayName,
-            ...(initialLanguage ? { language: initialLanguage } : {})
+            ...(displayName ? { display_name: displayName } : {}),
+            ...(initialLanguage ? { language: initialLanguage } : {}),
+            ...(isNewProfile
+              ? {
+                  marketing_opt_in: marketingOptIn,
+                  ...(marketingOptIn
+                    ? { marketing_opt_in_at: new Date().toISOString() }
+                    : {})
+                }
+              : {})
           },
           { onConflict: 'id' }
         )
@@ -119,7 +134,13 @@ export async function ensureProfileExists(
         phone,
         country,
         display_name: displayName,
-        ...(initialLanguage ? { language: initialLanguage } : {})
+        ...(initialLanguage ? { language: initialLanguage } : {}),
+        ...(isNewProfile
+          ? {
+              marketing_opt_in: marketingOptIn,
+              ...(marketingOptIn ? { marketing_opt_in_at: new Date().toISOString() } : {})
+            }
+          : {})
       },
       { onConflict: 'id' }
     )

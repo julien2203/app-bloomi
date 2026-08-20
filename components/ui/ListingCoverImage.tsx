@@ -24,8 +24,8 @@ const missingCardOrigins = new Set<string>();
  */
 export function ListingCoverImage({
   uri,
-  widthDp: _widthDp,
-  heightDp: _heightDp,
+  widthDp,
+  heightDp,
   recyclingKey,
   priority = 'normal',
   contentFit = 'cover',
@@ -48,12 +48,24 @@ export function ListingCoverImage({
     setActiveUri(preferredUri);
   }, [preferredUri]);
 
+  const sizeStyle = useMemo(() => {
+    if (
+      typeof widthDp === 'number' &&
+      widthDp > 0 &&
+      typeof heightDp === 'number' &&
+      heightDp > 0
+    ) {
+      return { width: widthDp, height: heightDp };
+    }
+    return { width: '100%' as const, height: '100%' as const };
+  }, [widthDp, heightDp]);
+
   if (!activeUri) return null;
 
   return (
     <Image
       source={activeUri}
-      style={[styles.image, style]}
+      style={[styles.image, sizeStyle, style]}
       contentFit={contentFit}
       cachePolicy="memory-disk"
       recyclingKey={recyclingKey}
@@ -76,8 +88,6 @@ export function ListingCoverImage({
 
 const styles = StyleSheet.create({
   image: {
-    width: '100%',
-    height: '100%',
     backgroundColor: '#F5F5F5'
   }
 });

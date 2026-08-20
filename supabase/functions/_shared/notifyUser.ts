@@ -12,12 +12,17 @@ import {
   stripeOnboardingEmailContent,
   unreadMessageEmailContent,
   welcomeEmailContent,
+  priceDropEmailContent,
+  followedSellerNewListingEmailContent,
+  noPurchaseNudgeEmailContent,
+  sellerNoSaleTipsEmailContent,
   type EmailLang,
   type TransactionalEmailContent,
 } from "./transactionalEmailI18n.ts";
 import {
+  claimTransactionalEmailSend,
   logTransactionalEmailSent,
-  wasTransactionalEmailSent,
+  releaseTransactionalEmailClaim,
 } from "./transactionalEmailLog.ts";
 
 const DEFAULT_RESEND_FROM = "Bloomi <contact@bloomi.ch>";
@@ -31,7 +36,11 @@ export type EmailTemplateKey =
   | "order_cancelled"
   | "order_action_required"
   | "seller_order_cancelled"
-  | "stripe_onboarding";
+  | "stripe_onboarding"
+  | "price_drop"
+  | "followed_seller_new_listing"
+  | "no_purchase_nudge"
+  | "seller_no_sale_tips";
 
 export type NotifyUserPush = {
   title: string;
@@ -49,6 +58,8 @@ export type NotifyUserParams = {
   push?: NotifyUserPush;
   skipEmail?: boolean;
   skipPush?: boolean;
+  /** Si true : n'envoie l'e-mail que si profiles.marketing_opt_in = true */
+  requireMarketingOptIn?: boolean;
   variables?: Record<string, string | boolean | number>;
 };
 
@@ -113,7 +124,7 @@ function buildEmailContent(
         headline: String(variables.headline ?? ""),
         body: String(variables.body ?? ""),
         ctaLabel: String(variables.ctaLabel ?? "Open Bloomi"),
-        ctaUrl: String(variables.ctaUrl ?? "bloomi://tabs/profile"),
+        ctaUrl: String(variables.ctaUrl ?? "https://bloomi.ch/open/profile"),
       });
     case "seller_order_cancelled":
       return sellerOrderCancelledEmailContent(lang, {
@@ -122,6 +133,30 @@ function buildEmailContent(
       });
     case "stripe_onboarding":
       return stripeOnboardingEmailContent(lang, displayName);
+    case "price_drop":
+      return priceDropEmailContent(lang, {
+        displayName,
+        listingTitle: String(variables.listingTitle ?? ""),
+        oldPrice: String(variables.oldPrice ?? ""),
+        newPrice: String(variables.newPrice ?? ""),
+        listingId: String(variables.listingId ?? ""),
+      });
+    case "followed_seller_new_listing":
+      return followedSellerNewListingEmailContent(lang, {
+        displayName,
+        sellerName: String(variables.sellerName ?? ""),
+        listingTitle: String(variables.listingTitle ?? ""),
+        listingId: String(variables.listingId ?? ""),
+      });
+    case "no_purchase_nudge":
+      return noPurchaseNudgeEmailContent(lang, displayName);
+    case "seller_no_sale_tips":
+      return sellerNoSaleTipsEmailContent(lang, {
+        displayName,
+        listingTitle: String(variables.listingTitle ?? ""),
+        tip: String(variables.tip ?? ""),
+        listingId: String(variables.listingId ?? ""),
+      });
     default:
       return null;
   }
@@ -181,24 +216,39 @@ export async function notifyUser(params: NotifyUserParams): Promise<NotifyUserRe
     return result;
   }
 
+  if (params.requireMarketingOptIn) {
+    const { data: optRow } = await params.supabaseAdmin
+      .from("profiles")
+      .select("marketing_opt_in")
+      .eq("id", params.userId)
+      .maybeSingle();
+    if (!Boolean((optRow as { marketing_opt_in?: boolean } | null)?.marketing_opt_in)) {
+      result.emailSkippedReason = "no_marketing_opt_in";
+      return result;
+    }
+  }
+
   const resendApiKey = Deno.env.get("RESEND_API_KEY")?.trim() ?? "";
   if (!resendApiKey) {
     result.emailSkippedReason = "no_resend_key";
     return result;
   }
 
-  const alreadySent = await wasTransactionalEmailSent(params.supabaseAdmin, {
+  const claim = await claimTransactionalEmailSend(params.supabaseAdmin, {
     userId: params.userId,
     templateKey: params.templateKey,
     entityId: params.entityId,
   });
-  if (alreadySent) {
+  if (!claim.claimed) {
     result.emailSkippedReason = "already_sent";
     return result;
   }
 
   const email = await fetchUserEmail(params.supabaseAdmin, params.userId);
   if (!email) {
+    if (claim.logId) {
+      await releaseTransactionalEmailClaim(params.supabaseAdmin, claim.logId);
+    }
     result.emailSkippedReason = "no_email";
     return result;
   }
@@ -207,6 +257,9 @@ export async function notifyUser(params: NotifyUserParams): Promise<NotifyUserRe
   const displayName = await fetchProfileDisplayName(params.supabaseAdmin, params.userId);
   const content = buildEmailContent(params.templateKey, lang, displayName, variables);
   if (!content) {
+    if (claim.logId) {
+      await releaseTransactionalEmailClaim(params.supabaseAdmin, claim.logId);
+    }
     result.emailSkippedReason = "unknown_template";
     return result;
   }
@@ -221,6 +274,9 @@ export async function notifyUser(params: NotifyUserParams): Promise<NotifyUserRe
   });
 
   if (!emailResult.ok) {
+    if (claim.logId) {
+      await releaseTransactionalEmailClaim(params.supabaseAdmin, claim.logId);
+    }
     console.warn("notifyUser email failed:", emailResult.error);
     result.emailSkippedReason = "resend_error";
     return result;
@@ -231,6 +287,7 @@ export async function notifyUser(params: NotifyUserParams): Promise<NotifyUserRe
     templateKey: params.templateKey,
     entityId: params.entityId,
     resendId: emailResult.id,
+    logId: claim.logId,
   });
 
   result.emailSent = true;

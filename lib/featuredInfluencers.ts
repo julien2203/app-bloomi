@@ -49,9 +49,10 @@ export async function fetchFeaturedInfluencers(
   try {
     const blocked = new Set(blockedSellerIds.map(String));
 
+    // Fetch all influencer profiles in one query, including featured_in_carousel flag
     const { data: profs, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_url, cover_image')
+      .select('id, display_name, avatar_url, cover_image, featured_in_carousel')
       .eq('is_influencer', true)
       .limit(FEATURED_INFLUENCERS_POOL_LIMIT);
     if (profErr) throw profErr;
@@ -89,7 +90,9 @@ export async function fetchFeaturedInfluencers(
       thumbBySeller.set(sid, url);
     }
 
-    const built: FeaturedInfluencer[] = [];
+    const featuredFixed: FeaturedInfluencer[] = [];
+    const pool: FeaturedInfluencer[] = [];
+
     for (const p of candidates) {
       const id = String(p.id);
       const activeCount = countBySeller.get(id) ?? 0;
@@ -98,15 +101,35 @@ export async function fetchFeaturedInfluencers(
       const imageUrl = pickProfileImage(p) ?? thumbBySeller.get(id) ?? null;
       if (!imageUrl) continue;
 
-      built.push({
+      const inf: FeaturedInfluencer = {
         id,
         display_name: (p.display_name as string | null) ?? null,
         image_url: imageUrl,
         active_listings_count: activeCount
-      });
+      };
+
+      // featured_in_carousel = true → cards 2-8 (fixed positions)
+      // featured_in_carousel = false → pool for weekly spotlight (card 1)
+      if ((p as { featured_in_carousel?: boolean }).featured_in_carousel) {
+        featuredFixed.push(inf);
+      } else {
+        pool.push(inf);
+      }
     }
 
-    return shuffleWithSeed(built, getIsoWeekSeed()).slice(0, FEATURED_INFLUENCERS_LIMIT);
+    // Card 1 : weekly rotating spotlight picked from non-featured pool
+    const seed = getIsoWeekSeed();
+    const shuffledPool = shuffleWithSeed(pool, seed);
+    const spotlight = shuffledPool[0];
+
+    // Cards 2-8 : fixed influencers (featured_in_carousel = true), capped at limit - 1
+    const fixedSlots = featuredFixed.slice(0, FEATURED_INFLUENCERS_LIMIT - 1);
+
+    if (spotlight) {
+      return [spotlight, ...fixedSlots];
+    }
+    // Fallback if pool is empty: fill card 1 from featured list
+    return featuredFixed.slice(0, FEATURED_INFLUENCERS_LIMIT);
   } catch {
     return [];
   }

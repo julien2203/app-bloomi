@@ -55,6 +55,7 @@ type OrderRow = {
   buyer_protection_chf?: number | string | null;
   buyer_banking_fee_chf?: number | string | null;
   shipping_fee_chf?: number | string | null;
+  promo_discount_chf?: number | string | null;
   parcel_size?: string | null;
   is_promo_shipping?: boolean | null;
   created_at: string | null;
@@ -158,6 +159,15 @@ export default function OrdersScreen() {
   const [reviewedOrderIds, setReviewedOrderIds] = useState<Set<string>>(() => new Set());
   const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
+  const [trackingModalVisible, setTrackingModalVisible] = useState(false);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [trackingNumberForModal, setTrackingNumberForModal] = useState<string | null>(null);
+  const [trackingInfo, setTrackingInfo] = useState<{
+    status: string;
+    date: string | null;
+    description: string;
+  } | null>(null);
 
   const userId = user?.id ?? null;
 
@@ -187,6 +197,7 @@ export default function OrdersScreen() {
           buyer_protection_chf,
           buyer_banking_fee_chf,
           shipping_fee_chf,
+          promo_discount_chf,
           parcel_size,
           is_promo_shipping,
           created_at,
@@ -877,6 +888,95 @@ export default function OrdersScreen() {
     );
   }, []);
 
+  const formatTrackingDate = useCallback(
+    (iso: string | null | undefined) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      try {
+        return d.toLocaleString(undefined, {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch {
+        return iso;
+      }
+    },
+    []
+  );
+
+  const closeTrackingModal = useCallback(() => {
+    if (trackingLoading) return;
+    setTrackingModalVisible(false);
+  }, [trackingLoading]);
+
+  const openTrackingModal = useCallback(
+    async (order: EnrichedOrder) => {
+      const trackingNumber = String(order.tracking_number ?? '').trim();
+      if (!trackingNumber) return;
+
+      setTrackingNumberForModal(trackingNumber);
+      setTrackingInfo(null);
+      setTrackingError(null);
+      setTrackingModalVisible(true);
+      setTrackingLoading(true);
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) {
+          throw new Error(t('feed.checkout.sessionExpired'));
+        }
+
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/track-shipment`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tracking_number: trackingNumber,
+            order_id: order.id
+          })
+        });
+
+        const responseText = await response.text();
+        let data: any = null;
+        try {
+          data = responseText ? JSON.parse(responseText) : null;
+        } catch {
+          data = null;
+        }
+
+        if (!response.ok || data?.success !== true) {
+          const message =
+            (typeof data?.error === 'string' && data.error) ||
+            (typeof data?.details === 'string' && data.details) ||
+            responseText ||
+            t('profile.orders.trackingUnavailable');
+          throw new Error(message);
+        }
+
+        setTrackingInfo({
+          status: String(data.status ?? '—'),
+          date: typeof data.date === 'string' ? data.date : null,
+          description: String(data.description ?? data.status ?? '—')
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setTrackingError(
+          t('profile.orders.trackingUnavailableWithDetails', { message })
+        );
+      } finally {
+        setTrackingLoading(false);
+      }
+    },
+    [t]
+  );
+
   const openOrderDetail = useCallback(
     (orderId: string) => {
       router.push({
@@ -1057,8 +1157,8 @@ export default function OrdersScreen() {
               {isPurchasesTab && statusNorm === 'shipped' && hasTracking && !isPickup ? (
                 <View style={styles.cancelButtonWrap}>
                   <Button
-                    title={t('profile.orders.trackParcel')}
-                    onPress={() => void followPackage(trackingNumber)}
+                    title={t('profile.orders.viewTracking')}
+                    onPress={() => void openTrackingModal(item)}
                     variant="secondary"
                   />
                 </View>
@@ -1133,6 +1233,7 @@ export default function OrdersScreen() {
     [
       canCancelOrder,
       canConfirmReception,
+      openTrackingModal,
       canGenerateShippingLabel,
       isLetterAplusOrder,
       cancellingOrderIds,
@@ -1257,6 +1358,81 @@ export default function OrdersScreen() {
                 variant="secondary"
               />
               <Button title={t('common.close')} onPress={closeDisputeModal} variant="google" />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={trackingModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeTrackingModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.disputeModalBackdrop}
+            activeOpacity={1}
+            onPress={closeTrackingModal}
+          />
+          <View style={styles.modalCard}>
+            <Text variant="h3" style={styles.modalTitle}>
+              {t('profile.orders.trackingModalTitle')}
+            </Text>
+            {trackingNumberForModal ? (
+              <Text variant="captionSm" color="textSecondary" style={styles.disputeOrderId}>
+                {t('profile.orders.trackingNumber', { number: trackingNumberForModal })}
+              </Text>
+            ) : null}
+
+            {trackingLoading ? (
+              <View style={styles.trackingLoadingWrap}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text variant="body" color="textSecondary" style={styles.trackingLoadingText}>
+                  {t('profile.orders.trackingLoading')}
+                </Text>
+              </View>
+            ) : trackingError ? (
+              <Text variant="body" color="danger" style={styles.disputeModalMessage}>
+                {trackingError}
+              </Text>
+            ) : trackingInfo ? (
+              <View style={styles.trackingInfoWrap}>
+                <Text variant="captionSm" color="textSecondary">
+                  {t('profile.orders.trackingStatusLabel')}
+                </Text>
+                <Text variant="body" style={styles.trackingInfoValue}>
+                  {trackingInfo.status}
+                </Text>
+                <Text variant="captionSm" color="textSecondary" style={styles.trackingInfoLabel}>
+                  {t('profile.orders.trackingDateLabel')}
+                </Text>
+                <Text variant="body" style={styles.trackingInfoValue}>
+                  {formatTrackingDate(trackingInfo.date)}
+                </Text>
+                <Text variant="captionSm" color="textSecondary" style={styles.trackingInfoLabel}>
+                  {t('profile.orders.trackingDescriptionLabel')}
+                </Text>
+                <Text variant="body" style={styles.trackingInfoValue}>
+                  {trackingInfo.description}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.disputeModalActions}>
+              {trackingNumberForModal ? (
+                <Button
+                  title={t('profile.orders.trackingOpenSwissPost')}
+                  onPress={() => void followPackage(trackingNumberForModal)}
+                  variant="secondary"
+                />
+              ) : null}
+              <Button
+                title={t('common.close')}
+                onPress={closeTrackingModal}
+                variant="google"
+                disabled={trackingLoading}
+              />
             </View>
           </View>
         </View>
@@ -1434,6 +1610,25 @@ const styles = StyleSheet.create({
   },
   disputeOrderId: {
     marginBottom: 12
+  },
+  trackingLoadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10
+  },
+  trackingLoadingText: {
+    textAlign: 'center'
+  },
+  trackingInfoWrap: {
+    marginTop: 4,
+    marginBottom: 8
+  },
+  trackingInfoLabel: {
+    marginTop: 12
+  },
+  trackingInfoValue: {
+    marginTop: 4
   },
   disputeModalActions: {
     gap: 10,

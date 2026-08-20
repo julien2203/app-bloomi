@@ -1,21 +1,16 @@
 /**
- * La vérification SMS est obligatoire pour toute session authentifiée.
- * On se base uniquement sur auth.users.phone_confirmed_at (Supabase Auth),
- * pas sur profiles.phone (peut contenir un placeholder sans OTP validé).
- *
- * Couvre :
- * - inscription email (phone encore vide)
- * - OTP phone_change démarré mais non confirmé
- * - login / OAuth sans téléphone confirmé
+ * La vérification SMS n'est plus obligatoire à l'inscription ni à la connexion.
+ * Les écrans verify-phone* restent dans le code (accès manuel possible)
+ * mais ne sont plus injectés dans le parcours auth.
  */
 export function needsAuthPhoneVerification(
-  user: { phone_confirmed_at?: string | null } | null | undefined
+  _user?: { phone_confirmed_at?: string | null } | null
 ): boolean {
-  return Boolean(user) && !user.phone_confirmed_at;
+  return false;
 }
 
 export function postAuthDestination(
-  user: { phone_confirmed_at?: string | null } | null | undefined
-): '/auth/verify-phone' | '/tabs/feed' {
-  return needsAuthPhoneVerification(user) ? '/auth/verify-phone' : '/tabs/feed';
+  _user?: { phone_confirmed_at?: string | null } | null
+): '/tabs/feed' {
+  return '/tabs/feed';
 }

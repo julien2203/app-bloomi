@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import { translateFilterGenderDb } from './filterGenderParams';
 
 export type CategoryLabelSource = {
   name: string;
@@ -803,4 +804,31 @@ export function translateCategoryLabel(
   }
 
   return trimmed || String(slug ?? '').trim();
+}
+
+/**
+ * Affiche la catégorie avec sa racine genre : « Hommes · Pulls ».
+ */
+export function formatCategoryWithGender(
+  categoryLabel: string | null | undefined,
+  gender: string | null | undefined,
+  t: TFunction
+): string {
+  const cat = (categoryLabel ?? '').trim();
+  const genderLabel = translateFilterGenderDb(gender, t);
+  const hasGender =
+    Boolean(gender?.trim()) && genderLabel !== '—' && genderLabel.length > 0;
+
+  if (!cat && !hasGender) return '';
+  if (!cat) return hasGender ? genderLabel : '';
+  if (!hasGender) return cat;
+
+  // Évite « Hommes · Hommes » si le libellé catégorie reprend déjà le genre
+  const catLower = cat.toLowerCase();
+  const genderLower = genderLabel.toLowerCase();
+  if (catLower === genderLower || catLower.startsWith(`${genderLower} `)) {
+    return cat;
+  }
+
+  return `${genderLabel} · ${cat}`;
 }

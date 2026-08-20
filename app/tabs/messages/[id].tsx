@@ -29,6 +29,12 @@ import { markThreadMessagesAsRead, type ThreadListItem } from '../../../lib/api_
 import { orderBlocksAcceptedOfferCheckout } from '../../../lib/messagesOfferCheckout';
 import { guardedPush } from '../../../lib/navigation/guardedNav';
 import { notificationsShortcutHref } from '../../../lib/navigation/feedShortcutNav';
+import {
+  listingDetailHref,
+  listingDetailPathBaseFromStackToken,
+  pickListingReturnParams,
+  resolveListingDetailPathBase
+} from '../../../lib/navigation/listingDetailNav';
 import { SUPABASE_URL } from '../../../lib/env';
 import { sendPushNotificationWithUserJwt } from '../../../lib/pushNotifications';
 import { refreshUnreadThreadsBadge } from '../../../lib/unreadMessagesBadge';
@@ -40,6 +46,13 @@ import { isOrderPickupDelivery } from '../../../lib/deliveryMode';
 import { getSafeBottomInset } from '../../../lib/safeArea';
 import { TransactionEventCard } from '../../../components/messages/TransactionEventCard';
 import { MessagesSafetyBanner } from '../../../components/messages/MessagesSafetyBanner';
+import { MessagesPaymentGateBanner } from '../../../components/messages/MessagesPaymentGateBanner';
+import {
+  BLOOMI_PII_BLOCKED_CODE,
+  detectBlockedContactInfo,
+  isBloomiPiiBlockedError,
+  isThreadPaymentConfirmed
+} from '../../../lib/messageContentGuard';
 import {
   buildChatEventCardModel,
   CHAT_EVENT_PREFIX,
@@ -108,15 +121,36 @@ export default function ThreadScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: windowHeight } = useWindowDimensions();
   const chatCardWidth = useMemo(() => computeChatCardWidth(screenWidth), [screenWidth]);
-  const { id, listing_id, seller_id, from_listing_id, from_order_id, from_notifications, from_inbox, from_notifications_origin } = useLocalSearchParams<{
+  const {
+    id,
+    listing_id,
+    seller_id,
+    from_listing_id,
+    from_listing_stack,
+    from_order_id,
+    from_notifications,
+    from_inbox,
+    from_notifications_origin,
+    return_to,
+    return_user_id,
+    return_query,
+    return_search_tab,
+    profile_return_to
+  } = useLocalSearchParams<{
     id?: string;
     listing_id?: string;
     seller_id?: string;
     from_listing_id?: string;
+    from_listing_stack?: string;
     from_order_id?: string;
     from_notifications?: string;
     from_inbox?: string;
     from_notifications_origin?: string;
+    return_to?: string;
+    return_user_id?: string;
+    return_query?: string;
+    return_search_tab?: string;
+    profile_return_to?: string;
   }>();
   const threadId = typeof id === 'string' ? id : '';
   const isDraftMode = threadId === 'draft';
@@ -528,6 +562,10 @@ export default function ThreadScreen() {
 
   const isSellerInThread = Boolean(threadMeta && user?.id && threadMeta.seller_id === user.id);
   const isBuyerInThread = Boolean(threadMeta && user?.id && threadMeta.buyer_id === user.id);
+  const paymentConfirmed = isThreadPaymentConfirmed(
+    latestOrderStatus,
+    latestOrderPaymentStatus
+  );
 
   const orderBlocksCheckout = orderBlocksAcceptedOfferCheckout(
     latestOrderStatus,
@@ -837,12 +875,23 @@ export default function ThreadScreen() {
     const body = input.trim();
     if (!body || !user || sending) return;
 
-    if (/(https?:\/\/|www\.)[^\s]+/i.test(body)) {
-      setLinkBlockedError('Les liens externes ne sont pas autorisés sur Bloomi.');
-      return;
+    const contactGuard = detectBlockedContactInfo(body);
+    if (contactGuard.blocked) {
+      if (contactGuard.reason === 'url') {
+        setLinkBlockedError(t('messages.paymentGate.blockedUrl'));
+        return;
+      }
+      if (contactGuard.reason === 'external_contact') {
+        setLinkBlockedError(t('messages.paymentGate.blockedExternalApp'));
+        return;
+      }
+      if (!paymentConfirmed) {
+        setLinkBlockedError(t('messages.paymentGate.blockedContact'));
+        return;
+      }
     }
     if (!checkRateLimit()) {
-      setLinkBlockedError('Vous envoyez trop de messages. Veuillez patienter une minute.');
+      setLinkBlockedError(t('messages.paymentGate.rateLimited'));
       return;
     }
     setLinkBlockedError(null);
@@ -879,6 +928,9 @@ export default function ThreadScreen() {
       if (insertError) {
         // eslint-disable-next-line no-console
         console.warn('Erreur envoi message:', insertError);
+        if (isBloomiPiiBlockedError(insertError) || String(insertError.message ?? '').includes(BLOOMI_PII_BLOCKED_CODE)) {
+          setLinkBlockedError(t('messages.paymentGate.blockedContact'));
+        }
       } else if (data) {
         setMessages((prev) =>
           [...prev, data as MessageRow].sort((a, b) =>
@@ -1486,11 +1538,24 @@ export default function ThreadScreen() {
       return;
     }
     if (fromListingId) {
-      // Retour contextuel sans POP_TO_TOP (dismissAll provoque un warning selon le navigator actif).
-      router.replace({
-        pathname: `/tabs/feed/${fromListingId}` as any,
-        params: { from_offer_chat: '1' }
+      const listingReturn = pickListingReturnParams({
+        return_to,
+        return_user_id,
+        return_query,
+        return_search_tab,
+        profile_return_to
       });
+      const stackBase =
+        listingDetailPathBaseFromStackToken(
+          typeof from_listing_stack === 'string' ? from_listing_stack : undefined
+        ) ?? resolveListingDetailPathBase(listingReturn.return_to);
+      router.replace(
+        listingDetailHref(fromListingId, {
+          ...listingReturn,
+          detailPathBase: stackBase,
+          extra: { from_offer_chat: '1' }
+        })
+      );
       return;
     }
     if (router.canGoBack && router.canGoBack()) {
@@ -1498,7 +1563,20 @@ export default function ThreadScreen() {
       return;
     }
     router.replace('/tabs/messages');
-  }, [fromListingId, fromOrderId, from_inbox, from_notifications, from_notifications_origin, router]);
+  }, [
+    fromListingId,
+    fromOrderId,
+    from_inbox,
+    from_listing_stack,
+    from_notifications,
+    from_notifications_origin,
+    profile_return_to,
+    return_query,
+    return_search_tab,
+    return_to,
+    return_user_id,
+    router
+  ]);
 
   const content = useMemo(() => {
     if (loading) {
@@ -1672,6 +1750,7 @@ export default function ThreadScreen() {
       </View>
 
       <MessagesSafetyBanner />
+      {!paymentConfirmed ? <MessagesPaymentGateBanner /> : null}
 
       <ChatBodyWrapper
         style={[styles.flex, Platform.OS === 'android' && styles.chatBodyAndroid]}

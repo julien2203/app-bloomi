@@ -80,7 +80,9 @@ export default function EditListingCategoryDetailScreen() {
     if (!cat) return;
 
     const previousCategoryId = values.category?.id ?? null;
-    const categoryChanged = previousCategoryId != null && previousCategoryId !== cat.id;
+    const previousGender = values.categoryGender ?? values.category?.gender ?? null;
+    const categoryOrGenderChanged =
+      previousCategoryId !== cat.id || previousGender !== gender;
 
     setField('category', { id: cat.id, name: cat.name, gender, slug: cat.slug ?? null });
     setField('categoryGender', gender);
@@ -92,7 +94,7 @@ export default function EditListingCategoryDetailScreen() {
       }
     });
 
-    if (categoryChanged) {
+    if (categoryOrGenderChanged) {
       setField('brand', null);
       setField('size', null);
     }

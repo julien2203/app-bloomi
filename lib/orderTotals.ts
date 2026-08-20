@@ -25,6 +25,7 @@ export type OrderBuyerTotals = {
   buyerBankingFeeChf: number;
   buyerFeesChf: number;
   shippingFeeChf: number;
+  promoDiscountChf: number;
   finalPriceChf: number;
   totalPaidChf: number;
   includesShipping: boolean;
@@ -121,6 +122,7 @@ function resolveShippingFeeChf(order: {
 export function computeOrderBuyerTotals(
   order: OrderPriceFields & {
     shipping_fee_chf?: number | string | null;
+    promo_discount_chf?: number | string | null;
     delivery_mode?: string | null;
     parcel_size?: string | null;
     is_promo_shipping?: boolean | null;
@@ -154,11 +156,12 @@ export function computeOrderBuyerTotals(
 
   const includesShipping = !isOrderPickupDelivery(order.delivery_mode);
   const shippingFeeChf = includesShipping ? resolveShippingFeeChf(order) : 0;
+  const promoDiscountChf = Math.max(0, parseChf(order.promo_discount_chf) ?? 0);
   const finalPriceChf =
     expectedFees?.finalPriceChf ??
     roundChfToInteger(itemPriceChf + buyerProtectionChf + buyerBankingFeeChf);
   const buyerFeesChf = roundChf(finalPriceChf - itemPriceChf);
-  const totalPaidChf = finalPriceChf + shippingFeeChf;
+  const totalPaidChf = roundChf(Math.max(0, finalPriceChf + shippingFeeChf - promoDiscountChf));
 
   return {
     itemPriceChf,
@@ -166,6 +169,7 @@ export function computeOrderBuyerTotals(
     buyerBankingFeeChf,
     buyerFeesChf,
     shippingFeeChf,
+    promoDiscountChf,
     finalPriceChf,
     totalPaidChf,
     includesShipping,

@@ -427,6 +427,7 @@ Deno.serve(async (req) => {
       seller_fee_rate: feeBreakdown.sellerFeeRate,
       seller_profile_type: feeBreakdown.sellerProfileType,
       shipping_fee_cents: feeBreakdown.shippingFeeCents,
+      promo_discount_cents: feeBreakdown.promoDiscountCents,
       is_promo_shipping: isPromoShipping,
     });
   } catch (e) {
