@@ -1,5 +1,11 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { isAuthorizedCronOrServiceRole } from "../_shared/cronAuth.ts";
+import { notifyUser } from "../_shared/notifyUser.ts";
+import {
+  fetchRecipientLanguage,
+  parcelDeliveredPushText,
+} from "../_shared/pushNotificationI18n.ts";
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -16,28 +22,6 @@ function normalizeAuthHeader(req: Request): string | null {
   if (!h) return null;
   if (!h.toLowerCase().startsWith("bearer ")) return null;
   return h;
-}
-
-function extractBearerOrKey(raw: string | null): string {
-  if (!raw) return "";
-  return raw.replace(/^Bearer\s+/i, "").trim();
-}
-
-function isAuthorizedCronOrServiceRole(req: Request, serviceRoleKey: string): boolean {
-  const expected = serviceRoleKey.trim();
-  if (!expected) return false;
-
-  const candidates = [
-    extractBearerOrKey(req.headers.get("Authorization")),
-    extractBearerOrKey(req.headers.get("apikey")),
-  ];
-  if (candidates.some((token) => token === expected)) return true;
-
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  const cronHeader = req.headers.get("x-cron-secret");
-  if (cronSecret && cronHeader === cronSecret) return true;
-
-  return false;
 }
 
 async function getPostAccessToken(params: {
@@ -289,30 +273,84 @@ async function fetchTrackingStatus(params: {
   };
 }
 
+async function persistCarrierSnapshot(
+  supabaseAdmin: SupabaseClient,
+  params: {
+    trackingNumber: string;
+    orderId?: string | null;
+    status: string;
+    description: string;
+    date: string | null;
+  },
+): Promise<void> {
+  const checkedAt = new Date().toISOString();
+  const patch = {
+    carrier_status: params.status.slice(0, 120),
+    carrier_status_description: params.description.slice(0, 500),
+    carrier_status_at: params.date,
+    carrier_tracking_checked_at: checkedAt,
+  };
+
+  try {
+    let query = supabaseAdmin.from("orders").update(patch);
+    if (params.orderId) {
+      query = query.eq("id", params.orderId);
+    } else {
+      query = query.eq("tracking_number", params.trackingNumber);
+    }
+    const { error } = await query;
+    if (error) {
+      // Colonnes absentes tant que le SQL scripts/supabase-order-carrier-tracking.sql n’a pas été exécuté.
+      console.warn("persistCarrierSnapshot:", error.message);
+    }
+  } catch (e) {
+    console.warn(
+      "persistCarrierSnapshot failed:",
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+}
+
 async function markOrderDeliveredIfShipped(
   supabaseAdmin: SupabaseClient,
   trackingNumber: string,
-): Promise<{ updated: boolean; error?: string }> {
+): Promise<{
+  updated: boolean;
+  error?: string;
+  order?: { id: string; buyer_id: string; listing_title: string | null };
+}> {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .update({
-      status: "completed",
       delivered_at: new Date().toISOString(),
     })
     .eq("tracking_number", trackingNumber)
     .eq("status", "shipped")
-    .select("id");
+    .is("delivered_at", null)
+    .select("id, buyer_id, listing_title")
+    .maybeSingle();
 
   if (error) {
     return { updated: false, error: error.message };
   }
-  return { updated: Array.isArray(data) && data.length > 0 };
+  if (!data) return { updated: false };
+  return {
+    updated: true,
+    order: {
+      id: String((data as { id: string }).id),
+      buyer_id: String((data as { buyer_id: string }).buyer_id),
+      listing_title: (data as { listing_title?: string | null }).listing_title ?? null,
+    },
+  };
 }
 
 async function trackOne(params: {
   supabaseAdmin: SupabaseClient;
   accessToken: string;
   trackingNumber: string;
+  orderId?: string | null;
+  supabaseUrl?: string;
+  supabaseServiceRoleKey?: string;
 }): Promise<{
   success: boolean;
   tracking_number: string;
@@ -321,6 +359,7 @@ async function trackOne(params: {
   description?: string;
   delivered?: boolean;
   order_updated?: boolean;
+  checked_at?: string;
   error?: string;
   details?: unknown;
 }> {
@@ -339,6 +378,15 @@ async function trackOne(params: {
   }
 
   const normalized = normalizeTrackingPayload(params.trackingNumber, tracked.body);
+  const checkedAt = new Date().toISOString();
+  await persistCarrierSnapshot(params.supabaseAdmin, {
+    trackingNumber: params.trackingNumber,
+    orderId: params.orderId,
+    status: normalized.status,
+    description: normalized.description,
+    date: normalized.date,
+  });
+
   let orderUpdated = false;
 
   if (normalized.delivered) {
@@ -359,6 +407,42 @@ async function trackOne(params: {
       };
     }
     orderUpdated = mark.updated;
+    if (
+      mark.updated &&
+      mark.order &&
+      params.supabaseUrl &&
+      params.supabaseServiceRoleKey
+    ) {
+      try {
+        const buyerLang = await fetchRecipientLanguage(
+          params.supabaseAdmin,
+          mark.order.buyer_id,
+        );
+        const push = parcelDeliveredPushText(buyerLang);
+        await notifyUser({
+          supabaseAdmin: params.supabaseAdmin,
+          supabaseUrl: params.supabaseUrl,
+          supabaseServiceRoleKey: params.supabaseServiceRoleKey,
+          userId: mark.order.buyer_id,
+          templateKey: "parcel_delivered",
+          entityId: mark.order.id,
+          variables: {
+            listingTitle: String(mark.order.listing_title ?? ""),
+            orderId: mark.order.id,
+          },
+          push: {
+            title: push.title,
+            body: push.body,
+            data: {
+              order_id: mark.order.id,
+              notification_type: "new_items",
+            },
+          },
+        });
+      } catch (e) {
+        console.warn("parcel_delivered notify failed:", mark.order.id, e);
+      }
+    }
   }
 
   return {
@@ -369,6 +453,7 @@ async function trackOne(params: {
     description: normalized.description,
     delivered: normalized.delivered,
     order_updated: orderUpdated,
+    checked_at: checkedAt,
   };
 }
 
@@ -410,10 +495,100 @@ Deno.serve(async (req) => {
   }
 
   const mode = String(body.mode ?? "").trim().toLowerCase();
+  const bodyOrderId = typeof body.order_id === "string" ? body.order_id.trim() : "";
+  const bodyTracking = String(body.tracking_number ?? "").trim();
   const wantsBatch =
-    isCron && (mode === "cron" || mode === "batch" || !String(body.tracking_number ?? "").trim());
+    isCron &&
+    (mode === "cron" || mode === "batch" || (!bodyTracking && !bodyOrderId));
 
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+  // ---- Admin / cron unitaire (service_role) : une commande ----
+  if (isCron && (bodyOrderId || bodyTracking) && !wantsBatch) {
+    try {
+      let trackingNumber = bodyTracking;
+      let orderId = bodyOrderId || null;
+
+      if (orderId) {
+        const { data: order, error: orderError } = await supabaseAdmin
+          .from("orders")
+          .select("id, tracking_number")
+          .eq("id", orderId)
+          .maybeSingle();
+
+        if (orderError) {
+          return jsonResponse(
+            { error: "Impossible de charger la commande", details: orderError.message },
+            { status: 500 },
+          );
+        }
+        if (!order) {
+          return jsonResponse({ error: "Commande introuvable" }, { status: 404 });
+        }
+        const orderTn = String(order.tracking_number ?? "").trim();
+        if (!orderTn) {
+          return jsonResponse(
+            { error: "Cette commande n’a pas de numéro de suivi" },
+            { status: 400 },
+          );
+        }
+        if (trackingNumber && trackingNumber !== orderTn) {
+          return jsonResponse(
+            { error: "Le numéro de suivi ne correspond pas à la commande" },
+            { status: 400 },
+          );
+        }
+        trackingNumber = orderTn;
+      }
+
+      if (!trackingNumber) {
+        return jsonResponse({ error: "tracking_number ou order_id requis" }, { status: 400 });
+      }
+
+      const accessToken = await getPostAccessToken({
+        clientId: postClientId,
+        clientSecret: postClientSecret,
+      });
+
+      const outcome = await trackOne({
+        supabaseAdmin,
+        accessToken,
+        trackingNumber,
+        orderId,
+        supabaseUrl,
+        supabaseServiceRoleKey,
+      });
+
+      if (!outcome.success) {
+        return jsonResponse(
+          {
+            error: outcome.error ?? "Erreur track-shipment",
+            details: outcome.details,
+          },
+          { status: 502 },
+        );
+      }
+
+      return jsonResponse({
+        success: true,
+        status: outcome.status,
+        date: outcome.date,
+        description: outcome.description,
+        tracking_number: outcome.tracking_number,
+        delivered: outcome.delivered === true,
+        order_updated: outcome.order_updated === true,
+        checked_at: outcome.checked_at ?? new Date().toISOString(),
+      });
+    } catch (e) {
+      return jsonResponse(
+        {
+          error: "Erreur track-shipment (admin)",
+          details: e instanceof Error ? e.message : String(e),
+        },
+        { status: 500 },
+      );
+    }
+  }
 
   // ---- Batch / cron : toutes les commandes shipped avec tracking ----
   if (wantsBatch) {
@@ -448,6 +623,8 @@ Deno.serve(async (req) => {
           supabaseAdmin,
           accessToken,
           trackingNumber: tn,
+          supabaseUrl,
+          supabaseServiceRoleKey,
         });
         results.push({ order_id: row.id, ...outcome });
       }
@@ -534,6 +711,8 @@ Deno.serve(async (req) => {
       supabaseAdmin,
       accessToken,
       trackingNumber,
+      supabaseUrl,
+      supabaseServiceRoleKey,
     });
 
     if (!outcome.success) {
