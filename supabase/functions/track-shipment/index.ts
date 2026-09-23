@@ -170,11 +170,18 @@ function normalizeTrackingPayload(
   const item = asRecord(root.item) ?? consignment ?? root;
   const event = firstEvent(root) ?? firstEvent(item ?? {}) ?? null;
 
+  // Payload ekp-web (API publique site La Poste)
+  const globalStatus = pickString(root.globalStatus);
+  const productStatus = pickString(root.status);
+  const eosEvents = Array.isArray(root.events) ? root.events : [];
+  const lastEos = asRecord(eosEvents[eosEvents.length - 1] ?? null);
+
   const status =
+    globalStatus ??
     pickString(
-      root.status,
       root.deliveryStatus,
       root.shipmentStatus,
+      productStatus,
       item?.status,
       item?.deliveryStatus,
       event?.status,
@@ -182,7 +189,9 @@ function normalizeTrackingPayload(
       event?.code,
       event?.eventName,
       event?.name,
-    ) ?? "unknown";
+      lastEos?.Status,
+    ) ??
+    "unknown";
 
   const description =
     pickString(
@@ -190,6 +199,9 @@ function normalizeTrackingPayload(
       root.statusDescription,
       root.statusText,
       root.message,
+      globalStatus ? GLOBAL_STATUS_FR[globalStatus] : null,
+      lastEos?.Description,
+      lastEos?.FullDescription,
       item?.description,
       item?.statusDescription,
       item?.statusText,
@@ -199,13 +211,19 @@ function normalizeTrackingPayload(
       event?.eventName,
       event?.name,
       event?.text,
+      productStatus,
     ) ?? status;
 
   const date = pickDate(
+    root.lastEventDateTime,
+    root.deliveryDate,
+    root.calculatedDeliveryDate,
+    root.creationDateTime,
     root.timestamp,
     root.statusTimestamp,
     root.lastUpdate,
     root.updatedAt,
+    lastEos?.TimeStamp,
     item?.timestamp,
     item?.statusTimestamp,
     item?.lastUpdate,
@@ -216,61 +234,237 @@ function normalizeTrackingPayload(
     event?.time,
   );
 
-  const delivered = isDeliveredStatus(status, description);
+  const delivered =
+    root.delivered === true ||
+    String(globalStatus ?? "").toUpperCase() === "DELIVERED" ||
+    isDeliveredStatus(status, description);
 
   return {
     status,
     date,
     description,
-    tracking_number: trackingNumber,
+    tracking_number:
+      pickString(root.shipmentNumber, root.identCode, trackingNumber) ?? trackingNumber,
     delivered,
     raw: payload,
   };
 }
 
-const TRACKING_URLS = [
-  (code: string) =>
-    `https://api.post.ch/api/barcode/v1/trackingStatus/${encodeURIComponent(code)}`,
-  (code: string) =>
-    `https://dcapi.apis.post.ch/barcode/v1/trackingStatus/${encodeURIComponent(code)}`,
-];
+const EKP_USER_URL = "https://service.post.ch/ekp-web/api/user";
+const EKP_HISTORY_URL = "https://service.post.ch/ekp-web/api/history";
+const EKP_REFERER = "https://service.post.ch/ekp-web/ui/";
+const EOS_HISTORY_URL = "https://eosapi.postlogistics.ch/api/trackandtrace/public";
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
+const GLOBAL_STATUS_FR: Record<string, string> = {
+  REGISTERED: "Enregistré",
+  REPORTED: "Annoncé (données transmises)",
+  CUSTOMS: "En douane",
+  TO_BE_DELIVERED: "En cours d’acheminement",
+  IN_DELIVERY: "En distribution",
+  DELIVERED: "Livré",
+  MISSED_DELIVERY: "Livraison manquée",
+  NOT_DELIVERED: "Non livré",
+  RETURNED: "Retourné à l’expéditeur",
+};
+
+function cookieHeaderFromSetCookie(setCookie: string | null): string {
+  if (!setCookie) return "";
+  // Deno/fetch may join multiple Set-Cookie with ", " — keep name=value only.
+  return setCookie
+    .split(/,(?=\s*[^;=]+=)/)
+    .map((part) => part.split(";")[0]?.trim())
+    .filter(Boolean)
+    .join("; ");
+}
+
+async function fetchEosEvents(trackingNumber: string): Promise<Array<Record<string, unknown>>> {
+  try {
+    const resp = await fetch(`${EOS_HISTORY_URL}?culture=fr-FR`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": BROWSER_UA,
+        Origin: "https://tracking.postlogistics.ch",
+        Referer: "https://tracking.postlogistics.ch/",
+      },
+      body: JSON.stringify({ Identifier: trackingNumber }),
+    });
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as {
+      Data?: Array<{ History?: Array<Record<string, unknown>> }>;
+    };
+    const history = json.Data?.[0]?.History;
+    return Array.isArray(history) ? history : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Suivi public La Poste (même API que le site consommateur) — pas l’API Barcode.
+ * Flow : GET /api/user → POST /api/history → GET /api/history/not-included/{hash}
+ * + timeline optionnelle via eosapi.postlogistics.ch
+ */
 async function fetchTrackingStatus(params: {
-  accessToken: string;
   trackingNumber: string;
 }): Promise<{ ok: boolean; status: number; body: unknown; url: string }> {
-  let last: { ok: boolean; status: number; body: unknown; url: string } | null = null;
+  const code = params.trackingNumber.trim();
+  const baseHeaders = {
+    Accept: "application/json",
+    "User-Agent": BROWSER_UA,
+    Referer: EKP_REFERER,
+  };
 
-  for (const buildUrl of TRACKING_URLS) {
-    const url = buildUrl(params.trackingNumber);
-    const resp = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${params.accessToken}`,
-        Accept: "application/json",
-        "Accept-Language": "fr",
-      },
-    });
-
-    const rawText = await resp.text();
-    let body: unknown = rawText;
-    try {
-      body = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      body = { error: "non_json_response", preview: rawText.slice(0, 240) };
+  try {
+    const userResp = await fetch(EKP_USER_URL, { method: "GET", headers: baseHeaders });
+    if (!userResp.ok) {
+      return {
+        ok: false,
+        status: userResp.status,
+        body: { error: "ekp_user_failed", detail: await userResp.text() },
+        url: EKP_USER_URL,
+      };
+    }
+    const userJson = (await userResp.json()) as { userIdentifier?: string };
+    const userId = userJson.userIdentifier;
+    const csrf =
+      userResp.headers.get("X-CSRF-TOKEN") ??
+      userResp.headers.get("x-csrf-token") ??
+      "";
+    const cookie = cookieHeaderFromSetCookie(userResp.headers.get("set-cookie"));
+    if (!userId || !csrf) {
+      return {
+        ok: false,
+        status: 502,
+        body: { error: "ekp_session_incomplete", userId: Boolean(userId), csrf: Boolean(csrf) },
+        url: EKP_USER_URL,
+      };
     }
 
-    last = { ok: resp.ok, status: resp.status, body, url };
-    if (resp.ok) return last;
-    if (resp.status !== 404 && resp.status !== 405) break;
-  }
+    const sessionHeaders: Record<string, string> = {
+      ...baseHeaders,
+      "Content-Type": "application/json",
+      "X-CSRF-TOKEN": csrf,
+    };
+    if (cookie) sessionHeaders.Cookie = cookie;
 
-  return last ?? {
-    ok: false,
-    status: 502,
-    body: { error: "no_response" },
-    url: "",
-  };
+    const historyUrl = `${EKP_HISTORY_URL}?userId=${encodeURIComponent(userId)}`;
+    const regResp = await fetch(historyUrl, {
+      method: "POST",
+      headers: sessionHeaders,
+      body: JSON.stringify({ searchQuery: code }),
+    });
+    const regSetCookie = cookieHeaderFromSetCookie(regResp.headers.get("set-cookie"));
+    if (regSetCookie) {
+      sessionHeaders.Cookie = [cookie, regSetCookie].filter(Boolean).join("; ");
+    }
+    if (!regResp.ok) {
+      return {
+        ok: false,
+        status: regResp.status,
+        body: { error: "ekp_history_register_failed", detail: await regResp.text() },
+        url: historyUrl,
+      };
+    }
+    const regJson = (await regResp.json()) as { hash?: string };
+    const digest = regJson.hash;
+    if (!digest) {
+      return {
+        ok: false,
+        status: 502,
+        body: { error: "ekp_history_no_hash", detail: regJson },
+        url: historyUrl,
+      };
+    }
+
+    const itemUrl =
+      `https://service.post.ch/ekp-web/api/history/not-included/${encodeURIComponent(digest)}` +
+      `?userId=${encodeURIComponent(userId)}`;
+    const itemResp = await fetch(itemUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": BROWSER_UA,
+        Referer: EKP_REFERER,
+        Cookie: sessionHeaders.Cookie ?? cookie,
+      },
+    });
+    if (!itemResp.ok) {
+      // Fallback : timeline publique seule
+      const events = await fetchEosEvents(code);
+      if (events.length > 0) {
+        const last = events[events.length - 1] ?? {};
+        return {
+          ok: true,
+          status: 200,
+          url: EOS_HISTORY_URL,
+          body: {
+            source: "eos",
+            shipmentNumber: code,
+            globalStatus: typeof last.Status === "string" ? last.Status : "UNKNOWN",
+            status: typeof last.Status === "string" ? last.Status : null,
+            lastEventDateTime: typeof last.TimeStamp === "string" ? last.TimeStamp : null,
+            description:
+              (typeof last.Description === "string" && last.Description) ||
+              (typeof last.FullDescription === "string" && last.FullDescription) ||
+              null,
+            events,
+            delivered: false,
+          },
+        };
+      }
+      return {
+        ok: false,
+        status: itemResp.status,
+        body: { error: "ekp_history_item_failed", detail: await itemResp.text() },
+        url: itemUrl,
+      };
+    }
+
+    const shipments = (await itemResp.json()) as unknown;
+    const list = Array.isArray(shipments) ? shipments : [];
+    const shipment = (list[0] ?? null) as Record<string, unknown> | null;
+    if (!shipment) {
+      return {
+        ok: false,
+        status: 404,
+        body: { error: "tracking_not_found", tracking_number: code },
+        url: itemUrl,
+      };
+    }
+
+    const events = await fetchEosEvents(code);
+    const lastEvent = events.length > 0 ? events[events.length - 1] : null;
+
+    return {
+      ok: true,
+      status: 200,
+      url: itemUrl,
+      body: {
+        source: "ekp",
+        ...shipment,
+        events,
+        description:
+          (lastEvent && typeof lastEvent.Description === "string" && lastEvent.Description) ||
+          (typeof shipment.globalStatus === "string" &&
+            (GLOBAL_STATUS_FR[shipment.globalStatus] ?? shipment.globalStatus)) ||
+          null,
+      },
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: 502,
+      body: {
+        error: "ekp_fetch_failed",
+        details: e instanceof Error ? e.message : String(e),
+      },
+      url: EKP_HISTORY_URL,
+    };
+  }
 }
 
 async function persistCarrierSnapshot(
@@ -346,11 +540,12 @@ async function markOrderDeliveredIfShipped(
 
 async function trackOne(params: {
   supabaseAdmin: SupabaseClient;
-  accessToken: string;
   trackingNumber: string;
   orderId?: string | null;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
+  /** @deprecated OAuth barcode inutile pour le suivi public */
+  accessToken?: string;
 }): Promise<{
   success: boolean;
   tracking_number: string;
@@ -364,7 +559,6 @@ async function trackOne(params: {
   details?: unknown;
 }> {
   const tracked = await fetchTrackingStatus({
-    accessToken: params.accessToken,
     trackingNumber: params.trackingNumber,
   });
 
@@ -465,16 +659,9 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const postClientId = Deno.env.get("POST_CH_CLIENT_ID");
-  const postClientSecret = Deno.env.get("POST_CH_CLIENT_SECRET");
+  // POST_CH_* plus nécessaires pour le suivi (API publique ekp-web). Conservés si présents.
 
-  if (
-    !supabaseUrl ||
-    !supabaseAnonKey ||
-    !supabaseServiceRoleKey ||
-    !postClientId ||
-    !postClientSecret
-  ) {
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
     return jsonResponse({ error: "Configuration manquante côté serveur" }, { status: 500 });
   }
 
@@ -545,14 +732,8 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "tracking_number ou order_id requis" }, { status: 400 });
       }
 
-      const accessToken = await getPostAccessToken({
-        clientId: postClientId,
-        clientSecret: postClientSecret,
-      });
-
       const outcome = await trackOne({
         supabaseAdmin,
-        accessToken,
         trackingNumber,
         orderId,
         supabaseUrl,
@@ -611,18 +792,13 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, processed: 0, results: [] });
       }
 
-      const accessToken = await getPostAccessToken({
-        clientId: postClientId,
-        clientSecret: postClientSecret,
-      });
-
       const results: Array<Record<string, unknown>> = [];
       for (const row of rows) {
         const tn = String(row.tracking_number).trim();
         const outcome = await trackOne({
           supabaseAdmin,
-          accessToken,
           trackingNumber: tn,
+          orderId: String(row.id),
           supabaseUrl,
           supabaseServiceRoleKey,
         });
@@ -702,15 +878,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const accessToken = await getPostAccessToken({
-      clientId: postClientId,
-      clientSecret: postClientSecret,
-    });
-
     const outcome = await trackOne({
       supabaseAdmin,
-      accessToken,
       trackingNumber,
+      orderId: orderId || null,
       supabaseUrl,
       supabaseServiceRoleKey,
     });
