@@ -12,6 +12,8 @@ export type SellerProfileInput = {
   company_name?: string | null;
   ide_number?: string | null;
   seller_type?: 'individual' | 'pro' | 'sole_proprietorship' | null;
+  /** Override admin : commission vendeur à 0 % sans changer le type de profil. */
+  seller_fee_exempt?: boolean | null;
 };
 
 export type BuyerFeesBreakdown = {
@@ -113,6 +115,15 @@ export function isSellerFeeExempt(profileType: SellerProfileType): boolean {
   return profileType === 'influencer' || profileType === 'pro';
 }
 
+/** Exemption par type (influenceur/pro) ou flag admin `seller_fee_exempt`. */
+export function profileHasSellerFeeExemption(
+  profile: SellerProfileInput | SellerProfileType
+): boolean {
+  if (typeof profile === 'string') return isSellerFeeExempt(profile);
+  if (profile.seller_fee_exempt) return true;
+  return isSellerFeeExempt(resolveSellerProfileType(profile));
+}
+
 export function getBuyerProtectionRate(itemPriceChf: number): number {
   return BUYER_PROTECTION_RATES[getPriceTier(itemPriceChf)];
 }
@@ -184,7 +195,9 @@ export function computeSellerFees(
   const profileType =
     typeof profile === 'string' ? profile : resolveSellerProfileType(profile);
   const tier = getPriceTier(itemPrice);
-  const feeRate = getSellerFeeRate(itemPrice, profileType);
+  const feeRate = profileHasSellerFeeExemption(profile)
+    ? 0
+    : getSellerFeeRate(itemPrice, profileType);
   const commissionChf = roundChf(itemPrice * feeRate);
 
   return {

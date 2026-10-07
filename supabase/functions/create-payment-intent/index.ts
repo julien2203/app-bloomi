@@ -335,7 +335,7 @@ Deno.serve(async (req) => {
 
     const { data: sellerProfileRow } = await supabaseAdmin
       .from("profiles")
-      .select("is_influencer, company_name, ide_number, seller_type")
+      .select("is_influencer, company_name, ide_number, seller_type, seller_fee_exempt")
       .eq("id", String(seller_id))
       .maybeSingle();
 
@@ -364,6 +364,7 @@ Deno.serve(async (req) => {
         company_name?: string | null;
         ide_number?: string | null;
         seller_type?: 'individual' | 'pro' | 'sole_proprietorship' | null;
+        seller_fee_exempt?: boolean | null;
       },
       shippingFeeCents,
     });

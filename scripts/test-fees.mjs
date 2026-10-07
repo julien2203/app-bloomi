@@ -46,6 +46,19 @@ assert.ok(soleProprietorSeller);
 assert.equal(soleProprietorSeller.profileType, 'pro');
 assert.equal(soleProprietorSeller.commissionChf, 0);
 
+const feeExemptSeller = computeSellerFees(50, { seller_fee_exempt: true });
+assert.ok(feeExemptSeller);
+assert.equal(feeExemptSeller.profileType, 'individual');
+assert.equal(feeExemptSeller.commissionChf, 0);
+assert.equal(feeExemptSeller.netPayoutChf, 50);
+
+const piExempt = buildPaymentIntentFeeBreakdown({
+  itemAmountCents: 5000,
+  sellerProfile: { seller_fee_exempt: true }
+});
+assert.equal(piExempt.sellerCommissionCents, 0);
+assert.equal(piExempt.sellerPayoutCents, 5000);
+
 const piIndividual = buildPaymentIntentFeeBreakdown({
   itemAmountCents: 5000,
   sellerProfile: {}
